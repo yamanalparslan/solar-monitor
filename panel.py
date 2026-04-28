@@ -7,6 +7,7 @@ import veritabani
 import utils
 from styles import inject_glossy_css, section_header, status_bar, kpi_row
 from auth import check_auth, logout_button
+from crm_embed import inject_embed_mode, is_embed_mode
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
@@ -26,6 +27,10 @@ veritabani.init_db()
 # --- GLOSSY CSS TEMA ---
 inject_glossy_css()
 logout_button()
+
+# --- CRM EMBED MODU ---
+# CRM iframe içinde açıldığında header/footer/sidebar gizlenir
+inject_embed_mode(hide_sidebar=False)
 
 # --- YARDIMCI ---
 # Panel artık doğrudan Modbus'a bağlanmaz.

@@ -28,7 +28,7 @@ def _verify_password(password: str, stored_hash: str) -> bool:
 
 def _is_auth_enabled() -> bool:
     """Authentication aktif mi kontrol eder."""
-    return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
+    return False  # CRM entegrasyonu için Login sistemi tamamen devre dışı bırakıldı
 
 
 def _get_credentials() -> tuple[str, str]:

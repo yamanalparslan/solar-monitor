@@ -87,6 +87,19 @@ class Config:
     TELEGRAM_BOT_TOKEN: str = field(default_factory=lambda: _env("TELEGRAM_BOT_TOKEN", ""))
     TELEGRAM_CHAT_ID: str = field(default_factory=lambda: _env("TELEGRAM_CHAT_ID", ""))
 
+    # --- CRM Entegrasyonu ---
+    CRM_BASE_URL: str = field(default_factory=lambda: _env("CRM_BASE_URL", "xxxxx"))
+    CRM_API_KEY: str = field(default_factory=lambda: _env("CRM_API_KEY", "xxxxx"))
+    CRM_API_SECRET: str = field(default_factory=lambda: _env("CRM_API_SECRET", "xxxxx"))
+    CRM_TENANT_ID: str = field(default_factory=lambda: _env("CRM_TENANT_ID", "xxxxx"))
+    CRM_USERNAME: str = field(default_factory=lambda: _env("CRM_USERNAME", "xxxxx"))
+    CRM_PASSWORD: str = field(default_factory=lambda: _env("CRM_PASSWORD", "xxxxx"))
+    CRM_ALLOWED_ORIGIN: str = field(default_factory=lambda: _env("CRM_ALLOWED_ORIGIN", "xxxxx"))
+    SOLAR_MONITOR_EXTERNAL_URL: str = field(default_factory=lambda: _env("SOLAR_MONITOR_EXTERNAL_URL", "xxxxx"))
+    CRM_WEBHOOK_URL: str = field(default_factory=lambda: _env("CRM_WEBHOOK_URL", "xxxxx"))
+    CRM_WEBHOOK_SECRET: str = field(default_factory=lambda: _env("CRM_WEBHOOK_SECRET", "xxxxx"))
+    CRM_EMBED_MODE: bool = field(default_factory=lambda: _env_bool("CRM_EMBED_MODE", True))
+
 
 def setup_logging(name: str = "solar_monitor") -> logging.Logger:
     """Modül bazlı logger oluşturur.

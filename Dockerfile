@@ -22,8 +22,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 COPY --from=builder /install /usr/local
 
 # Uygulama dosyalarını kopyala
-COPY --chown=solar:solar config.py models.py veritabani.py collector.py collector_async.py panel.py auth.py notifications.py utils.py sanal_inverter.py styles.py healthcheck.py api.py prometheus_exporter.py mqtt_listener.py ./
+COPY --chown=solar:solar config.py models.py veritabani.py collector.py collector_async.py panel.py auth.py notifications.py utils.py sanal_inverter.py styles.py healthcheck.py api.py prometheus_exporter.py mqtt_listener.py crm_embed.py ./
 COPY --chown=solar:solar pages/ ./pages/
+COPY --chown=solar:solar .streamlit/ ./.streamlit/
 COPY --chown=solar:solar .env.example ./.env.example
 
 # .env yoksa example'dan oluştur
