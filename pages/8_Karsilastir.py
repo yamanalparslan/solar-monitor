@@ -30,8 +30,8 @@ metrik = st.selectbox("Metrik:", ["guc", "voltaj", "akim", "sicaklik"],
 metrik_birim = {"guc": "W", "voltaj": "V", "akim": "A", "sicaklik": "C"}
 metrik_baslik = {"guc": "Guc Karsilastirma", "voltaj": " Voltaj Karlatrma", "akim": "Akim Karsilastirma", "sicaklik": "Sicaklik Karsilastirma"}
 
-# Veritabanndan dnen stunlar: zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_193
-DB_COLUMNS = ["ts", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_193"]
+# Veritabanından dönen sütunlar (son_verileri_getir)
+DB_COLUMNS = ["ts", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
 
 if secili:
     colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']

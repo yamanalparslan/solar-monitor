@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Monitor — Canlı İzleme</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.06) 0%, transparent 50%),
+                #0a0e1a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        /* ── Header ── */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            padding: 0 4px;
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .header-left h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header-left .subtitle {
+            font-size: 0.85rem;
+            color: #64748b;
+            font-weight: 400;
+        }
+
+        /* ── Bağlantı Durumu ── */
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .status-badge.connected {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.25);
+        }
+        .status-badge.disconnected {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .connected .status-dot { background: #10b981; }
+        .disconnected .status-dot { background: #ef4444; animation: none; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        /* ── Cihaz Grid ── */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        /* ── Cihaz Kartı ── */
+        .device-card {
+            background: linear-gradient(145deg,
+                rgba(30, 41, 59, 0.8) 0%,
+                rgba(15, 23, 42, 0.65) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+        }
+        .device-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            opacity: 0.7;
+        }
+        .device-card.alarm::before {
+            background: linear-gradient(135deg, #ef4444, #f97316);
+            opacity: 1;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+        .card-id {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #cbd5e1;
+        }
+        .card-status {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 4px 10px;
+            border-radius: 6px;
+        }
+        .card-status.aktif { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .card-status.beklemede { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .card-status.ariza { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+        /* ── Metrik Satırları ── */
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+        .metric {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .metric-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 600;
+        }
+        .metric-value {
+            font-size: 1.35rem;
+            font-weight: 700;
+            transition: color 0.3s ease;
+        }
+        .metric-value.guc { color: #ffd700; }
+        .metric-value.voltaj { color: #818cf8; }
+        .metric-value.akim { color: #34d399; }
+        .metric-value.sicaklik { color: #f87171; }
+
+        .metric-unit {
+            font-size: 0.8rem;
+            font-weight: 400;
+            opacity: 0.6;
+        }
+
+        /* ── Zaman ── */
+        .card-footer {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 0.72rem;
+            color: #475569;
+            text-align: right;
+        }
+
+        /* ── Güncelleme Flash ── */
+        .device-card.flash {
+            animation: flash-border 0.6s ease;
+        }
+        @keyframes flash-border {
+            0% { border-color: rgba(99, 102, 241, 0.6); box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+            100% { border-color: rgba(255, 255, 255, 0.06); box-shadow: none; }
+        }
+
+        /* ── Bilgi Çubuğu ── */
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 12px 20px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 10px;
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+        .info-bar span { display: flex; align-items: center; gap: 6px; }
+
+        /* ── Boş Durum ── */
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #475569;
+        }
+        .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+        .empty-state .msg { font-size: 1rem; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            body { padding: 14px; }
+            .devices-grid { grid-template-columns: 1fr; }
+            .header { flex-direction: column; gap: 12px; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <div>
+            <h1>☀️ Solar Monitor</h1>
+            <div class="subtitle">Canlı İzleme Paneli — WebSocket</div>
+        </div>
+    </div>
+    <div id="statusBadge" class="status-badge disconnected">
+        <div class="status-dot"></div>
+        <span id="statusText">Bağlanıyor...</span>
+    </div>
+</div>
+
+<div class="info-bar">
+    <span>🔌 <span id="clientInfo">Bağlantı bekleniyor</span></span>
+    <span>🕐 Son güncelleme: <strong id="lastUpdate">—</strong></span>
+</div>
+
+<div id="devicesGrid" class="devices-grid">
+    <div class="empty-state">
+        <div class="icon">📡</div>
+        <div class="msg">WebSocket bağlantısı kuruluyor...</div>
+    </div>
+</div>
+
+<script>
+    // ── Ayarlar ──
+    const WS_URL = `ws://${window.location.host}/ws/live`;
+    const RECONNECT_DELAY = 3000;
+
+    let ws = null;
+    let reconnectTimer = null;
+    let lastData = null;
+
+    // ── DOM Elemanları ──
+    const grid = document.getElementById('devicesGrid');
+    const badge = document.getElementById('statusBadge');
+    const statusText = document.getElementById('statusText');
+    const lastUpdate = document.getElementById('lastUpdate');
+    const clientInfo = document.getElementById('clientInfo');
+
+    // ── WebSocket Bağlantısı ──
+    function connect() {
+        if (ws && ws.readyState === WebSocket.OPEN) return;
+
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+            badge.className = 'status-badge connected';
+            statusText.textContent = 'Canlı Bağlantı';
+            clientInfo.textContent = 'WebSocket aktif';
+            clearTimeout(reconnectTimer);
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                lastData = data;
+                renderDevices(data);
+                lastUpdate.textContent = new Date().toLocaleTimeString('tr-TR');
+            } catch (e) {
+                console.error('JSON parse hatası:', e);
+            }
+        };
+
+        ws.onclose = () => {
+            badge.className = 'status-badge disconnected';
+            statusText.textContent = 'Bağlantı koptu';
+            clientInfo.textContent = `Yeniden bağlanılıyor (${RECONNECT_DELAY / 1000}s)...`;
+            scheduleReconnect();
+        };
+
+        ws.onerror = () => {
+            ws.close();
+        };
+    }
+
+    function scheduleReconnect() {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
+    }
+
+    // ── Cihaz Kartlarını Render Et ──
+    function renderDevices(data) {
+        const devices = data.devices || [];
+
+        if (devices.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📭</div>
+                    <div class="msg">Henüz cihaz verisi yok</div>
+                </div>`;
+            return;
+        }
+
+        // Mevcut kartları güncelle veya yeni oluştur
+        const existingIds = new Set();
+        devices.forEach(dev => {
+            existingIds.add(dev.slave_id);
+            let card = document.getElementById(`device-${dev.slave_id}`);
+            const isNew = !card;
+
+            if (isNew) {
+                card = document.createElement('div');
+                card.id = `device-${dev.slave_id}`;
+                card.className = 'device-card';
+                grid.appendChild(card);
+            }
+
+            // Durum belirleme
+            let durum, durumClass;
+            if (dev.hata_kodu && dev.hata_kodu !== 0) {
+                durum = 'ARIZA';
+                durumClass = 'ariza';
+                card.classList.add('alarm');
+            } else if (dev.guc > 0) {
+                durum = 'AKTİF';
+                durumClass = 'aktif';
+                card.classList.remove('alarm');
+            } else {
+                durum = 'BEKLEMEDE';
+                durumClass = 'beklemede';
+                card.classList.remove('alarm');
+            }
+
+            // Zaman formatlama
+            let zamanStr = '—';
+            if (dev.son_zaman) {
+                try {
+                    const dt = new Date(dev.son_zaman);
+                    zamanStr = dt.toLocaleTimeString('tr-TR');
+                } catch { zamanStr = dev.son_zaman; }
+            }
+
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="card-id">⚡ Inverter #${dev.slave_id}</div>
+                    <div class="card-status ${durumClass}">${durum}</div>
+                </div>
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-label">Güç</div>
+                        <div class="metric-value guc">
+                            ${dev.guc.toFixed(1)}<span class="metric-unit"> W</span>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Voltaj</div>
+                        <div class="metric-value voltaj">
+                            ${dev.voltaj.toFixed(1)}<span class="metric-unit"> V</span>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Akım</div>
+                        <div class="metric-value akim">
+                            ${dev.akim.toFixed(2)}<span class="metric-unit"> A</span>
+                        </div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Sıcaklık</div>
+                        <div class="metric-value sicaklik">
+                            ${dev.sicaklik.toFixed(1)}<span class="metric-unit"> °C</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">Son veri: ${zamanStr}</div>
+            `;
+
+            // Flash animasyonu
+            if (!isNew) {
+                card.classList.remove('flash');
+                void card.offsetWidth; // reflow
+                card.classList.add('flash');
+            }
+        });
+
+        // Artık olmayan cihaz kartlarını kaldır
+        const emptyState = grid.querySelector('.empty-state');
+        if (emptyState) emptyState.remove();
+
+        document.querySelectorAll('.device-card').forEach(card => {
+            const id = parseInt(card.id.replace('device-', ''));
+            if (!existingIds.has(id)) card.remove();
+        });
+    }
+
+    // ── Başlat ──
+    connect();
+</script>
+
+</body>
+</html>

@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 from pymodbus.client import ModbusTcpClient
@@ -12,6 +13,18 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='repla
 
 INTER_REQUEST_DELAY = 0.25
 BLOCK_CANDIDATE_SIZE = 4
+WS_NOTIFY_URL = os.getenv("WS_NOTIFY_URL", "http://solar_api:8503/ws/notify")
+
+
+def _notify_websocket():
+    """API'ye bildirim göndererek WebSocket istemcilerini günceller."""
+    try:
+        import urllib.request
+        req = urllib.request.Request(WS_NOTIFY_URL, data=b"", method="POST")
+        req.add_header("Content-Type", "application/json")
+        urllib.request.urlopen(req, timeout=2)
+    except Exception:
+        pass  # WS bildirimi kritik değil, sessizce devam et
 
 
 def load_config():
@@ -343,6 +356,10 @@ def start_collector():
                 print("[YOK]")
 
         elapsed = time.time() - start_time
+
+        # WebSocket istemcilerini bilgilendir
+        _notify_websocket()
+
         time.sleep(max(0, config["refresh_rate"] - elapsed))
 
 
