@@ -181,10 +181,10 @@ def root():
 # ── 1. Sistem Durumu ──
 
 @app.get("/api/v1/status", response_model=SystemStatus, tags=["Sistem"])
-def get_system_status(_=Depends(verify_api_key)):
+def get_system_status(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
     """Sistem genel durumu — CRM ana sayfa widget'ı için ideal."""
-    durum = veritabani.tum_cihazlarin_son_durumu()
-    istatistik = veritabani.veritabani_istatistikleri()
+    durum = veritabani.tum_cihazlarin_son_durumu(fabrika)
+    istatistik = veritabani.veritabani_istatistikleri(fabrika)
 
     last_time = None
     if durum:
@@ -203,16 +203,9 @@ def get_system_status(_=Depends(verify_api_key)):
 # ── 2. Tüm Cihazların Anlık Durumu ──
 
 @app.get("/api/v1/devices", response_model=List[DeviceSummary], tags=["Cihaz"])
-def get_all_devices(_=Depends(verify_api_key)):
-    """Tüm inverterlerin anlık durumunu döner.
-
-    CRM'de liste/tablo göstermek için bu endpoint'i kullanın.
-
-    Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/devices
-        Header: X-API-Key: xxxxx
-    """
-    rows = veritabani.tum_cihazlarin_son_durumu()
+def get_all_devices(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+    """Tüm inverterlerin anlık durumunu döner."""
+    rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
     if not rows:
         return []
 
@@ -244,18 +237,9 @@ def get_all_devices(_=Depends(verify_api_key)):
 # ── 3. Tekil Cihaz Son Veriler ──
 
 @app.get("/api/v1/devices/{slave_id}/latest", response_model=List[DeviceData], tags=["Cihaz"])
-def get_device_latest(slave_id: int, limit: int = Query(10, ge=1, le=1000), _=Depends(verify_api_key)):
-    """Belirtilen inverter için son N ölçüm verisini döner.
-
-    Parametreler:
-        slave_id: İnverter ID (1, 2, 3 vb.)
-        limit: Kaç kayıt (varsayılan 10, max 1000)
-
-    Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/devices/1/latest?limit=50
-        Header: X-API-Key: xxxxx
-    """
-    veriler = veritabani.son_verileri_getir(slave_id, limit=limit)
+def get_device_latest(slave_id: int, limit: int = Query(10, ge=1, le=1000), fabrika: str = Query("mekanik"), _=Depends(verify_api_key)):
+    """Belirtilen inverter için son N ölçüm verisini döner."""
+    veriler = veritabani.son_verileri_getir(slave_id, limit=limit, fabrika_id=fabrika)
     if not veriler:
         raise HTTPException(status_code=404, detail=f"Cihaz ID {slave_id} bulunamadı veya veri yok.")
 
@@ -325,6 +309,7 @@ def get_device_history(
 def get_daily_production(
     tarih: date = Query(None, description="Tarih (YYYY-MM-DD), boş bırakılırsa bugün"),
     slave_id: Optional[int] = Query(None, description="İnverter ID (boş = tümü)"),
+    fabrika: str = Query("mekanik", description="Fabrika ID"),
     _=Depends(verify_api_key),
 ):
     """Belirtilen gün için üretim raporu (Wh / kWh).
@@ -339,7 +324,7 @@ def get_daily_production(
     if tarih is None:
         tarih = date.today()
 
-    sonuc = veritabani.gunluk_uretim_hesapla(str(tarih), slave_id)
+    sonuc = veritabani.gunluk_uretim_hesapla(str(tarih), slave_id, fabrika_id=fabrika)
     if not sonuc:
         raise HTTPException(status_code=404, detail="Bu tarih için üretim verisi bulunamadı.")
 
@@ -391,16 +376,9 @@ def get_production_range(
 # ── 7. Aktif Alarmlar ──
 
 @app.get("/api/v1/alarms", response_model=List[AlarmInfo], tags=["Alarm"])
-def get_active_alarms(_=Depends(verify_api_key)):
-    """Aktif hata kodu olan cihazları listeler.
-
-    CRM'de alarm/bildirim paneli için bu endpoint'i kullanın.
-
-    Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/alarms
-        Header: X-API-Key: xxxxx
-    """
-    rows = veritabani.tum_cihazlarin_son_durumu()
+def get_active_alarms(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+    """Aktif hata kodu olan cihazları listeler."""
+    rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
     if not rows:
         return []
 
@@ -428,14 +406,9 @@ def get_active_alarms(_=Depends(verify_api_key)):
 # ── 8. DB İstatistikleri ──
 
 @app.get("/api/v1/stats", tags=["Sistem"])
-def get_db_stats(_=Depends(verify_api_key)):
-    """Veritabanı istatistikleri — kayıt sayısı, boyut, tarih aralığı.
-
-    Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/stats
-        Header: X-API-Key: xxxxx
-    """
-    istatistik = veritabani.veritabani_istatistikleri()
+def get_db_stats(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+    """Veritabanı istatistikleri — kayıt sayısı, boyut, tarih aralığı."""
+    istatistik = veritabani.veritabani_istatistikleri(fabrika)
     if not istatistik:
         raise HTTPException(status_code=500, detail="İstatistik alınamadı.")
 
@@ -462,24 +435,28 @@ def get_db_stats(_=Depends(verify_api_key)):
 
 def _build_ws_payload() -> dict:
     """DB'den güncel veriyi okuyup WebSocket payload'ı oluşturur."""
-    rows = veritabani.tum_cihazlarin_son_durumu()
-    devices = []
-    for row in rows:
-        guc = float(row[2]) if row[2] else 0
-        hata = (row[6] if len(row) > 6 and row[6] else 0)
-        devices.append({
-            "slave_id": row[0],
-            "son_zaman": row[1],
-            "guc": guc,
-            "voltaj": round(float(row[3]), 1) if row[3] else 0,
-            "akim": round(float(row[4]), 2) if row[4] else 0,
-            "sicaklik": round(float(row[5]), 1) if row[5] else 0,
-            "hata_kodu": hata,
-        })
+    from veritabani import FABRIKALAR
+    all_data = {}
+    for fab_id in FABRIKALAR:
+        rows = veritabani.tum_cihazlarin_son_durumu(fab_id)
+        devices = []
+        for row in rows:
+            guc = float(row[2]) if row[2] else 0
+            hata = (row[6] if len(row) > 6 and row[6] else 0)
+            devices.append({
+                "slave_id": row[0],
+                "son_zaman": row[1],
+                "guc": guc,
+                "voltaj": round(float(row[3]), 1) if row[3] else 0,
+                "akim": round(float(row[4]), 2) if row[4] else 0,
+                "sicaklik": round(float(row[5]), 1) if row[5] else 0,
+                "hata_kodu": hata,
+            })
+        all_data[fab_id] = devices
     return {
         "type": "update",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "devices": devices,
+        "fabrikalar": all_data,
         "client_count": ws_manager.client_count,
     }
 

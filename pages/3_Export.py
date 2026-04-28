@@ -13,10 +13,17 @@ if not check_auth():
     st.stop()
 logout_button()
 veritabani.init_db()
+
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+
 st.title("Veri Aktarimi")
 section_header("", "Veri Aktarimi", "CSV formatinda veri indirin")
 
-ayarlar = veritabani.tum_ayarlari_oku()
+ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -29,7 +36,7 @@ if st.button("Verileri Getir", type="primary"):
     sid = None if secilen == "Tum" else int(secilen.split()[-1])
     tum = []
     for s in (slave_ids if sid is None else [sid]):
-        for r in veritabani.son_verileri_getir(s, limit=50000):
+        for r in veritabani.son_verileri_getir(s, limit=50000, fabrika_id=fab_id):
             tum.append({"slave_id": s, "zaman": r[0], "guc": r[1], "voltaj": r[2], "akim": r[3], "sicaklik": r[4], "hata_kodu": r[5]})
     if tum:
         df = pd.DataFrame(tum)

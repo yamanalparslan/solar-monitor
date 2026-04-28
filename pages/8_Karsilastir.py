@@ -17,10 +17,16 @@ logout_button()
 
 veritabani.init_db()
 
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+
 st.title("Cihaz Karsilastirma")
 section_header("", "Coklu Cihaz Analizi", "Secilen cihazlarin performansini yan yana karsilastirin")
 
-ayarlar = veritabani.tum_ayarlari_oku()
+ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
 
 secili = st.multiselect("Karsilastirilacak Cihazlar:", slave_ids, default=slave_ids[:3])
@@ -39,7 +45,7 @@ if secili:
     ozet_veriler = []
 
     for i, did in enumerate(secili):
-        data = veritabani.son_verileri_getir(did, limit=200)
+        data = veritabani.son_verileri_getir(did, limit=200, fabrika_id=fab_id)
         if not data:
             continue
         

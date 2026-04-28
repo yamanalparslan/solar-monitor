@@ -29,22 +29,59 @@ inject_glossy_css()
 logout_button()
 
 # --- CRM EMBED MODU ---
-# CRM iframe içinde açıldığında header/footer/sidebar gizlenir
 inject_embed_mode(hide_sidebar=False)
 
-# --- YARDIMCI ---
-# Panel artık doğrudan Modbus'a bağlanmaz.
-# Collector ayrı process olarak sürekli veriyi DB'ye yazar.
-# Panel yalnızca DB'den okuyup gösterir.
+# --- FABRİKA SEÇİMİ ---
+from veritabani import FABRIKALAR, VARSAYILAN_FABRIKA
 
+if 'fabrika_id' not in st.session_state:
+    st.session_state.fabrika_id = None
+
+# Fabrika seçilmemişse seçim ekranı göster
+if st.session_state.fabrika_id is None:
+    st.markdown("""
+    <div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
+        <div style="text-align:center;">
+            <h1 style="font-size:2.5rem;font-weight:800;
+                background:linear-gradient(135deg,#6366f1,#a855f7);
+                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+                margin-bottom:8px;">☀️ Solar Monitor</h1>
+            <p style="color:#64748b;font-size:1.1rem;margin-bottom:32px;">İzlemek istediğiniz fabrikayı seçin</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("🔧 Mekanik Fabrika", use_container_width=True, type="primary"):
+                st.session_state.fabrika_id = "mekanik"
+                st.rerun()
+        with c2:
+            if st.button("🏭 Üretim Fabrika", use_container_width=True, type="primary"):
+                st.session_state.fabrika_id = "uretim"
+                st.rerun()
+    st.stop()
+
+fab_id = st.session_state.fabrika_id
+fab_info = FABRIKALAR[fab_id]
+
+# --- YARDIMCI ---
 if 'ayarlar_kaydedildi' not in st.session_state:
     st.session_state.ayarlar_kaydedildi = False
 
 # --- YAN MENU ---
 with st.sidebar:
+    # Fabrika değiştirme butonu
+    st.caption(f"{fab_info['ikon']} {fab_info['ad']}")
+    if st.button("🔄 Fabrika Değiştir", use_container_width=True):
+        st.session_state.fabrika_id = None
+        st.rerun()
+    st.divider()
     st.header("PULSAR Ayarlari")
 
-    mevcut_ayarlar = veritabani.tum_ayarlari_oku()
+    mevcut_ayarlar = veritabani.tum_ayarlari_oku(fab_id)
     interval_options = {
         "10 saniye": 10,
         "30 saniye": 30,
@@ -162,18 +199,18 @@ with st.sidebar:
     submitted = st.button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
 
     if submitted:
-        veritabani.ayar_yaz('target_ip', target_ip)
-        veritabani.ayar_yaz('target_port', target_port)
-        veritabani.ayar_yaz('slave_ids', id_input)
-        veritabani.ayar_yaz('refresh_rate', refresh_rate)
-        veritabani.ayar_yaz('guc_addr', c_guc_adr)
-        veritabani.ayar_yaz('guc_scale', c_guc_sc)
-        veritabani.ayar_yaz('volt_addr', c_volt_adr)
-        veritabani.ayar_yaz('volt_scale', c_volt_sc)
-        veritabani.ayar_yaz('akim_addr', c_akim_adr)
-        veritabani.ayar_yaz('akim_scale', c_akim_sc)
-        veritabani.ayar_yaz('isi_addr', c_isi_adr)
-        veritabani.ayar_yaz('isi_scale', c_isi_sc)
+        veritabani.ayar_yaz('target_ip', target_ip, fab_id)
+        veritabani.ayar_yaz('target_port', target_port, fab_id)
+        veritabani.ayar_yaz('slave_ids', id_input, fab_id)
+        veritabani.ayar_yaz('refresh_rate', refresh_rate, fab_id)
+        veritabani.ayar_yaz('guc_addr', c_guc_adr, fab_id)
+        veritabani.ayar_yaz('guc_scale', c_guc_sc, fab_id)
+        veritabani.ayar_yaz('volt_addr', c_volt_adr, fab_id)
+        veritabani.ayar_yaz('volt_scale', c_volt_sc, fab_id)
+        veritabani.ayar_yaz('akim_addr', c_akim_adr, fab_id)
+        veritabani.ayar_yaz('akim_scale', c_akim_sc, fab_id)
+        veritabani.ayar_yaz('isi_addr', c_isi_adr, fab_id)
+        veritabani.ayar_yaz('isi_scale', c_isi_sc, fab_id)
 
         st.success("Ayarlar kaydedildi! Collector bir sonraki okuma dongusunda guncellenecek.")
         kullanici = st.session_state.get('username', 'admin')
@@ -201,7 +238,7 @@ with st.sidebar:
     st.markdown("---")
     st.header("Collector Durumu")
     # Collector'ın son veriyi ne zaman yazdığını DB'den kontrol et
-    _son = veritabani.tum_cihazlarin_son_durumu()
+    _son = veritabani.tum_cihazlarin_son_durumu(fab_id)
     if _son:
         try:
             _sz = max(r[1] for r in _son if r[1])
@@ -220,9 +257,9 @@ with st.sidebar:
     st.markdown("---")
     st.header(" Veri Yonetimi")
     if st.button("Tum Verileri Sil"):
-        if veritabani.db_temizle():
+        if veritabani.db_temizle(fab_id):
             kullanici = st.session_state.get('username', 'admin')
-            veritabani.audit_log_kaydet(kullanici, "veri_sil", "Tum olcum verileri silindi")
+            veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
             st.success("Temizlendi!")
             time.sleep(1)
             st.rerun()
@@ -261,7 +298,7 @@ def create_plotly_chart(df, column, title, color, unit=""):
 def create_comparison_chart(ids, metric, title, colors):
     fig = go.Figure()
     for i, dev_id in enumerate(ids):
-        data = veritabani.son_verileri_getir(dev_id, limit=100)
+        data = veritabani.son_verileri_getir(dev_id, limit=100, fabrika_id=fab_id)
         if not data:
             continue
             
@@ -351,7 +388,7 @@ def guncel_verileri_goster():
     status_spot = st.empty()
 
     # 1. TABLO VE KART GUNCELLEME
-    summary_data = veritabani.tum_cihazlarin_son_durumu()
+    summary_data = veritabani.tum_cihazlarin_son_durumu(fab_id)
     if summary_data:
         with gauge_spot.container():
             num_devices = len(summary_data)
@@ -406,7 +443,7 @@ def guncel_verileri_goster():
         table_spot.dataframe(df_sum.set_index("ID"), width='stretch')
 
     # 2. PLOTLY GRAFIK GUNCELLEME (Tekli)
-    detail_data = veritabani.son_verileri_getir(selected_id, limit=100)
+    detail_data = veritabani.son_verileri_getir(selected_id, limit=100, fabrika_id=fab_id)
     if detail_data:
         try:
             cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]

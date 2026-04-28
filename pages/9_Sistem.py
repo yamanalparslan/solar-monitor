@@ -13,6 +13,12 @@ if not check_auth():
     st.stop()
 logout_button()
 veritabani.init_db()
+
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
 runtime_config = load_runtime_config()
 st.title(" Sistem Durumu")
 section_header("", "Sistem Bilgileri", "Konfigurasyon ve ortam durumu")

@@ -21,10 +21,16 @@ if not check_auth():
 logout_button()
 veritabani.init_db()
 
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+
 st.title("Gelismis PDF Raporlayici")
 section_header("", "Belge Olustur", "Donanim analizi ve uretim verilerini profesyonel formata donusturun")
 
-ayarlar = veritabani.tum_ayarlari_oku()
+ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids_raw = ayarlar.get('slave_ids', '1,2,3')
 slave_ids, _ = utils.parse_id_list(slave_ids_raw)
 
@@ -49,15 +55,14 @@ else:
             toplam_uretim = 0
             
             for s_id in slave_ids:
-                istatistik = veritabani.tarih_araliginda_ortalamalar(baslangic_str, bitis_str, slave_id=s_id)
-                hatalar = veritabani.hata_sayilarini_getir(baslangic_str, bitis_str, slave_id=s_id)
+                istatistik = veritabani.tarih_araliginda_ortalamalar(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
+                hatalar = veritabani.hata_sayilarini_getir(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
                 
-                # Toplam uretim hesabi icin (birden fazla gun secilebilir)
                 delta = bitis - baslangic
                 cihaz_uretimi = 0
                 for i in range(delta.days + 1):
                     t_str = (baslangic + timedelta(days=i)).strftime('%Y-%m-%d')
-                    u = veritabani.gunluk_uretim_hesapla(t_str, slave_id=s_id)
+                    u = veritabani.gunluk_uretim_hesapla(t_str, slave_id=s_id, fabrika_id=fab_id)
                     if u:
                         cihaz_uretimi += u.get('uretim_kwh', 0)
                 

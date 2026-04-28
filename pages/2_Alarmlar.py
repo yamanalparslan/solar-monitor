@@ -15,6 +15,12 @@ if not check_auth():
 logout_button()
 veritabani.init_db()
 
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+
 st.title("Aktif Donanim Arizalari")
 section_header("", "Canli Alarm Paneli", "Cihazlardan gelen hata kodlarinin (Register 107 & 111) detayli dokumu")
 
@@ -36,7 +42,7 @@ def hata_bit_coz(kod, fault_map):
     return hatalar
 
 
-durumlar = veritabani.tum_cihazlarin_son_durumu()
+durumlar = veritabani.tum_cihazlarin_son_durumu(fab_id)
 
 if not durumlar:
     st.warning("Henuz veri yok.")

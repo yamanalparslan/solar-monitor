@@ -39,6 +39,12 @@ if not check_auth():
 logout_button()
 veritabani.init_db()
 
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+
 st.title("Fizik Tabanlı GES Üretim Tahmini")
 section_header("", "Astro-Termodinamik Model", "Canlı meteorolojik veriler ve evirici kapasitesine göre üretim simülasyonu")
 

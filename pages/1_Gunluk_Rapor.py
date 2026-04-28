@@ -43,6 +43,14 @@ if not check_auth():
 logout_button()
 veritabani.init_db()
 
+# --- Fabrika Kontrolü ---
+from veritabani import FABRIKALAR
+if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
+    st.warning("Lütfen ana sayfadan bir fabrika seçin.")
+    st.stop()
+fab_id = st.session_state.fabrika_id
+fab_info = FABRIKALAR[fab_id]
+
 # --- OTOMATIK YENILEME AYARI ---
 if 'refresh_interval' not in st.session_state:
     st.session_state.refresh_interval = 30
@@ -53,14 +61,14 @@ st.title("Gunluk Performans ve Uretim Raporu")
 section_header("", "Uretim Analizi", "Secilen tarihe gore tum cihazlarin uretim ve verimlilik ozeti")
 
 # --- AYARLARI OKUMA ---
-ayarlar = veritabani.tum_ayarlari_oku()
+ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids_raw = ayarlar.get('slave_ids', '1,2,3')
 slave_ids, parse_errors = utils.parse_id_list(slave_ids_raw)
 
 if parse_errors:
     st.warning("Parse hatasi: " + ", ".join(parse_errors))
 
-ayarlar = veritabani.tum_ayarlari_oku()
+ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 isi_scale = float(ayarlar.get('isi_scale', '1.0'))
 
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
@@ -79,9 +87,9 @@ def goster_rapor():
     # --- VER TOPLAMA ---
     rapor_listesi = []
     for s_id in slave_ids:
-        uretim = veritabani.gunluk_uretim_hesapla(tarih_str, slave_id=s_id)
-        istatistik = veritabani.tarih_araliginda_ortalamalar(tarih_str, tarih_str, slave_id=s_id)
-        hatalar = veritabani.hata_sayilarini_getir(tarih_str, tarih_str, slave_id=s_id)
+        uretim = veritabani.gunluk_uretim_hesapla(tarih_str, slave_id=s_id, fabrika_id=fab_id)
+        istatistik = veritabani.tarih_araliginda_ortalamalar(tarih_str, tarih_str, slave_id=s_id, fabrika_id=fab_id)
+        hatalar = veritabani.hata_sayilarini_getir(tarih_str, tarih_str, slave_id=s_id, fabrika_id=fab_id)
         
         if istatistik and istatistik.get('toplam_olcum', 0) > 0:
             hata_str = "0/0"

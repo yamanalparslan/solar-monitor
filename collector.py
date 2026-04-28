@@ -27,9 +27,9 @@ def _notify_websocket():
         pass  # WS bildirimi kritik değil, sessizce devam et
 
 
-def load_config():
-    """Veritabanindan ayarlari yukle."""
-    ayarlar = veritabani.tum_ayarlari_oku()
+def load_config(fabrika_id="mekanik"):
+    """Veritabanindan fabrikaya özel ayarlari yukle."""
+    ayarlar = veritabani.tum_ayarlari_oku(fabrika_id)
 
     slave_ids_raw = ayarlar.get("slave_ids", "1,2,3")
     slave_ids, parse_errors = utils.parse_id_list(slave_ids_raw)
@@ -268,99 +268,67 @@ def otomatik_veri_temizle(config):
 def start_collector():
     veritabani.init_db()
     print("=" * 60)
-    print("COLLECTOR BASLATILDI (Dinamik Ayar Modu)")
+    print("COLLECTOR BASLATILDI (Çoklu Fabrika Modu)")
     print("=" * 60)
 
-    config = load_config()
-    client = ModbusTcpClient(config["target_ip"], port=config["target_port"], timeout=5.0)
+    from veritabani import FABRIKALAR
 
-    print(f"IP: {config['target_ip']}:{config['target_port']}")
-    print(f"Refresh: {config['refresh_rate']}s")
-    print(f"Slave IDs: {config['slave_ids']}")
-    print(
-        "Carpanlar: "
-        f"Guc={config['guc_scale']}, "
-        f"V={config['volt_scale']}, "
-        f"A={config['akim_scale']}, "
-        f"C={config['isi_scale']}"
-    )
-    print(
-        "Adresler: "
-        f"Guc={config['guc_addr']}, "
-        f"V={config['volt_addr']}, "
-        f"A={config['akim_addr']}, "
-        f"C={config['isi_addr']}"
-    )
-
-    if config["veri_saklama_gun"] == 0:
-        print("Veri Saklama: Sinirsiz")
-    else:
-        print(f"Veri Saklama: {config['veri_saklama_gun']} Gun")
+    # Her fabrika için config ve client tut
+    fab_state = {}
+    for fab_id, fab_info in FABRIKALAR.items():
+        config = load_config(fab_id)
+        client = ModbusTcpClient(config["target_ip"], port=config["target_port"], timeout=5.0)
+        fab_state[fab_id] = {"config": config, "client": client}
+        print(f"  {fab_info['ikon']} {fab_info['ad']}: {config['target_ip']}:{config['target_port']} IDs={config['slave_ids']}")
 
     print("=" * 60)
 
     temizlik_sayaci = 0
     temizlik_periyodu = 1800
 
-    otomatik_veri_temizle(config)
-
     while True:
         start_time = time.time()
 
-        yeni_config = load_config()
-        if yeni_config != config:
-            if (
-                yeni_config["target_ip"] != config["target_ip"]
-                or yeni_config["target_port"] != config["target_port"]
-            ):
-                print("\nIP/Port degisti, baglanti yenileniyor...")
-                client.close()
-                client = ModbusTcpClient(
-                    yeni_config["target_ip"],
-                    port=yeni_config["target_port"],
-                    timeout=5.0,
-                )
-            config = yeni_config
-            print(f"\nAyarlar guncellendi (Refresh: {config['refresh_rate']}s)")
+        for fab_id in FABRIKALAR:
+            state = fab_state[fab_id]
+            config = state["config"]
+            client = state["client"]
+
+            # Ayar değişikliği kontrolü
+            yeni_config = load_config(fab_id)
+            if yeni_config != config:
+                if yeni_config["target_ip"] != config["target_ip"] or yeni_config["target_port"] != config["target_port"]:
+                    print(f"\n[{fab_id.upper()}] IP/Port degisti, baglanti yenileniyor...")
+                    client.close()
+                    client = ModbusTcpClient(yeni_config["target_ip"], port=yeni_config["target_port"], timeout=5.0)
+                    state["client"] = client
+                config = yeni_config
+                state["config"] = config
+
+            for dev_id in config["slave_ids"]:
+                print(f"[{fab_id.upper()}] ID {dev_id}...", end=" ")
+                time.sleep(0.5)
+                data = read_device(client, dev_id, config)
+                if data:
+                    veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
+                    hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
+                    # hata_kodu aslında hata_kodu key'inde
+                    hata_kodlari[0] = data.get("hata_kodu", 0)
+                    durum = "TEMIZ" if all(h == 0 for h in hata_kodlari) else "HATA"
+                    print(f"[OK] {durum}")
+                else:
+                    print("[YOK]")
 
         temizlik_sayaci += 1
         if temizlik_sayaci >= temizlik_periyodu:
             otomatik_veri_temizle(config)
             temizlik_sayaci = 0
 
-        for dev_id in config["slave_ids"]:
-            print(f"ID {dev_id}...", end=" ")
-            time.sleep(0.5)
-            data = read_device(client, dev_id, config)
-            if data:
-                veritabani.veri_ekle(dev_id, data)
-                h107 = data.get("hata_kodu", 0)
-                h109 = data.get("hata_kodu_109", 0)
-                h111 = data.get("hata_kodu_111", 0)
-                h112 = data.get("hata_kodu_112", 0)
-                h114 = data.get("hata_kodu_114", 0)
-                h115 = data.get("hata_kodu_115", 0)
-                h116 = data.get("hata_kodu_116", 0)
-                h117 = data.get("hata_kodu_117", 0)
-                h118 = data.get("hata_kodu_118", 0)
-                h119 = data.get("hata_kodu_119", 0)
-                h120 = data.get("hata_kodu_120", 0)
-                h121 = data.get("hata_kodu_121", 0)
-                h122 = data.get("hata_kodu_122", 0)
-                if h107 == 0 and h109 == 0 and h111 == 0 and h112 == 0 and h114 == 0 and h115 == 0 and h116 == 0 and h117 == 0 and h118 == 0 and h119 == 0 and h120 == 0 and h121 == 0 and h122 == 0:
-                    durum = "TEMIZ"
-                else:
-                    durum = f"HATA (107:{h107}, 109:{h109}, 111:{h111}, 112:{h112}, 114:{h114}, 115:{h115}, 116:{h116}, 117:{h117}, 118:{h118}, 119:{h119}, 120:{h120}, 121:{h121}, 122:{h122})"
-                print(f"[OK] {durum}")
-            else:
-                print("[YOK]")
-
-        elapsed = time.time() - start_time
-
-        # WebSocket istemcilerini bilgilendir
         _notify_websocket()
 
-        time.sleep(max(0, config["refresh_rate"] - elapsed))
+        elapsed = time.time() - start_time
+        min_refresh = min(fab_state[f]["config"]["refresh_rate"] for f in fab_state)
+        time.sleep(max(0, min_refresh - elapsed))
 
 
 if __name__ == "__main__":
