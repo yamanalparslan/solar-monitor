@@ -236,6 +236,7 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     simdi = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
+    
     hk_107 = data.get('hata_kodu', 0)
     hk_109 = data.get('hata_kodu_109', 0)
     hk_111 = data.get('hata_kodu_111', 0)
@@ -249,10 +250,23 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     hk_120 = data.get('hata_kodu_120', 0)
     hk_121 = data.get('hata_kodu_121', 0)
     hk_122 = data.get('hata_kodu_122', 0)
+    
+    # Tüm kolonlar sırasıyla INSERT komutuna dahil edildi
     cursor.execute("""
-        INSERT INTO olcumler (fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122)
+        INSERT INTO olcumler (
+            fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, 
+            hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, 
+            hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, 
+            hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+        )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (fabrika_id, slave_id, simdi, data['guc'], data['voltaj'], data['akim'], data['sicaklik'], hk_107, hk_109, hk_111, hk_112, hk_114, hk_115, hk_116, hk_117, hk_118, hk_119, hk_120, hk_121, hk_122))
+    """, (
+        fabrika_id, slave_id, simdi, 
+        data.get('guc', 0), data.get('voltaj', 0), data.get('akim', 0), data.get('sicaklik', 0), 
+        hk_107, hk_109, hk_111, hk_112, 
+        hk_114, hk_115, hk_116, hk_117, 
+        hk_118, hk_119, hk_120, hk_121, hk_122
+    ))
     conn.commit()
     conn.close()
 
