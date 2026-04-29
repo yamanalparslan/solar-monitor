@@ -272,7 +272,7 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT o.slave_id, o.zaman, o.guc, o.voltaj, o.akim, o.sicaklik, o.hata_kodu, o.hata_kodu_109, o.hata_kodu_111, o.hata_kodu_112, o.hata_kodu_114, o.hata_kodu_115, o.hata_kodu_116
+        SELECT o.slave_id, o.zaman, o.guc, o.voltaj, o.akim, o.sicaklik, o.hata_kodu, o.hata_kodu_109, o.hata_kodu_111, o.hata_kodu_112, o.hata_kodu_114, o.hata_kodu_115, o.hata_kodu_116, o.hata_kodu_117, o.hata_kodu_118, o.hata_kodu_119, o.hata_kodu_120, o.hata_kodu_121, o.hata_kodu_122
         FROM olcumler o
         WHERE o.fabrika_id = ? AND o.id = (
             SELECT COALESCE(

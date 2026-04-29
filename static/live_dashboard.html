@@ -241,6 +241,13 @@
 
 <div class="info-bar">
     <span>🔌 <span id="clientInfo">Bağlantı bekleniyor</span></span>
+    <span>
+        <label for="fabrikaSelect" style="margin-right:6px;">🏭 Fabrika:</label>
+        <select id="fabrikaSelect" onchange="renderFromCache()" style="background:#1e293b;color:#e2e8f0;border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px 10px;font-family:Inter,sans-serif;font-size:0.8rem;">
+            <option value="mekanik">Mekanik</option>
+            <option value="uretim">Üretim</option>
+        </select>
+    </span>
     <span>🕐 Son güncelleme: <strong id="lastUpdate">—</strong></span>
 </div>
 
@@ -266,6 +273,7 @@
     const statusText = document.getElementById('statusText');
     const lastUpdate = document.getElementById('lastUpdate');
     const clientInfo = document.getElementById('clientInfo');
+    const fabrikaSelect = document.getElementById('fabrikaSelect');
 
     // ── WebSocket Bağlantısı ──
     function connect() {
@@ -284,7 +292,7 @@
             try {
                 const data = JSON.parse(event.data);
                 lastData = data;
-                renderDevices(data);
+                renderFromCache();
                 lastUpdate.textContent = new Date().toLocaleTimeString('tr-TR');
             } catch (e) {
                 console.error('JSON parse hatası:', e);
@@ -308,9 +316,20 @@
         reconnectTimer = setTimeout(connect, RECONNECT_DELAY);
     }
 
+    // ── Cache'den render (fabrika değiştiğinde) ──
+    function renderFromCache() {
+        if (!lastData) return;
+        const fab = fabrikaSelect.value;
+        // Yeni format: data.fabrikalar.mekanik / data.fabrikalar.uretim
+        // Eski format uyumu: data.devices
+        const devices = (lastData.fabrikalar && lastData.fabrikalar[fab])
+            ? lastData.fabrikalar[fab]
+            : (lastData.devices || []);
+        renderDevices(devices);
+    }
+
     // ── Cihaz Kartlarını Render Et ──
-    function renderDevices(data) {
-        const devices = data.devices || [];
+    function renderDevices(devices) {
 
         if (devices.length === 0) {
             grid.innerHTML = `

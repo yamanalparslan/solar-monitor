@@ -77,61 +77,59 @@ async def read_device_async(client, slave_id, target_config):
 
 async def main_loop():
     veritabani.init_db()
+    from veritabani import FABRIKALAR
     print("==================================================")
-    print("ASENKRON COLLECTOR BAŞLATILDI (Yüksek Performans)")
+    print("ASENKRON COLLECTOR BAŞLATILDI (Çoklu Fabrika)")
     print("==================================================")
 
-    current_config = load_config()
-    client = AsyncModbusTcpClient(
-        current_config["target_ip"], 
-        port=current_config["target_port"], 
-        timeout=2.0
-    )
-
-    print(f"Hedef: {current_config['target_ip']}:{current_config['target_port']}")
-    print(f"Paralel Taranacak ID'ler: {current_config['slave_ids']}")
+    # Her fabrika için ayrı config ve client
+    fabrika_configs = {}
+    fabrika_clients = {}
+    for fab_id in FABRIKALAR:
+        cfg = load_config(fab_id)
+        fabrika_configs[fab_id] = cfg
+        fabrika_clients[fab_id] = AsyncModbusTcpClient(
+            cfg["target_ip"], port=cfg["target_port"], timeout=2.0
+        )
+        print(f"[{fab_id}] Hedef: {cfg['target_ip']}:{cfg['target_port']} | ID'ler: {cfg['slave_ids']}")
     
-    otomatik_veri_temizle(current_config)
+    otomatik_veri_temizle(fabrika_configs[list(FABRIKALAR.keys())[0]])
 
     while True:
         start_time = time.time()
         
-        # Gelecekteki dinamik degisiklik ihtiyacina karsi her dongu yavasca ayarlari guncelle
-        yeni_config = load_config()
-        if (yeni_config["target_ip"] != current_config["target_ip"] or 
-            yeni_config["target_port"] != current_config["target_port"]):
-            print("\nHedef IP/Port degisti, AsyncClient yenileniyor...")
-            client.close()
-            client = AsyncModbusTcpClient(yeni_config["target_ip"], port=yeni_config["target_port"], timeout=2.0)
-        current_config = yeni_config
-        
-        # Tum slave cihazlari icin asyncio gorevlerini olustur (Parallel fetch)
-        tasks = [read_device_async(client, dev_id, current_config) for dev_id in current_config["slave_ids"]]
-        results = await asyncio.gather(*tasks)
+        for fab_id in FABRIKALAR:
+            # Her döngüde ayarları güncelle
+            yeni_config = load_config(fab_id)
+            current_config = fabrika_configs[fab_id]
+            client = fabrika_clients[fab_id]
 
-        # Sonuclari isleme
-        for slave_id, data in results:
-            if data:
-                veritabani.veri_ekle(slave_id, data)
-                h107 = data.get("hata_kodu", 0)
-                h109 = data.get("hata_kodu_109", 0)
-                h111 = data.get("hata_kodu_111", 0)
-                h112 = data.get("hata_kodu_112", 0)
-                h114 = data.get("hata_kodu_114", 0)
-                h115 = data.get("hata_kodu_115", 0)
-                h116 = data.get("hata_kodu_116", 0)
-                h117 = data.get("hata_kodu_117", 0)
-                h118 = data.get("hata_kodu_118", 0)
-                h119 = data.get("hata_kodu_119", 0)
-                h120 = data.get("hata_kodu_120", 0)
-                h121 = data.get("hata_kodu_121", 0)
-                h122 = data.get("hata_kodu_122", 0)
-                print(f"[Async] ID {slave_id} Cekildi | Guc: {data['guc']}W | Hatalar: {h107}/{h109}/{h111}/{h112}/{h114}/{h115}/{h116}/{h117}/{h118}/{h119}/{h120}/{h121}/{h122}")
-            else:
-                print(f"[Async] ID {slave_id} Baglanti Yok")
+            if (yeni_config["target_ip"] != current_config["target_ip"] or 
+                yeni_config["target_port"] != current_config["target_port"]):
+                print(f"\n[{fab_id}] Hedef IP/Port degisti, AsyncClient yenileniyor...")
+                client.close()
+                client = AsyncModbusTcpClient(yeni_config["target_ip"], port=yeni_config["target_port"], timeout=2.0)
+                fabrika_clients[fab_id] = client
+            fabrika_configs[fab_id] = yeni_config
+            
+            # Tum slave cihazlari icin asyncio gorevlerini olustur (Parallel fetch)
+            tasks = [read_device_async(client, dev_id, yeni_config) for dev_id in yeni_config["slave_ids"]]
+            results = await asyncio.gather(*tasks)
+
+            # Sonuclari isleme
+            for slave_id, data in results:
+                if data:
+                    veritabani.veri_ekle(slave_id, data, fabrika_id=fab_id)
+                    h107 = data.get("hata_kodu", 0)
+                    h109 = data.get("hata_kodu_109", 0)
+                    h111 = data.get("hata_kodu_111", 0)
+                    print(f"[Async/{fab_id}] ID {slave_id} | Guc: {data['guc']}W | H107:{h107} H109:{h109} H111:{h111}")
+                else:
+                    print(f"[Async/{fab_id}] ID {slave_id} Baglanti Yok")
 
         elapsed = time.time() - start_time
-        kalan_bekleme = max(0.5, current_config["refresh_rate"] - elapsed)
+        min_refresh = min(c["refresh_rate"] for c in fabrika_configs.values())
+        kalan_bekleme = max(0.5, min_refresh - elapsed)
         await asyncio.sleep(kalan_bekleme)
 
 if __name__ == "__main__":
@@ -139,3 +137,4 @@ if __name__ == "__main__":
         asyncio.run(main_loop())
     except KeyboardInterrupt:
         print("Asenkron Collector durduruldu.")
+

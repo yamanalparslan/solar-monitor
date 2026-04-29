@@ -4,7 +4,7 @@ datasources:
   - name: Prometheus
     type: prometheus
     # container_name üzerinden erişim
-    url: http://solar_prometheus:9100
+    url: http://solar_prometheus:9090
     access: proxy
     isDefault: true
     editable: false

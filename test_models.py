@@ -10,7 +10,13 @@ def test_fault_maps():
     assert len(FAULT_MAP_112) > 0
     assert len(FAULT_MAP_114) > 0
     assert len(FAULT_MAP_115) > 0
-    assert len(FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122) > 0
+    assert len(FAULT_MAP_116) > 0
+    assert len(FAULT_MAP_117) > 0
+    assert len(FAULT_MAP_118) > 0
+    assert len(FAULT_MAP_119) > 0
+    assert len(FAULT_MAP_120) > 0
+    assert len(FAULT_MAP_121) > 0
+    assert len(FAULT_MAP_122) > 0
     assert 0 in FAULT_MAP_107
     assert "DC Overcurrent" in FAULT_MAP_107[0]
     assert 0 in FAULT_MAP_109
@@ -21,8 +27,14 @@ def test_fault_maps():
     assert "String Current Backfeed" in FAULT_MAP_114[0]
     assert 0 in FAULT_MAP_115
     assert "Low Insulation Resistance MPPT" in FAULT_MAP_115[0]
-    assert 0 in FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122
-    assert "Insufficient DC voltage" in FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122[0]
+    assert 0 in FAULT_MAP_116
+    assert 0 in FAULT_MAP_117
+    assert 0 in FAULT_MAP_118
+    assert 0 in FAULT_MAP_119
+    assert 0 in FAULT_MAP_120
+    assert 0 in FAULT_MAP_121
+    assert 0 in FAULT_MAP_122
+    assert "Insufficient DC voltage" in FAULT_MAP_122[0]
 
 def test_olcum_verisi_to_dict():
     data = OlcumVerisi(

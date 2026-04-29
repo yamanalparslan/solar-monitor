@@ -16,19 +16,26 @@ import hashlib
 import streamlit as st
 
 
+# PBKDF2 sabitleri
+_PBKDF2_ITERATIONS = 100_000
+_PBKDF2_SALT = b'solar_monitor_v2'
+
+
 def _get_password_hash(password: str) -> str:
-    """SHA-256 ile ifre hash'i oluturur."""
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    """PBKDF2-HMAC-SHA256 ile güçlü şifre hash'i oluşturur (100K iterasyon)."""
+    return hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), _PBKDF2_SALT, _PBKDF2_ITERATIONS
+    ).hex()
 
 
 def _verify_password(password: str, stored_hash: str) -> bool:
-    """ifreyi hash ile karlatrr."""
+    """Şifreyi PBKDF2 hash ile karşılaştırır."""
     return _get_password_hash(password) == stored_hash
 
 
 def _is_auth_enabled() -> bool:
-    """Authentication aktif mi kontrol eder."""
-    return False  # CRM entegrasyonu için Login sistemi tamamen devre dışı bırakıldı
+    """Authentication aktif mi kontrol eder (.env AUTH_ENABLED ile yönetilir)."""
+    return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
 
 
 def _get_credentials() -> tuple[str, str]:
