@@ -9,11 +9,9 @@ import veritabani
 
 import sys
 import io
-# Logların görünmez olmasını engellemek için
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
 
 WS_NOTIFY_URL = os.getenv("WS_NOTIFY_URL", "http://solar_api:8503/ws/notify")
-
 
 def _notify_websocket():
     try:
@@ -23,7 +21,6 @@ def _notify_websocket():
         urllib.request.urlopen(req, timeout=2)
     except Exception:
         pass
-
 
 def load_config(fabrika_id="mekanik"):
     ayarlar = veritabani.tum_ayarlari_oku(fabrika_id)
@@ -64,8 +61,6 @@ def load_config(fabrika_id="mekanik"):
         ],
     }
 
-
-# Ölü cihazlarda 4 dakika kilitlenmeyi önlemek için max_retries 1 yapıldı
 def read_device(client, slave_id, config, max_retries=1):
     for attempt in range(max_retries):
         try:
@@ -87,8 +82,6 @@ def read_device(client, slave_id, config, max_retries=1):
             
             src_guc, src_volt, src_akim, src_isi = "hizli_oku", "hizli_oku", "hizli_oku", "hizli_oku"
 
-            # YENİ EKLENEN KISIM: Sadece bütün değerler None (cevap yok) ise cihazı atla. 
-            # Değerler 0 bile olsa kaydetmeye devam et.
             if raw_guc is None and raw_volt is None and raw_akim is None and raw_isi is None:
                 return None
 
@@ -138,7 +131,6 @@ def read_device(client, slave_id, config, max_retries=1):
                 continue
             return None
 
-
 def otomatik_veri_temizle(config):
     saklama_gun = config.get("veri_saklama_gun", 365)
     if saklama_gun == 0: return 0
@@ -148,7 +140,6 @@ def otomatik_veri_temizle(config):
         return silinen
     except Exception:
         return 0
-
 
 def start_collector():
     veritabani.init_db()
@@ -161,8 +152,8 @@ def start_collector():
     fab_state = {}
     for fab_id, fab_info in FABRIKALAR.items():
         config = load_config(fab_id)
-        # Timeout 5.0'dan 1.5'e düşürüldü, ölü cihazları anında atlasın diye
-        client = ModbusTcpClient(config["target_ip"], port=config["target_port"], timeout=1.5)
+        # Timeout süresi invertör cevap verebilsin diye 3.0 saniyeye çıkarıldı
+        client = ModbusTcpClient(config["target_ip"], port=config["target_port"], timeout=3.0)
         fab_state[fab_id] = {"config": config, "client": client}
         print(f"  {fab_info['ikon']} {fab_info['ad']}: {config['target_ip']}:{config['target_port']} IDs={config['slave_ids']}")
 
@@ -184,13 +175,13 @@ def start_collector():
                 if yeni_config["target_ip"] != config["target_ip"] or yeni_config["target_port"] != config["target_port"]:
                     print(f"\n[{fab_id.upper()}] IP/Port degisti, baglanti yenileniyor...")
                     client.close()
-                    client = ModbusTcpClient(yeni_config["target_ip"], port=yeni_config["target_port"], timeout=1.5)
+                    # Timeout burada da 3.0 saniyeye çıkarıldı
+                    client = ModbusTcpClient(yeni_config["target_ip"], port=yeni_config["target_port"], timeout=3.0)
                     state["client"] = client
                 config = yeni_config
                 state["config"] = config
 
             for dev_id in config["slave_ids"]:
-                # BU SATIR KRİTİK: flush=True ile logun donmasını engelledik
                 print(f"[{fab_id.upper()}] ID {dev_id}...", end=" ", flush=True)
                 time.sleep(0.5)
                 data = read_device(client, dev_id, config)
