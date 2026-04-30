@@ -148,10 +148,10 @@ def _try_read_metric_sync(client, addr: int, slave_id: int, is_32bit: bool = Fal
     return None, None
 
 
-def read_device(client, slave_id: int, config: dict, max_retries: int = 2):
+def read_device(client, slave_id: int, config: dict, max_retries: int = 3):
     """
-    Senkron Modbus okuma (Modbus Poll mantığı ile Blok Okuma).
-    Parçalı sorgular yerine adres aralıklarını tek seferde okur.
+    Senkron Modbus okuma (Dinamik Blok Okuma).
+    .env dosyasına girilen adres aralıklarını otomatik hesaplar ve tek seferde okur.
     """
     for attempt in range(max_retries):
         try:
@@ -159,22 +159,29 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 2):
                 client.connect()
                 time.sleep(0.1)
 
-            # ── 1. ADIM: TEMEL METRİKLERİ TEK BİR BLOK OLARAK OKU ──
-            # Akım(25), Voltaj(28), Güç(33), Sıcaklık(44)
-            # 25'ten başlayıp 20 register okursak, 44 dahil hepsini tek pakette almış oluruz. (44 - 25 + 1 = 20)
-            start_addr = 25
-            count = 20 
+            # ── 1. ADIM: TEMEL METRİKLERİ DİNAMİK BLOK OLARAK OKU ──
+            # Ayarlardaki adreslerin en küçüğünü ve en büyüğünü bul
+            metrik_adresleri = [
+                config["akim_addr"], 
+                config["volt_addr"], 
+                config["guc_addr"], 
+                config["isi_addr"]
+            ]
+            start_addr = min(metrik_adresleri)
+            end_addr = max(metrik_adresleri)
+            
+            # Aradaki fark kadar register oku (+1 dahil etmek için)
+            count = (end_addr - start_addr) + 1 
             
             time.sleep(0.05)
             rr_temel = client.read_holding_registers(address=start_addr, count=count, slave=slave_id)
             
-            # Eğer okuma başarısızsa retry döngüsüne gir
             if getattr(rr_temel, "isError", lambda: True)():
                 continue  
             
             regs = rr_temel.registers
             
-            # Diziden (Array) değerleri cımbızla çekiyoruz (25 -> index 0, 28 -> index 3 vb.)
+            # Değerleri diziden dinamik ofset hesaplayarak al (Güvenli yöntem)
             raw_akim = regs[config["akim_addr"] - start_addr]
             raw_volt = regs[config["volt_addr"] - start_addr]
             raw_guc  = regs[config["guc_addr"] - start_addr]
@@ -183,10 +190,9 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 2):
             # ── Değer Dönüşümleri ──
             val_volt = utils.to_signed16(raw_volt) * config["volt_scale"]
             val_akim = utils.to_signed16(raw_akim) * config["akim_scale"]
-            val_guc  = utils.to_signed16(raw_guc) * config["guc_scale"]
+            val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
             val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
 
-            # Güç 0 hesaplaması
             if val_guc <= 0 and val_volt > 0 and val_akim > 0:
                 val_guc = round(val_volt * val_akim, 2)
 
@@ -202,11 +208,16 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 2):
                 "sicaklik": val_isi,
             }
 
-            # ── 2. ADIM: ALARMLARI TEK BİR BLOK OLARAK OKU ──
-            # Alarmlar 107 ile 122 arasında. 107'den başlayıp 20 register okursak tüm alarmları yormadan almış oluruz.
-            alarm_start = 107
-            alarm_count = 20
-            
+            # ── 2. ADIM: ALARMLARI DİNAMİK BLOK OLARAK OKU ──
+            # Alarm adreslerinin sınırlarını bul
+            alarm_adresleri = [reg["addr"] for reg in config["alarm_registers"]]
+            if not alarm_adresleri:
+                return veriler
+
+            alarm_start = min(alarm_adresleri)
+            alarm_end = max(alarm_adresleri) + 1 # count=2 olanlar için +1 ekliyoruz
+            alarm_count = (alarm_end - alarm_start) + 1
+
             time.sleep(0.05)
             rr_alarm = client.read_holding_registers(address=alarm_start, count=alarm_count, slave=slave_id)
             
@@ -217,7 +228,6 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 2):
                     a_count = reg.get("count", 2)
                     offset = a_addr - alarm_start
                     
-                    # Diziden taşma olmaması için güvenlik kontrolü
                     if offset >= 0 and (offset + a_count) <= len(alarm_regs):
                         if a_count == 2:
                             veriler[reg["key"]] = (alarm_regs[offset] << 16) | alarm_regs[offset + 1]

@@ -4,19 +4,10 @@ Solar Monitor - Birlesik Asenkron Veri Toplayici (Ana Collector)
 collector.py'nin tum ozelliklerini icerir + AsyncModbus mimarisi.
 Bu dosya artik tek ve ana collector olarak kullanilir.
 
-Calistirma:
-    python collector_async.py
-
-Docker:
-    entrypoint: ["python", "collector_async.py"]
-
 Modbus Veri Kalitesi Duzeltmeleri:
-    - Her register icin hem holding (FC3) hem input (FC4) denenir
-    - Blok okuma fallback: addr=73 okunamazsa 70-73 blogu okunup offset 3 alinir
+    - Dinamik Blok Okuma: Metrik ve alarmlari tek paket halinde okur (Modbus Poll mantigi)
     - to_signed16: voltaj/akim negatif olabilir, signed cevirme zorunlu
-    - decode_temperature_register: farkli scale carpanlari otomatik denenir
-    - Tum degerler sifirsa kayit atlanir (gercek veri yok)
-    - Guc=0 ama V ve A varsa P=V*I ile hesaplanir
+    - decode_temperature_register: otomatik scale tespiti
 """
 
 import asyncio
@@ -47,7 +38,7 @@ WS_NOTIFY_URL = os.getenv("WS_NOTIFY_URL", "http://solar_api:8503/ws/notify")
 # ─────────────────────────────────────────────
 
 def _ws_notify_sync():
-    """Collector veri yazdiktan sonra API'ye bildirim gonderir (sync, thread'de calisir)."""
+    """Collector veri yazdiktan sonra API'ye bildirim gonderir."""
     try:
         import urllib.request
         req = urllib.request.Request(WS_NOTIFY_URL, data=b"", method="POST")
@@ -109,116 +100,55 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
 
 
 # ─────────────────────────────────────────────
-# Modbus Okuma Stratejisi - DUZELTME MERKEZI
-# ─────────────────────────────────────────────
-
-def build_metric_candidates(start_addr: int, is_32bit: bool = False) -> list:
-    """
-    Tek bir register adresi icin denenecek (func, addr, count, offset) adaylarini uretir.
-    32-bit (2 register) okuma destegi eklenmistir.
-    """
-    candidates = []
-    read_count = 2 if is_32bit else 1
-
-    # 1. Tekil okumalar (en hizli, once dene)
-    candidates.append(("holding", start_addr, read_count, 0))
-    candidates.append(("input",   start_addr, read_count, 0))
-
-    # 2. Blok okumalar - start_addr'dan max 3 geri giderek farkli bloklar dene
-    max_lookback = min(4, start_addr + 1)
-    for block_offset in range(max_lookback):
-        block_start = start_addr - block_offset
-        if block_start >= 0:
-            # 32-bit okunacaksa blok boyutu offset'i ve 2 register'i kapsamalidir
-            block_size = max(4, block_offset + read_count)
-            candidates.append(("input",   block_start, block_size, block_offset))
-            candidates.append(("holding", block_start, block_size, block_offset))
-
-    return candidates
-
-
-async def _async_read_registers(
-    client, func: str, address: int, count: int, slave_id: int
-) -> list | None:
-    """Verilen fonksiyon tipiyle async register okur. Hata/exception durumunda None doner."""
-    try:
-        await asyncio.sleep(0.05)
-        if func == "holding":
-            rr = await client.read_holding_registers(address=address, count=count, slave=slave_id)
-        else:
-            rr = await client.read_input_registers(address=address, count=count, slave=slave_id)
-
-        if rr.isError():
-            return None
-        regs = getattr(rr, "registers", None)
-        return regs if regs else None
-    except Exception:
-        return None
-
-
-async def _try_read_metric(
-    client, addr: int, slave_id: int, is_32bit: bool = False
-) -> tuple:
-    """
-    Bir metrik adresi icin tum adaylari sirayla dener.
-    is_32bit True ise, 2 adet 16-bit register okuyup birlestirir.
-    """
-    for func, address, count, offset in build_metric_candidates(addr, is_32bit):
-        regs = await _async_read_registers(client, func, address, count, slave_id)
-        if regs is not None:
-            if is_32bit and len(regs) >= (offset + 2):
-                # 32-bit okuma: Iki register'i birlestir (High-Word, Low-Word)
-                combined_value = (regs[offset] << 16) | regs[offset + 1]
-                return combined_value, func
-            elif not is_32bit and len(regs) > offset:
-                # 16-bit okuma
-                return regs[offset], func
-    return None, None
-
-
-# ─────────────────────────────────────────────
-# Cihaz Okuma (Ana Islevsellik)
+# Cihaz Okuma (Dinamik Blok Okuma - Async)
 # ─────────────────────────────────────────────
 
 async def read_device_async(
     client: AsyncModbusTcpClient, slave_id: int, config: dict
 ) -> tuple:
     """
-    Tek bir inverter cihazindan tum verileri asenkron okur.
+    Tek bir inverter cihazindan tum verileri asenkron ve dinamik blok okuma ile alir.
     """
     try:
         if not client.connected:
             await client.connect()
             await asyncio.sleep(0.1)
 
-        # ── Temel metrikler ──
-        # ── Temel metrikler (Pulsar Dokümanına Göre Hepsi 16-bit UINT16) ──
-        # Cihazınız UINT16 kullandığı için is_32bit=False YAPILMALIDIR.
-        raw_volt, volt_src = await _try_read_metric(client, config["volt_addr"], slave_id, is_32bit=False)
-        if raw_volt is None:
-            return slave_id, None
+        # ── 1. ADIM: TEMEL METRIKLERI DINAMIK BLOK OLARAK OKU ──
+        metrik_adresleri = [
+            config["akim_addr"],
+            config["volt_addr"],
+            config["guc_addr"],
+            config["isi_addr"]
+        ]
+        start_addr = min(metrik_adresleri)
+        end_addr = max(metrik_adresleri)
+        count = (end_addr - start_addr) + 1
 
-        raw_guc,  guc_src  = await _try_read_metric(client, config["guc_addr"],  slave_id, is_32bit=False)
-        raw_akim, akim_src = await _try_read_metric(client, config["akim_addr"], slave_id, is_32bit=False)
-        raw_isi,  isi_src  = await _try_read_metric(client, config["isi_addr"],  slave_id, is_32bit=False)
-        # ── Deger Donusumu ──
+        await asyncio.sleep(0.05)
+        rr_temel = await client.read_holding_registers(address=start_addr, count=count, slave=slave_id)
+        
+        if rr_temel.isError():
+            # Input register denemesi (fallback)
+            rr_temel = await client.read_input_registers(address=start_addr, count=count, slave=slave_id)
+            if rr_temel.isError():
+                return slave_id, None
+
+        regs = rr_temel.registers
+        
+        raw_akim = regs[config["akim_addr"] - start_addr]
+        raw_volt = regs[config["volt_addr"] - start_addr]
+        raw_guc  = regs[config["guc_addr"] - start_addr]
+        raw_isi  = regs[config["isi_addr"] - start_addr]
+
+        # ── Deger Donusumleri ──
         val_volt = utils.to_signed16(raw_volt) * config["volt_scale"]
-        val_akim = (
-            0.0 if raw_akim is None
-            else utils.to_signed16(raw_akim) * config["akim_scale"]
-        )
-        val_guc = 0.0 if raw_guc is None else raw_guc * config["guc_scale"]
-        val_isi = (
-            0.0 if raw_isi is None
-            else utils.decode_temperature_register(raw_isi, config["isi_scale"])
-        )
+        val_akim = utils.to_signed16(raw_akim) * config["akim_scale"]
+        val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
+        val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
 
         if val_guc <= 0 and val_volt > 0 and val_akim > 0:
             val_guc = round(val_volt * val_akim, 2)
-
-        if val_guc == 0.0 and val_volt == 0.0 and val_akim == 0.0 and val_isi == 0.0:
-            logger.debug("ID %d: Tum degerler sifir, kayit atlandi", slave_id)
-            return slave_id, None
 
         veriler = {
             "guc":      val_guc,
@@ -227,25 +157,33 @@ async def read_device_async(
             "sicaklik": val_isi,
         }
 
-        # ── Alarm Register'lari ──
-        for reg in config["alarm_registers"]:
-            try:
-                await asyncio.sleep(0.03)
-                count = reg.get("count", 2)
-                regs = await _async_read_registers(
-                    client, "holding", reg["addr"], count, slave_id
-                )
-                if regs is not None:
-                    if count == 2 and len(regs) >= 2:
-                        veriler[reg["key"]] = (regs[0] << 16) | regs[1]
-                    elif count == 1 and len(regs) >= 1:
-                        veriler[reg["key"]] = regs[0]
+        # ── 2. ADIM: ALARMLARI DINAMIK BLOK OLARAK OKU ──
+        alarm_adresleri = [reg["addr"] for reg in config["alarm_registers"]]
+        if alarm_adresleri:
+            alarm_start = min(alarm_adresleri)
+            alarm_end = max(alarm_adresleri) + 1
+            alarm_count = (alarm_end - alarm_start) + 1
+
+            await asyncio.sleep(0.05)
+            rr_alarm = await client.read_holding_registers(address=alarm_start, count=alarm_count, slave=slave_id)
+            
+            if not rr_alarm.isError():
+                alarm_regs = rr_alarm.registers
+                for reg in config["alarm_registers"]:
+                    a_addr = reg["addr"]
+                    a_count = reg.get("count", 2)
+                    offset = a_addr - alarm_start
+                    
+                    if offset >= 0 and (offset + a_count) <= len(alarm_regs):
+                        if a_count == 2:
+                            veriler[reg["key"]] = (alarm_regs[offset] << 16) | alarm_regs[offset + 1]
+                        else:
+                            veriler[reg["key"]] = alarm_regs[offset]
                     else:
                         veriler[reg["key"]] = 0
-                else:
+            else:
+                for reg in config["alarm_registers"]:
                     veriler[reg["key"]] = 0
-            except Exception:
-                veriler[reg["key"]] = 0
 
         return slave_id, veriler
 
@@ -283,7 +221,7 @@ async def main_loop():
     from veritabani import FABRIKALAR
 
     print("=" * 65)
-    print("ASENKRON COLLECTOR BASLATILDI - Ana Collector (Birlesik Mod)")
+    print("ASENKRON COLLECTOR BASLATILDI - Dinamik Blok Okuma Modu")
     print("=" * 65)
 
     fab_configs: dict = {}
@@ -304,7 +242,7 @@ async def main_loop():
     print("=" * 65)
 
     temizlik_sayaci = 0
-    TEMIZLIK_PERIYODU = 1800  # saniye (30 dakika)
+    TEMIZLIK_PERIYODU = 1800
 
     while True:
         dongu_baslangic = time.time()
@@ -326,7 +264,6 @@ async def main_loop():
             cfg    = yeni_cfg
 
             if not cfg["slave_ids"]:
-                print(f"[{fab_id.upper()}] Slave ID listesi bos, atlandi.")
                 continue
 
             tasks = [read_device_async(client, dev_id, cfg) for dev_id in cfg["slave_ids"]]
@@ -340,17 +277,19 @@ async def main_loop():
                 slave_id, data = result
                 if data:
                     veritabani.veri_ekle(slave_id, data, fabrika_id=fab_id)
-                    hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
-                    hata_kodlari[0] = data.get("hata_kodu", 0)
-                    durum = "TEMIZ" if all(h == 0 for h in hata_kodlari) else "HATA"
+                    hata_var = data.get("hata_kodu", 0) != 0 or any(
+                        data.get(f"hata_kodu_{r}", 0) != 0
+                        for r in [109, 111, 112, 114, 115, 116, 117, 118, 119, 120, 121, 122]
+                    )
+                    durum = "[HATA]" if hata_var else "[TEMIZ]"
                     print(
                         f"[{fab_id.upper()}] ID {slave_id} | "
                         f"G={data['guc']:.1f}W  V={data['voltaj']:.1f}V  "
                         f"A={data['akim']:.2f}A  T={data['sicaklik']:.1f}C  "
-                        f"[{durum}]"
+                        f"{durum}"
                     )
                 else:
-                    print(f"[{fab_id.upper()}] ID {slave_id} | [YOK / CEVAP YOK]")
+                    print(f"[{fab_id.upper()}] ID {slave_id} | [CEVAP YOK]")
 
         temizlik_sayaci += 1
         if temizlik_sayaci * min(c["refresh_rate"] for c in fab_configs.values()) >= TEMIZLIK_PERIYODU:
