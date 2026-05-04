@@ -73,7 +73,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
     webhook_enabled = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
     webhook_url = os.getenv("WEBHOOK_URL", "")
     webhook_api_key = os.getenv("WEBHOOK_API_KEY", "")
-    webhook_interval = float(os.getenv("WEBHOOK_INTERVAL", "60"))
+    webhook_daily_time = os.getenv("WEBHOOK_DAILY_TIME", "23:50")
 
     return {
         "target_devices": target_devices,
@@ -82,7 +82,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
         "webhook_enabled": webhook_enabled,
         "webhook_url":     webhook_url,
         "webhook_api_key": webhook_api_key,
-        "webhook_interval": webhook_interval,
+        "webhook_daily_time": webhook_daily_time,
         "guc_addr":       int(os.getenv("GUC_ADDR", ayarlar.get("guc_addr", 93))),
         "volt_addr":      int(os.getenv("VOLT_ADDR", ayarlar.get("volt_addr", 29))),
         "akim_addr":      int(os.getenv("AKIM_ADDR", ayarlar.get("akim_addr", 26))),
@@ -292,40 +292,59 @@ def otomatik_veri_temizle(config: dict) -> int:
     except Exception:
         return 0
 
-def send_data_via_post(config: dict, device_id: int, ip_address: str, data: dict):
-    if not config.get("webhook_enabled") or not config.get("webhook_url"):
-        return
-
-    def _post_task():
-        try:
-            timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+def start_daily_webhook_thread():
+    def _daily_task():
+        from veritabani import FABRIKALAR, gunluk_uretim_hesapla, tarih_araliginda_ortalamalar, hata_sayilarini_getir
+        while True:
+            now = datetime.datetime.now()
+            config = load_config("mekanik")
             
-            alarms = {}
-            telemetry = {}
-            for k, v in data.items():
-                if k.startswith("hata_kodu"):
-                    alarms[k] = v
-                else:
-                    telemetry[k] = v
+            if config.get("webhook_enabled") and config.get("webhook_url"):
+                target_time = config.get("webhook_daily_time", "23:50").split(":")
+                if len(target_time) == 2 and now.hour == int(target_time[0]) and now.minute == int(target_time[1]):
+                    today_str = now.strftime('%Y-%m-%d')
+                    
+                    for fab_id in FABRIKALAR:
+                        fab_config = load_config(fab_id)
+                        for device in fab_config["target_devices"]:
+                            ip = device["ip"]
+                            for slave_id in device["slave_ids"]:
+                                try:
+                                    base_dev_id = int(ip.split(".")[-1])
+                                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                                    
+                                    uretim = gunluk_uretim_hesapla(today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    ortalama = tarih_araliginda_ortalamalar(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    hatalar = hata_sayilarini_getir(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    
+                                    payload = {
+                                        "tarih": today_str,
+                                        "fabrika_id": fab_id,
+                                        "device_id": dev_id,
+                                        "ip_address": ip,
+                                        "ozet": {
+                                            "toplam_uretim_kwh": uretim.get("uretim_kwh", 0),
+                                            "calisma_suresi_saat": uretim.get("calisma_suresi_saat", 0),
+                                            "ortalama_sicaklik": round(ortalama.get("ort_sicaklik", 0) or 0, 2),
+                                            "max_guc": round(ortalama.get("max_guc", 0) or 0, 2),
+                                            "toplam_hata_sayisi": hatalar.get("hata_107_sayisi", 0) or 0
+                                        }
+                                    }
+                                    
+                                    headers = {"Content-Type": "application/json"}
+                                    if config.get("webhook_api_key"):
+                                        headers["Authorization"] = f"Bearer {config['webhook_api_key']}"
+                                    
+                                    response = requests.post(config["webhook_url"], json=payload, headers=headers, timeout=10)
+                                    response.raise_for_status()
+                                    logging.info(f"[WEBHOOK] Gunluk ozet gonderildi: Fabrika {fab_id}, Cihaz {dev_id}")
+                                except Exception as e:
+                                    logging.error(f"Gunluk webhook hatasi (Cihaz {dev_id}): {e}")
+                    
+                    time.sleep(65)
+            time.sleep(30)
 
-            payload = {
-                "device_id": device_id,
-                "ip_address": ip_address,
-                "timestamp": timestamp,
-                "telemetry": telemetry,
-                "alarms": alarms
-            }
-
-            headers = {"Content-Type": "application/json"}
-            if config.get("webhook_api_key"):
-                headers["Authorization"] = f"Bearer {config['webhook_api_key']}"
-
-            response = requests.post(config["webhook_url"], json=payload, headers=headers, timeout=5)
-            response.raise_for_status()
-        except Exception as e:
-            logging.error("Webhook POST hatasi (IP: %s): %s", ip_address, e)
-
-    thread = threading.Thread(target=_post_task, daemon=True)
+    thread = threading.Thread(target=_daily_task, daemon=True)
     thread.start()
 
 
@@ -343,7 +362,9 @@ def start_collector():
     TEMIZLIK_PERIYODU = 1800
 
     clients = {}
-    last_webhook_times = {}
+    
+    # Günlük özet gönderim servisini başlat
+    start_daily_webhook_thread()
 
     while True:
         baslangic = time.time()
@@ -353,7 +374,6 @@ def start_collector():
             config = load_config(fab_id)
             port = config["target_port"]
             refresh_rate = config["refresh_rate"]
-            webhook_interval = config["webhook_interval"]
 
             for device in config["target_devices"]:
                 ip = device["ip"]
@@ -380,13 +400,6 @@ def start_collector():
                     data = read_device(client, slave_id, config, max_retries=3)
                     if data:
                         veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
-                        
-                        # Webhook Zaman Kontrolü (İstenilen Zaman Skalası)
-                        now = time.time()
-                        last_time = last_webhook_times.get(dev_id, 0)
-                        if (now - last_time) >= webhook_interval:
-                            send_data_via_post(config, dev_id, ip, data)
-                            last_webhook_times[dev_id] = now
 
                         hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
                         hata_kodlari[0] = data.get("hata_kodu", 0)
