@@ -1,0 +1,37 @@
+# ============================================================
+# STREAMLIT YAPILANDIRMASI - CRM GÖMME (EMBED) AYARLARI
+# ============================================================
+# Bu dosya Solar Monitor'ün bir CRM iframe'i içinde
+# çalışabilmesi için gereken ayarları içerir.
+
+[server]
+# CRM'nin Solar Monitor'e iframe ile erişeceği adres/port
+# Docker'da 0.0.0.0, lokalde 0.0.0.0 veya 127.0.0.1
+address = "0.0.0.0"
+port = 8501
+
+# iframe içinde gömmek için CORS ve XSRF korumasını ayarla
+enableCORS = false
+enableXsrfProtection = false
+
+# Tarayıcının otomatik açılmasını engelle (sunucu modunda)
+headless = true
+
+[browser]
+# CRM kullanıcılarının erişeceği harici URL
+# xxxxx → CRM sunucunuzun Solar Monitor'e yönlendirdiği URL
+# Örnek: "https://crm.sirketiniz.com/solar" veya "http://10.35.14.5:8501"
+serverAddress = "xxxxx"
+serverPort = 8501
+
+# Hamburger menüsü ve footer'ı gizle (temiz embed görünümü)
+gatherUsageStats = false
+
+[theme]
+# CRM'nizin tema renkleriyle uyumlu olması için
+# İsterseniz burayı CRM'nizin renklerine göre düzenleyin
+primaryColor = "#6366f1"
+backgroundColor = "#0a0e1a"
+secondaryBackgroundColor = "#1e293b"
+textColor = "#e2e8f0"
+font = "sans serif"

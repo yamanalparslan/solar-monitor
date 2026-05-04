@@ -1,0 +1,128 @@
+# ===================================================
+# Solar Monitor — Docker Compose (v2)
+# ===================================================
+# Tüm servisleri tek komutla başlatır:
+#   docker-compose up -d
+#
+# Servisler:
+#   panel            → Streamlit Dashboard    (:8501)
+#   collector        → Async Modbus Collector  (collector_async.py)
+#   api              → FastAPI REST API       (:8503)
+#   healthcheck      → HTTP Health Endpoint   (:8502)
+#   prometheus-exp   → Metrik Exporter        (:9100)
+# ===================================================
+
+x-common: &common
+  build: .
+  restart: unless-stopped
+  env_file: .env
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  volumes:
+    - ./data:/app/data
+    - ./backups:/app/backups
+    - ./:/app
+  environment:
+    - PYTHONUNBUFFERED=1
+    - DB_NAME=/app/data/solar_log.db
+
+services:
+  # ─── Veri Toplayıcı (Async - Ana Collector) ───
+  solar-collector:
+    <<: *common
+    container_name: solar_collector
+    # collector_async.py artık ana collector dosyasıdır.
+    # - Her metrik için holding (FC3) + input (FC4) + blok okuma fallback dener
+    # - to_signed16 ile voltaj/akım signed değer desteği
+    # - decode_temperature_register ile otomatik sıcaklık scale tespiti
+    # - Tüm slave'leri asyncio.gather ile paralel okur
+    entrypoint: [ "python", "collector_async.py" ]
+
+  # ─── Ana Dashboard ───
+  solar-monitor:
+    <<: *common
+    container_name: solar_monitor_pro
+    entrypoint: [ "streamlit", "run", "panel.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none" ]
+    ports:
+      - "8501:8501"
+    depends_on:
+      - solar-collector
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ─── REST API ───
+  solar-api:
+    <<: *common
+    container_name: solar_api
+    ports:
+      - "8503:8503"
+    entrypoint: [ "python", "api.py" ]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_NAME=/app/data/solar_log.db
+      - API_PORT=8503
+    depends_on:
+      - solar-collector
+
+  # ─── Healthcheck Endpoint ───
+  solar-healthcheck:
+    <<: *common
+    container_name: solar_healthcheck
+    restart: "no"
+    ports:
+      - "8502:8502"
+    entrypoint: [ "python", "healthcheck.py" ]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_NAME=/app/data/solar_log.db
+      - HEALTH_PORT=8502
+
+  # ─── Prometheus Exporter ───
+  solar-prometheus:
+    <<: *common
+    container_name: solar_prometheus
+    ports:
+      - "9100:9100"
+    entrypoint: [ "python", "prometheus_exporter.py" ]
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_NAME=/app/data/solar_log.db
+      - PROMETHEUS_PORT=9100
+
+  # ─── Grafana Dashboard ───
+  solar-grafana:
+    image: grafana/grafana:latest
+    container_name: solar_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - solar-prometheus
+
+  # ─── MQTT Broker ───
+  solar-mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: solar_mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  # ─── MQTT Dinleyici ───
+  solar-mqtt-listener:
+    <<: *common
+    container_name: solar_mqtt_listener
+    restart: "no"
+    depends_on:
+      - solar-mosquitto
+    entrypoint: [ "python", "mqtt_listener.py" ]
