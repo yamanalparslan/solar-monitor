@@ -49,8 +49,16 @@ def _notify_websocket():
 def load_config(fabrika_id: str = "mekanik") -> dict:
     ayarlar = veritabani.tum_ayarlari_oku(fabrika_id)
     
-    # Ornek: TARGET_DEVICES="10.35.14.10:1; 10.35.14.11:1,2"
-    target_devices_raw = os.getenv("TARGET_DEVICES", "10.35.14.10:1")
+    # Fabrikaya özel IP ve ID'leri .env dosyasından okuyoruz
+    env_key = f"TARGET_DEVICES_{fabrika_id.upper()}"
+    target_devices_raw = os.getenv(env_key)
+    
+    if not target_devices_raw:
+        # Eğer özel .env bulunamazsa veritabanındaki varsayılanlara dön
+        eski_ip = ayarlar.get("target_ip", "10.35.14.10")
+        eski_ids = ayarlar.get("slave_ids", "1")
+        target_devices_raw = f"{eski_ip}:{eski_ids}"
+
     target_devices = []
     for part in target_devices_raw.split(";"):
         part = part.strip()
