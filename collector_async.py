@@ -104,7 +104,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
 # ─────────────────────────────────────────────
 
 async def read_device_async(
-    client: AsyncModbusTcpClient, slave_id: int, config: dict
+    client: AsyncModbusTcpClient, dev_id: int, ip_address: str, slave_id: int, config: dict
 ) -> tuple:
     """
     Tek bir inverter cihazindan tum verileri asenkron ve dinamik blok okuma ile alir.
@@ -132,7 +132,7 @@ async def read_device_async(
             # Input register denemesi (fallback)
             rr_temel = await client.read_input_registers(address=start_addr, count=count, slave=slave_id)
             if rr_temel.isError():
-                return slave_id, None
+                return dev_id, ip_address, slave_id, None
 
         regs = rr_temel.registers
         
@@ -185,11 +185,11 @@ async def read_device_async(
                 for reg in config["alarm_registers"]:
                     veriler[reg["key"]] = 0
 
-        return slave_id, veriler
+        return dev_id, ip_address, slave_id, veriler
 
     except Exception as exc:
-        logger.error("ID %d baglanti/okuma hatasi: %s", slave_id, exc)
-        return slave_id, None
+        logger.error("IP %s ID %d baglanti/okuma hatasi: %s", ip_address, slave_id, exc)
+        return dev_id, ip_address, slave_id, None
 
 
 # ─────────────────────────────────────────────
@@ -213,6 +213,62 @@ def otomatik_veri_temizle(config: dict) -> int:
 # Ana Dongu
 # ─────────────────────────────────────────────
 
+def start_daily_webhook_thread():
+    def _daily_task():
+        from veritabani import FABRIKALAR, gunluk_uretim_hesapla, tarih_araliginda_ortalamalar, hata_sayilarini_getir
+        while True:
+            now = datetime.datetime.now()
+            config = load_config("mekanik")
+            
+            if config.get("webhook_enabled") and config.get("webhook_url"):
+                target_time = config.get("webhook_daily_time", "23:50").split(":")
+                if len(target_time) == 2 and now.hour == int(target_time[0]) and now.minute == int(target_time[1]):
+                    today_str = now.strftime('%Y-%m-%d')
+                    
+                    for fab_id in FABRIKALAR:
+                        fab_config = load_config(fab_id)
+                        for device in fab_config["target_devices"]:
+                            ip = device["ip"]
+                            for slave_id in device["slave_ids"]:
+                                try:
+                                    base_dev_id = int(ip.split(".")[-1])
+                                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                                    
+                                    uretim = gunluk_uretim_hesapla(today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    ortalama = tarih_araliginda_ortalamalar(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    hatalar = hata_sayilarini_getir(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
+                                    
+                                    payload = {
+                                        "tarih": today_str,
+                                        "fabrika_id": fab_id,
+                                        "device_id": dev_id,
+                                        "ip_address": ip,
+                                        "ozet": {
+                                            "toplam_uretim_kwh": uretim.get("uretim_kwh", 0),
+                                            "calisma_suresi_saat": uretim.get("calisma_suresi_saat", 0),
+                                            "ortalama_sicaklik": round(ortalama.get("ort_sicaklik", 0) or 0, 2),
+                                            "max_guc": round(ortalama.get("max_guc", 0) or 0, 2),
+                                            "toplam_hata_sayisi": hatalar.get("hata_107_sayisi", 0) or 0
+                                        }
+                                    }
+                                    
+                                    headers = {"Content-Type": "application/json"}
+                                    if config.get("webhook_api_key"):
+                                        headers["Authorization"] = f"Bearer {config['webhook_api_key']}"
+                                    
+                                    response = requests.post(config["webhook_url"], json=payload, headers=headers, timeout=10)
+                                    response.raise_for_status()
+                                    logging.info(f"[WEBHOOK] Gunluk ozet gonderildi: Fabrika {fab_id}, Cihaz {dev_id}")
+                                except Exception as e:
+                                    logging.error(f"Gunluk webhook hatasi (Cihaz {dev_id}): {e}")
+                    
+                    time.sleep(65)
+            time.sleep(30)
+
+    thread = threading.Thread(target=_daily_task, daemon=True)
+    thread.start()
+
+
 async def main_loop():
     """
     Tum fabrikalari asenkron tarar.
@@ -224,20 +280,16 @@ async def main_loop():
     print("ASENKRON COLLECTOR BASLATILDI - Dinamik Blok Okuma Modu")
     print("=" * 65)
 
+    # Günlük özet gönderim servisini başlat
+    start_daily_webhook_thread()
+
     fab_configs: dict = {}
-    fab_clients: dict = {}
+    clients: dict = {}
 
     for fab_id, fab_info in FABRIKALAR.items():
         cfg = load_config(fab_id)
         fab_configs[fab_id] = cfg
-        fab_clients[fab_id] = AsyncModbusTcpClient(
-            cfg["target_ip"], port=cfg["target_port"], timeout=3.0
-        )
-        print(
-            f"  {fab_info['ikon']} {fab_info['ad']}: "
-            f"{cfg['target_ip']}:{cfg['target_port']} "
-            f"IDs={cfg['slave_ids']} Refresh={cfg['refresh_rate']}s"
-        )
+        print(f"  {fab_info['ikon']} {fab_info['ad']} Config Yuklendi.")
 
     print("=" * 65)
 
@@ -246,53 +298,61 @@ async def main_loop():
 
     while True:
         dongu_baslangic = time.time()
+        tasks = []
+        task_info = []
 
         for fab_id in FABRIKALAR:
-            yeni_cfg = load_config(fab_id)
-            eski_cfg = fab_configs[fab_id]
+            cfg = load_config(fab_id)
+            fab_configs[fab_id] = cfg
+            port = cfg["target_port"]
 
-            if (yeni_cfg["target_ip"]   != eski_cfg["target_ip"] or
-                    yeni_cfg["target_port"] != eski_cfg["target_port"]):
-                print(f"\n[{fab_id.upper()}] IP/Port degisti, client yenileniyor...")
-                fab_clients[fab_id].close()
-                fab_clients[fab_id] = AsyncModbusTcpClient(
-                    yeni_cfg["target_ip"], port=yeni_cfg["target_port"], timeout=3.0
-                )
+            for device in cfg["target_devices"]:
+                ip = device["ip"]
+                client_key = f"{ip}:{port}"
+                
+                if client_key not in clients:
+                    clients[client_key] = AsyncModbusTcpClient(ip, port=port, timeout=3.0)
+                client = clients[client_key]
+                
+                for slave_id in device["slave_ids"]:
+                    try:
+                        base_dev_id = int(ip.split(".")[-1])
+                    except ValueError:
+                        base_dev_id = 1
+                    
+                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                    
+                    tasks.append(read_device_async(client, dev_id, ip, slave_id, cfg))
+                    task_info.append(fab_id)
 
-            fab_configs[fab_id] = yeni_cfg
-            client = fab_clients[fab_id]
-            cfg    = yeni_cfg
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            if not cfg["slave_ids"]:
+        for i, result in enumerate(results):
+            fab_id = task_info[i]
+            if isinstance(result, Exception):
+                logger.error("Gorev istisnasi: %s", result)
                 continue
 
-            tasks = [read_device_async(client, dev_id, cfg) for dev_id in cfg["slave_ids"]]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-
-            for result in results:
-                if isinstance(result, Exception):
-                    logger.error("Gorev istisnasi: %s", result)
-                    continue
-
-                slave_id, data = result
-                if data:
-                    veritabani.veri_ekle(slave_id, data, fabrika_id=fab_id)
-                    hata_var = data.get("hata_kodu", 0) != 0 or any(
-                        data.get(f"hata_kodu_{r}", 0) != 0
-                        for r in [109, 111, 112, 114, 115, 116, 117, 118, 119, 120, 121, 122]
-                    )
-                    durum = "[HATA]" if hata_var else "[TEMIZ]"
-                    print(
-                        f"[{fab_id.upper()}] ID {slave_id} | "
-                        f"G={data['guc']:.1f}W  V={data['voltaj']:.1f}V  "
-                        f"A={data['akim']:.2f}A  T={data['sicaklik']:.1f}C  "
-                        f"{durum}"
-                    )
-                else:
-                    print(f"[{fab_id.upper()}] ID {slave_id} | [CEVAP YOK]")
+            dev_id, ip_address, slave_id, data = result
+            if data:
+                veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
+                hata_var = data.get("hata_kodu", 0) != 0 or any(
+                    data.get(f"hata_kodu_{r}", 0) != 0
+                    for r in [109, 111, 112, 114, 115, 116, 117, 118, 119, 120, 121, 122]
+                )
+                durum = "[HATA]" if hata_var else "[TEMIZ]"
+                print(
+                    f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | "
+                    f"G={data['guc']:.1f}W  V={data['voltaj']:.1f}V  "
+                    f"A={data['akim']:.2f}A  T={data['sicaklik']:.1f}C  "
+                    f"{durum}"
+                )
+            else:
+                print(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | [CEVAP YOK]")
 
         temizlik_sayaci += 1
-        if temizlik_sayaci * min(c["refresh_rate"] for c in fab_configs.values()) >= TEMIZLIK_PERIYODU:
+        min_refresh = min((c["refresh_rate"] for c in fab_configs.values()), default=60)
+        if temizlik_sayaci * min_refresh >= TEMIZLIK_PERIYODU:
             for fab_id in FABRIKALAR:
                 otomatik_veri_temizle(fab_configs[fab_id])
             temizlik_sayaci = 0
@@ -300,7 +360,6 @@ async def main_loop():
         await _notify_websocket()
 
         gecen = time.time() - dongu_baslangic
-        min_refresh = min(c["refresh_rate"] for c in fab_configs.values())
         await asyncio.sleep(max(1.0, min_refresh - gecen))
 
 
