@@ -65,6 +65,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
     webhook_enabled = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
     webhook_url = os.getenv("WEBHOOK_URL", "")
     webhook_api_key = os.getenv("WEBHOOK_API_KEY", "")
+    webhook_interval = float(os.getenv("WEBHOOK_INTERVAL", "60"))
 
     return {
         "target_devices": target_devices,
@@ -73,6 +74,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
         "webhook_enabled": webhook_enabled,
         "webhook_url":     webhook_url,
         "webhook_api_key": webhook_api_key,
+        "webhook_interval": webhook_interval,
         "guc_addr":       int(ayarlar.get("guc_addr", 93)),
         "volt_addr":      int(ayarlar.get("volt_addr", 29)),
         "akim_addr":      int(ayarlar.get("akim_addr", 26)),
@@ -333,6 +335,7 @@ def start_collector():
     TEMIZLIK_PERIYODU = 1800
 
     clients = {}
+    last_webhook_times = {}
 
     while True:
         baslangic = time.time()
@@ -342,6 +345,7 @@ def start_collector():
             config = load_config(fab_id)
             port = config["target_port"]
             refresh_rate = config["refresh_rate"]
+            webhook_interval = config["webhook_interval"]
 
             for device in config["target_devices"]:
                 ip = device["ip"]
@@ -368,7 +372,13 @@ def start_collector():
                     data = read_device(client, slave_id, config, max_retries=3)
                     if data:
                         veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
-                        send_data_via_post(config, dev_id, ip, data)
+                        
+                        # Webhook Zaman Kontrolü (İstenilen Zaman Skalası)
+                        now = time.time()
+                        last_time = last_webhook_times.get(dev_id, 0)
+                        if (now - last_time) >= webhook_interval:
+                            send_data_via_post(config, dev_id, ip, data)
+                            last_webhook_times[dev_id] = now
 
                         hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
                         hata_kodlari[0] = data.get("hata_kodu", 0)
