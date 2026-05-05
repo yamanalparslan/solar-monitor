@@ -30,9 +30,12 @@ fab_id = st.session_state.fabrika_id
 st.title("Gelismis PDF Raporlayici")
 section_header("", "Belge Olustur", "Donanim analizi ve uretim verilerini profesyonel formata donusturun")
 
-ayarlar = veritabani.tum_ayarlari_oku(fab_id)
-slave_ids_raw = ayarlar.get('slave_ids', '1,2,3')
-slave_ids, _ = utils.parse_id_list(slave_ids_raw)
+import collector_async
+cfg = collector_async.load_config(fab_id)
+slave_ids = []
+for device in cfg["target_devices"]:
+    for s_id in device["slave_ids"]:
+        slave_ids.append(s_id)
 
 col1, col2 = st.columns([1, 1])
 with col1:

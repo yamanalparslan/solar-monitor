@@ -62,14 +62,14 @@ section_header("", "Uretim Analizi", "Secilen tarihe gore tum cihazlarin uretim 
 
 # --- AYARLARI OKUMA ---
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
-slave_ids_raw = ayarlar.get('slave_ids', '1,2,3')
-slave_ids, parse_errors = utils.parse_id_list(slave_ids_raw)
-
-if parse_errors:
-    st.warning("Parse hatasi: " + ", ".join(parse_errors))
-
-ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 isi_scale = float(ayarlar.get('isi_scale', '1.0'))
+
+import collector_async
+cfg = collector_async.load_config(fab_id)
+slave_ids = []
+for device in cfg["target_devices"]:
+    for s_id in device["slave_ids"]:
+        slave_ids.append(s_id)
 
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def goster_rapor():

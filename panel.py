@@ -354,6 +354,13 @@ def guncel_verileri_goster():
     gauge_spot = st.empty()
     table_spot = st.empty()
 
+    import collector_async
+    cfg = collector_async.load_config(fab_id)
+    active_dev_ids = []
+    for device in cfg["target_devices"]:
+        for s_id in device["slave_ids"]:
+            active_dev_ids.append(s_id)
+
     # --- Grafik Secimi ---
     st.markdown("---")
 
@@ -362,7 +369,7 @@ def guncel_verileri_goster():
     with tab_tekli:
         col_sel, col_info = st.columns([1, 3])
         with col_sel:
-            selected_id = st.selectbox("Cihaz Sec:", target_ids, key="tek_cihaz")
+            selected_id = st.selectbox("Cihaz Sec:", active_dev_ids, key="tek_cihaz")
         with col_info:
             st.info(" Detayli ariza kodlarini gormek icin sol menuden **Alarmlar** sayfasina gidin.")
 
@@ -378,7 +385,7 @@ def guncel_verileri_goster():
             chart_isi = st.empty()
 
     with tab_karsilastirma:
-        karsilastirma_ids = st.multiselect("Karsilastirilacak Cihazlar:", target_ids, default=target_ids[:3])
+        karsilastirma_ids = st.multiselect("Karsilastirilacak Cihazlar:", active_dev_ids, default=active_dev_ids[:3])
         karsilastirma_metrik = st.selectbox("Metrik:", ["guc", "voltaj", "akim", "sicaklik"],
                                              format_func=lambda x: {"guc": " Guc (W)", "voltaj": " Voltaj (V)",
                                                                       "akim": "Akim (A)", "sicaklik": "Sicaklik (C)"}[x])

@@ -310,8 +310,7 @@ def start_daily_webhook_thread():
                             ip = device["ip"]
                             for slave_id in device["slave_ids"]:
                                 try:
-                                    base_dev_id = int(ip.split(".")[-1])
-                                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                                    dev_id = slave_id
                                     
                                     uretim = gunluk_uretim_hesapla(today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
                                     ortalama = tarih_araliginda_ortalamalar(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
@@ -378,15 +377,7 @@ def start_collector():
             for device in config["target_devices"]:
                 ip = device["ip"]
                 for slave_id in device["slave_ids"]:
-                    try:
-                        base_dev_id = int(ip.split(".")[-1])
-                    except ValueError:
-                        base_dev_id = 1
-                    
-                    if slave_id == 1:
-                        dev_id = base_dev_id
-                    else:
-                        dev_id = int(f"{base_dev_id}{slave_id}")
+                    dev_id = slave_id
                     
                     print(f"[{fab_id.upper()}] IP {ip} ID {slave_id} (DevID: {dev_id})...", end=" ", flush=True)
                     time.sleep(0.5)

@@ -11,11 +11,15 @@ Modbus Veri Kalitesi Duzeltmeleri:
 """
 
 import asyncio
+import datetime
+import io
 import logging
 import os
 import sys
+import threading
 import time
-import io
+
+import requests
 
 import utils
 import veritabani
@@ -59,23 +63,46 @@ async def _notify_websocket():
 # ─────────────────────────────────────────────
 
 def load_config(fabrika_id: str = "mekanik") -> dict:
-    """Veritabanindan fabrika ayarlarini yukler."""
     ayarlar = veritabani.tum_ayarlari_oku(fabrika_id)
-    slave_ids_raw = ayarlar.get("slave_ids", "1,2,3")
-    slave_ids, parse_errors = utils.parse_id_list(slave_ids_raw)
+    
+    # Fabrikaya özel IP ve ID'leri .env dosyasından okuyoruz
+    env_key = f"TARGET_DEVICES_{fabrika_id.upper()}"
+    target_devices_raw = os.getenv(env_key)
+    
+    if not target_devices_raw:
+        # Eğer özel .env bulunamazsa veritabanındaki varsayılanlara dön
+        eski_ip = ayarlar.get("target_ip", "10.35.14.10")
+        eski_ids = ayarlar.get("slave_ids", "1")
+        target_devices_raw = f"{eski_ip}:{eski_ids}"
 
-    if parse_errors:
-        logger.warning("[%s] ID parsing hatalari: %s", fabrika_id, ", ".join(parse_errors))
+    target_devices = []
+    for part in target_devices_raw.split(";"):
+        part = part.strip()
+        if not part: continue
+        if ":" in part:
+            ip, ids_str = part.split(":", 1)
+            ids = [int(i.strip()) for i in ids_str.split(",") if i.strip().isdigit()]
+            target_devices.append({"ip": ip.strip(), "slave_ids": ids})
+        else:
+            target_devices.append({"ip": part.strip(), "slave_ids": [1]})
+
+    webhook_enabled = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
+    webhook_url = os.getenv("WEBHOOK_URL", "")
+    webhook_api_key = os.getenv("WEBHOOK_API_KEY", "")
+    webhook_daily_time = os.getenv("WEBHOOK_DAILY_TIME", "23:50")
 
     return {
-        "target_ip":      ayarlar.get("target_ip", "10.35.14.10"),
+        "target_devices": target_devices,
         "target_port":    int(ayarlar.get("target_port", 502)),
         "refresh_rate":   float(ayarlar.get("refresh_rate", 60)),
-        "slave_ids":      slave_ids,
-        "guc_addr":       int(ayarlar.get("guc_addr", 93)),
-        "volt_addr":      int(ayarlar.get("volt_addr", 29)),
-        "akim_addr":      int(ayarlar.get("akim_addr", 26)),
-        "isi_addr":       int(ayarlar.get("isi_addr", 44)),
+        "webhook_enabled": webhook_enabled,
+        "webhook_url":     webhook_url,
+        "webhook_api_key": webhook_api_key,
+        "webhook_daily_time": webhook_daily_time,
+        "guc_addr":       int(os.getenv("GUC_ADDR", ayarlar.get("guc_addr", 93))),
+        "volt_addr":      int(os.getenv("VOLT_ADDR", ayarlar.get("volt_addr", 29))),
+        "akim_addr":      int(os.getenv("AKIM_ADDR", ayarlar.get("akim_addr", 26))),
+        "isi_addr":       int(os.getenv("ISI_ADDR", ayarlar.get("isi_addr", 44))),
         "guc_scale":      float(ayarlar.get("guc_scale", 1.0)),
         "volt_scale":     float(ayarlar.get("volt_scale", 1.0)),
         "akim_scale":     float(ayarlar.get("akim_scale", 0.1)),
@@ -231,8 +258,7 @@ def start_daily_webhook_thread():
                             ip = device["ip"]
                             for slave_id in device["slave_ids"]:
                                 try:
-                                    base_dev_id = int(ip.split(".")[-1])
-                                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                                    dev_id = slave_id
                                     
                                     uretim = gunluk_uretim_hesapla(today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
                                     ortalama = tarih_araliginda_ortalamalar(today_str, today_str, slave_id=dev_id, fabrika_id=fab_id) or {}
@@ -315,12 +341,7 @@ async def main_loop():
                 client = clients[client_key]
                 
                 for slave_id in device["slave_ids"]:
-                    try:
-                        base_dev_id = int(ip.split(".")[-1])
-                    except ValueError:
-                        base_dev_id = 1
-                    
-                    dev_id = base_dev_id if slave_id == 1 else int(f"{base_dev_id}{slave_id}")
+                    dev_id = slave_id
                     
                     tasks.append(read_device_async(client, dev_id, ip, slave_id, cfg))
                     task_info.append(fab_id)
