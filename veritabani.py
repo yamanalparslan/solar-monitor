@@ -286,34 +286,12 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT o.slave_id, o.zaman, o.guc, o.voltaj, o.akim, o.sicaklik, o.hata_kodu, o.hata_kodu_109, o.hata_kodu_111, o.hata_kodu_112, o.hata_kodu_114, o.hata_kodu_115, o.hata_kodu_116, o.hata_kodu_117, o.hata_kodu_118, o.hata_kodu_119, o.hata_kodu_120, o.hata_kodu_121, o.hata_kodu_122
-        FROM olcumler o
-        WHERE o.fabrika_id = ? AND o.id = (
-            SELECT COALESCE(
-                (
-                    SELECT i.id
-                    FROM olcumler i
-                    WHERE i.fabrika_id = ? AND i.slave_id = o.slave_id
-                      AND (
-                          COALESCE(i.guc, 0) <> 0
-                          OR COALESCE(i.voltaj, 0) <> 0
-                          OR COALESCE(i.akim, 0) <> 0
-                          OR COALESCE(i.sicaklik, 0) <> 0
-                      )
-                    ORDER BY i.zaman DESC, i.id DESC
-                    LIMIT 1
-                ),
-                (
-                    SELECT i.id
-                    FROM olcumler i
-                    WHERE i.fabrika_id = ? AND i.slave_id = o.slave_id
-                    ORDER BY i.zaman DESC, i.id DESC
-                    LIMIT 1
-                )
-            )
-        )
-        ORDER BY o.slave_id ASC
-    """, (fabrika_id, fabrika_id, fabrika_id))
+        SELECT slave_id, MAX(zaman) as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+        FROM olcumler
+        WHERE fabrika_id = ?
+        GROUP BY slave_id
+        ORDER BY slave_id ASC
+    """, (fabrika_id,))
     rows = cursor.fetchall()
     conn.close()
     return rows

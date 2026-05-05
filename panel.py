@@ -421,15 +421,15 @@ def guncel_verileri_goster():
                         title={'text': f"ID:{dev_id}", 'font': {'size': 14, 'color': '#94a3b8', 'family': 'Inter'}},
                         number={'suffix': 'kW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
                         gauge={
-                            'axis': {'range': [0, 1000], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
+                            'axis': {'range': [0, 500], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
                             'bar': {'color': durum_renk},
                             'bgcolor': 'rgba(15, 23, 42, 0.6)',
                             'borderwidth': 1,
                             'bordercolor': 'rgba(255, 255, 255, 0.06)',
                             'steps': [
-                                {'range': [0, max(dev_guc * 1.5, 1000) * 0.3], 'color': 'rgba(15, 23, 42, 0.4)'},
-                                {'range': [max(dev_guc * 1.5, 1000) * 0.3, max(dev_guc * 1.5, 1000) * 0.7], 'color': 'rgba(30, 41, 59, 0.4)'},
-                                {'range': [max(dev_guc * 1.5, 1000) * 0.7, max(dev_guc * 1.5, 1000)], 'color': 'rgba(99, 102, 241, 0.08)'},
+                                {'range': [0, max(dev_guc * 1.5, 500) * 0.3], 'color': 'rgba(15, 23, 42, 0.4)'},
+                                {'range': [max(dev_guc * 1.5, 500) * 0.3, max(dev_guc * 1.5, 500) * 0.7], 'color': 'rgba(30, 41, 59, 0.4)'},
+                                {'range': [max(dev_guc * 1.5, 500) * 0.7, max(dev_guc * 1.5, 500)], 'color': 'rgba(99, 102, 241, 0.08)'},
                             ],
                         },
                     ))

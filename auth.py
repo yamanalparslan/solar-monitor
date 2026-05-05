@@ -49,18 +49,23 @@ def _is_auth_enabled() -> bool:
     return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
 
 
+_DEFAULT_ADMIN_HASH = None
+
 def _get_credentials() -> tuple[str, str]:
     """Kullanc ad ve ifre hash'ini dner.
     
     Returns:
         (username, password_hash)  hash bosa varsaylan 'admin' ifresi kullanlr
     """
+    global _DEFAULT_ADMIN_HASH
     username = os.getenv("AUTH_USERNAME", "admin")
     password_hash = os.getenv("AUTH_PASSWORD_HASH", "")
 
     # Hash tanml deilse varsaylan ifre: "admin"
     if not password_hash:
-        password_hash = _get_password_hash("admin")
+        if _DEFAULT_ADMIN_HASH is None:
+            _DEFAULT_ADMIN_HASH = _get_password_hash("admin")
+        password_hash = _DEFAULT_ADMIN_HASH
 
     return username, password_hash
 

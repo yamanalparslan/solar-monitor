@@ -58,10 +58,13 @@ def update_metrics():
     except Exception as e:
         logger.error(f"Prometheus metrik guncelleme hatasi: {e}")
 
-def start_exporter(port=9090, update_interval=5):
+import os
+
+def start_exporter(port=None, update_interval=5):
     """
     Prometheus metrics sunucusunu başlatır ve sonsuz döngüde metrikleri günceller.
     """
+    port = port or int(os.getenv("PROMETHEUS_PORT", 9100))
     logger.info(f"Prometheus Exporter http://0.0.0.0:{port}/metrics adresinde baslatiliyor...")
     try:
         start_http_server(port)
