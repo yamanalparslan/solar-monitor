@@ -195,11 +195,11 @@ def veri_ekle(slave_id, data):
 def son_verileri_getir(slave_id, limit=100):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute(f"""
+    cursor.execute("""
         SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_111
-        FROM olcumler WHERE slave_id = {slave_id}
-        ORDER BY zaman DESC LIMIT {limit}
-    """)
+        FROM olcumler WHERE slave_id = ?
+        ORDER BY zaman DESC LIMIT ?
+    """, (slave_id, limit))
     rows = cursor.fetchall()
     conn.close()
     return rows[::-1]

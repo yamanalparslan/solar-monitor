@@ -12,7 +12,7 @@ port = 8501
 
 # iframe içinde gömmek için CORS ve XSRF korumasını ayarla
 enableCORS = false
-enableXsrfProtection = false
+enableXsrfProtection = true
 
 # Tarayıcının otomatik açılmasını engelle (sunucu modunda)
 headless = true

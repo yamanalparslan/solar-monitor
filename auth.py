@@ -18,19 +18,30 @@ import streamlit as st
 
 # PBKDF2 sabitleri
 _PBKDF2_ITERATIONS = 100_000
-_PBKDF2_SALT = b'solar_monitor_v2'
-
 
 def _get_password_hash(password: str) -> str:
-    """PBKDF2-HMAC-SHA256 ile güçlü şifre hash'i oluşturur (100K iterasyon)."""
-    return hashlib.pbkdf2_hmac(
-        'sha256', password.encode('utf-8'), _PBKDF2_SALT, _PBKDF2_ITERATIONS
+    """PBKDF2-HMAC-SHA256 ile güçlü şifre hash'i oluşturur (100K iterasyon) rastgele salt ile."""
+    salt = os.urandom(16)
+    hash_hex = hashlib.pbkdf2_hmac(
+        'sha256', password.encode('utf-8'), salt, _PBKDF2_ITERATIONS
     ).hex()
-
+    return f"{salt.hex()}:{hash_hex}"
 
 def _verify_password(password: str, stored_hash: str) -> bool:
-    """Şifreyi PBKDF2 hash ile karşılaştırır."""
-    return _get_password_hash(password) == stored_hash
+    """Şifreyi PBKDF2 hash ile karşılaştırır (Geriye dönük uyumluluk içerir)."""
+    if ":" in stored_hash:
+        salt_hex, hash_hex = stored_hash.split(":")
+        salt = bytes.fromhex(salt_hex)
+        expected_hash = hashlib.pbkdf2_hmac(
+            'sha256', password.encode('utf-8'), salt, _PBKDF2_ITERATIONS
+        ).hex()
+        return expected_hash == hash_hex
+    else:
+        # Eski sabit salt (solar_monitor_v2) için geriye dönük uyumluluk
+        expected_hash = hashlib.pbkdf2_hmac(
+            'sha256', password.encode('utf-8'), b'solar_monitor_v2', _PBKDF2_ITERATIONS
+        ).hex()
+        return expected_hash == stored_hash
 
 
 def _is_auth_enabled() -> bool:
