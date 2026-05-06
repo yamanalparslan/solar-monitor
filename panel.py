@@ -142,12 +142,12 @@ with st.sidebar:
     with st.expander("Detayli Adres Ayarlari", expanded=False):
         c_guc_adr = st.number_input(
             "Guc Adresi",
-            value=int(mevcut_ayarlar.get('guc_addr', 70)),
+            value=int(mevcut_ayarlar.get('guc_addr', 75)),
             key="guc_addr_input",
         )
         c_guc_sc = st.number_input(
             "Guc Carpan",
-            value=float(mevcut_ayarlar.get('guc_scale', 1.0)),
+            value=float(mevcut_ayarlar.get('guc_scale', 0.1)),
             step=0.01,
             format="%.4f",
             key="guc_scale_input",
@@ -156,12 +156,12 @@ with st.sidebar:
 
         c_volt_adr = st.number_input(
             "Voltaj Adresi",
-            value=int(mevcut_ayarlar.get('volt_addr', 71)),
+            value=int(mevcut_ayarlar.get('volt_addr', 73)),
             key="volt_addr_input",
         )
         c_volt_sc = st.number_input(
             "Voltaj Carpan",
-            value=float(mevcut_ayarlar.get('volt_scale', 1.0)),
+            value=float(mevcut_ayarlar.get('volt_scale', 0.1)),
             step=0.01,
             format="%.4f",
             key="volt_scale_input",
@@ -170,7 +170,7 @@ with st.sidebar:
 
         c_akim_adr = st.number_input(
             "Akim Adresi",
-            value=int(mevcut_ayarlar.get('akim_addr', 72)),
+            value=int(mevcut_ayarlar.get('akim_addr', 70)),
             key="akim_addr_input",
         )
         c_akim_sc = st.number_input(
@@ -184,12 +184,12 @@ with st.sidebar:
 
         c_isi_adr = st.number_input(
             "Isi Adresi",
-            value=int(mevcut_ayarlar.get('isi_addr', 74)),
+            value=int(mevcut_ayarlar.get('isi_addr', 93)),
             key="isi_addr_input",
         )
         c_isi_sc = st.number_input(
             "Isi Carpani",
-            value=float(mevcut_ayarlar.get('isi_scale', 0.001)),
+            value=float(mevcut_ayarlar.get('isi_scale', 1.0)),
             step=0.01,
             format="%.4f",
             key="isi_scale_input",
@@ -270,7 +270,7 @@ st.title("Gunes Enerjisi Santrali Izleme")
 section_header("", "Canli Filo Durumu", "Tum cihazlarin anlik durum ozeti")
 
 # --- Plotly Grafik Yardmclar ---
-def create_plotly_chart(df, column, title, color, unit=""):
+def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df.index, y=df[column],
@@ -281,6 +281,11 @@ def create_plotly_chart(df, column, title, color, unit=""):
         hovertemplate=f'%{{x|%H:%M:%S}}<br>{title}: %{{y:.1f}} {unit}<extra></extra>',
         name=title
     ))
+    
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False)
+    if ymax is not None:
+        yaxis_params['range'] = [0, ymax]
+        
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(10, 14, 26, 0.5)',
@@ -295,14 +300,14 @@ def create_plotly_chart(df, column, title, color, unit=""):
             tickformat="%H:%M",
             range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
         ),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False),
+        yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
     )
     return fig
 
 
-def create_comparison_chart(ids, metric, title, colors):
+def create_comparison_chart(ids, metric, title, colors, ymax=None):
     fig = go.Figure()
     for i, dev_id in enumerate(ids):
         data = veritabani.son_verileri_getir(dev_id, limit=2880, fabrika_id=fab_id)
@@ -338,6 +343,10 @@ def create_comparison_chart(ids, metric, title, colors):
             line=dict(color=color, width=2.5),
         ))
         
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)')
+    if ymax is not None:
+        yaxis_params['range'] = [0, ymax]
+
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(10, 14, 26, 0.5)',
@@ -350,7 +359,7 @@ def create_comparison_chart(ids, metric, title, colors):
             tickformat="%H:%M",
             range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
         ),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.04)'),
+        yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
         legend=dict(
@@ -487,7 +496,7 @@ def guncel_verileri_goster():
                 df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                 df_det = df_det.set_index("timestamp")
 
-                chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " Guc", "rgb(255,215,0)", "W"), width='stretch')
+                chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " Guc", "rgb(255,215,0)", "W", ymax=500), width='stretch')
                 chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " Voltaj", "rgb(99,102,241)", "V"), width='stretch')
                 chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "Akim", "rgb(16,185,129)", "A"), width='stretch')
                 chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "Sicaklik", "rgb(239,83,80)", "C"), width='stretch')
@@ -500,8 +509,9 @@ def guncel_verileri_goster():
         metrik_labels = {"guc": " Guc Karslastrma (W)", "voltaj": " Voltaj Karslastrma (V)",
                          "akim": " Akm Karslastrma (A)", "sicaklik": " Scaklk Karslastrma (C)"}
         
+        ymax_val = 500 if karsilastirma_metrik == "guc" else None
         chart_karsilastirma.plotly_chart(
-            create_comparison_chart(karsilastirma_ids, karsilastirma_metrik, metrik_labels[karsilastirma_metrik], colors),
+            create_comparison_chart(karsilastirma_ids, karsilastirma_metrik, metrik_labels[karsilastirma_metrik], colors, ymax=ymax_val),
             width='stretch'
         )
 
