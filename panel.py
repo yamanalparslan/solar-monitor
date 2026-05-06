@@ -497,7 +497,7 @@ def guncel_verileri_goster():
                 df_det = df_det.set_index("timestamp")
 
                 chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " Guc", "rgb(255,215,0)", "W", ymax=500), width='stretch')
-                chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " Voltaj", "rgb(99,102,241)", "V"), width='stretch')
+                chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " Voltaj", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
                 chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "Akim", "rgb(16,185,129)", "A"), width='stretch')
                 chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "Sicaklik", "rgb(239,83,80)", "C"), width='stretch')
         except Exception as e:
@@ -509,7 +509,7 @@ def guncel_verileri_goster():
         metrik_labels = {"guc": " Guc Karslastrma (W)", "voltaj": " Voltaj Karslastrma (V)",
                          "akim": " Akm Karslastrma (A)", "sicaklik": " Scaklk Karslastrma (C)"}
         
-        ymax_val = 500 if karsilastirma_metrik == "guc" else None
+        ymax_val = 500 if karsilastirma_metrik == "guc" else (1000 if karsilastirma_metrik == "voltaj" else None)
         chart_karsilastirma.plotly_chart(
             create_comparison_chart(karsilastirma_ids, karsilastirma_metrik, metrik_labels[karsilastirma_metrik], colors, ymax=ymax_val),
             width='stretch'
