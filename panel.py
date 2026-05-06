@@ -287,7 +287,14 @@ def create_plotly_chart(df, column, title, color, unit=""):
         margin=dict(l=10, r=10, t=35, b=10),
         height=260,
         title=dict(text=title, font=dict(size=13, color='#94a3b8', family='Inter')),
-        xaxis=dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False),
+        xaxis=dict(
+            gridcolor='rgba(255,255,255,0.04)', 
+            showgrid=True, 
+            zeroline=False,
+            dtick=1800000,
+            tickformat="%H:%M",
+            range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+        ),
         yaxis=dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False),
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
@@ -298,7 +305,7 @@ def create_plotly_chart(df, column, title, color, unit=""):
 def create_comparison_chart(ids, metric, title, colors):
     fig = go.Figure()
     for i, dev_id in enumerate(ids):
-        data = veritabani.son_verileri_getir(dev_id, limit=100, fabrika_id=fab_id)
+        data = veritabani.son_verileri_getir(dev_id, limit=2880, fabrika_id=fab_id)
         if not data:
             continue
             
@@ -337,7 +344,12 @@ def create_comparison_chart(ids, metric, title, colors):
         margin=dict(l=10, r=10, t=40, b=10),
         height=360,
         title=dict(text=title, font=dict(size=14, color='#94a3b8', family='Inter')),
-        xaxis=dict(gridcolor='rgba(255,255,255,0.04)'),
+        xaxis=dict(
+            gridcolor='rgba(255,255,255,0.04)',
+            dtick=1800000,
+            tickformat="%H:%M",
+            range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+        ),
         yaxis=dict(gridcolor='rgba(255,255,255,0.04)'),
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
@@ -450,7 +462,7 @@ def guncel_verileri_goster():
         table_spot.dataframe(df_sum.set_index("ID"), width='stretch')
 
     # 2. PLOTLY GRAFIK GUNCELLEME (Tekli)
-    detail_data = veritabani.son_verileri_getir(selected_id, limit=100, fabrika_id=fab_id)
+    detail_data = veritabani.son_verileri_getir(selected_id, limit=2880, fabrika_id=fab_id)
     if detail_data:
         try:
             cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
