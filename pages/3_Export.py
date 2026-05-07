@@ -7,7 +7,7 @@ import veritabani, utils
 from styles import inject_glossy_css, section_header
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Veri Aktarimi", page_icon="", layout="wide")
+st.set_page_config(page_title="VERI AKTARIMI", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
@@ -20,8 +20,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 
-st.title("Veri Aktarimi")
-section_header("", "Veri Aktarimi", "CSV formatinda veri indirin")
+st.title("VERI AKTARIMI")
+section_header("", "VERI AKTARIMI", "CSV FORMATINDA VERI INDIRIN")
 
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))

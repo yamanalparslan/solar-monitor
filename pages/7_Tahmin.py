@@ -31,7 +31,7 @@ def calculate_power_output(temp_amb, ghi):
     p_system_ac = p_panel * PANEL_COUNT * INV_EFFICIENCY
     return min(max(0, p_system_ac), INV_MAX_AC_OUT) # Inverter Clipping
 
-st.set_page_config(page_title="Üretim Tahmini", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="URETIM TAHMINI", page_icon="☀️", layout="wide")
 inject_glossy_css()
 
 if not check_auth():
@@ -45,8 +45,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 
-st.title("Fizik Tabanlı GES Üretim Tahmini")
-section_header("", "Astro-Termodinamik Model", "Canlı meteorolojik veriler ve evirici kapasitesine göre üretim simülasyonu")
+st.title("FIZIK TABANLI GES URETIM TAHMINI")
+section_header("", "ASTRO-TERMODINAMIK MODEL", "CANLI METEOROLOJIK VERILER VE EVIRICI KAPASITESINE GORE URETIM SIMULASYONU")
 
 # Ayarlar Alani
 col_settings, col_info = st.columns([1, 2])
@@ -113,9 +113,9 @@ if st.button("Simülasyonu Başlat", type="primary"):
 
         # KPI Kartları
         kpi_row([
-            {"value": f"{toplam_kwh:,.1f} kWh", "label": f"Beklenen Toplam Üretim", "color": "#10b981"},
-            {"value": f"{tepe_guc_kw:.1f} kW", "label": "Beklenen Tepe Güç (Maks 250kW)", "color": "#f59e0b"},
-            {"value": f"{df_gelecek['sicaklik'].max():.1f} °C", "label": "Maks. Beklenen Ortam Isısı", "color": "#ef4444"},
+            {"value": f"{toplam_kwh:,.1f} kWh", "label": f"BEKLENEN TOPLAM URETIM", "color": "#10b981"},
+            {"value": f"{tepe_guc_kw:.1f} kW", "label": "BEKLENEN TEPE GUC (MAKS 250KW)", "color": "#f59e0b"},
+            {"value": f"{df_gelecek['sicaklik'].max():.1f} °C", "label": "MAKS. BEKLENEN ORTAM ISISI", "color": "#ef4444"},
         ])
         
         # Eğer kırpma (clipping) varsa kullanıcıyı uyar

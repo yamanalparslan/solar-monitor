@@ -7,7 +7,7 @@ import veritabani, utils
 from styles import inject_glossy_css, section_header, kpi_row
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Karsilastirma", page_icon="", layout="wide")
+st.set_page_config(page_title="KARSILASTIRMA", page_icon="", layout="wide")
 
 if not check_auth():
     st.stop()
@@ -23,8 +23,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 
-st.title("Cihaz Karsilastirma")
-section_header("", "Coklu Cihaz Analizi", "Secilen cihazlarin performansini yan yana karsilastirin")
+st.title("CIHAZ KARSILASTIRMA")
+section_header("", "COKLU CIHAZ ANALIZI", "SECILEN CIHAZLARIN PERFORMANSINI YAN YANA KARSILASTIRIN")
 
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
@@ -99,7 +99,7 @@ if secili:
     # zet tablo
     if ozet_veriler:
         st.markdown("<br>", unsafe_allow_html=True)
-        section_header("", "Istatistik Ozeti", f"{metrik_baslik[metrik]} - Secili cihazlarin karsilastirmali ozeti")
+        section_header("", "ISTATISTIK OZETI", f"{metrik_baslik[metrik]} - SECILI CIHAZLARIN KARSILASTIRMALI OZETI")
         
         kpi_items = []
         for oz in ozet_veriler:

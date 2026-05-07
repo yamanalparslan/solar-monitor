@@ -4,14 +4,14 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from styles import inject_glossy_css, section_header, badge
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Sanal Inverter", page_icon="", layout="wide")
+st.set_page_config(page_title="SANAL INVERTER", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
 logout_button()
 
-st.title("Sanal Inverter (Simulator)")
-section_header("", "Sistem Simulasyonu", "Fiziksel panellere baglanmadan test verileri uretir")
+st.title("SANAL INVERTER (SIMULATOR)")
+section_header("", "SISTEM SIMULASYONU", "FIZIKSEL PANELLERE BAGLANMADAN TEST VERILERI URETIR")
 
 def is_simulator_running():
     try:

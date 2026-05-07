@@ -6,7 +6,7 @@ import veritabani
 from styles import inject_glossy_css, section_header
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Audit Log", page_icon="", layout="wide")
+st.set_page_config(page_title="AUDIT LOG", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
@@ -18,8 +18,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.warning("Lütfen ana sayfadan bir fabrika seçin.")
     st.stop()
 fab_id = st.session_state.fabrika_id
-st.title(" Audit Log")
-section_header("", "Islem Gecmisi", "Ayar degisiklikleri ve kullanici islemleri")
+st.title(" AUDIT LOG")
+section_header("", "ISLEM GECMISI", "AYAR DEGISIKLIKLERI VE KULLANICI ISLEMLERI")
 
 limit = st.slider("Limit:", 10, 500, 100)
 loglar = veritabani.audit_log_getir(limit=limit)

@@ -7,7 +7,7 @@ from modbus_diagnostics import load_runtime_config
 from styles import inject_glossy_css, section_header, kpi_row
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Sistem", page_icon="", layout="wide")
+st.set_page_config(page_title="SISTEM", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
@@ -20,8 +20,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 runtime_config = load_runtime_config()
-st.title(" Sistem Durumu")
-section_header("", "Sistem Bilgileri", "Konfigurasyon ve ortam durumu")
+st.title(" SISTEM DURUMU")
+section_header("", "SISTEM BILGILERI", "KONFIGURASYON VE ORTAM DURUMU")
 
 kpi_row([
     {"value": platform.node()[:15], "label": "Hostname", "color": "#6366f1"},

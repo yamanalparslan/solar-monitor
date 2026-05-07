@@ -8,7 +8,7 @@ from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, F
 from styles import inject_glossy_css, section_header, alarm_card, badge, kpi_row
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="Aktif Alarmlar", page_icon="", layout="wide")
+st.set_page_config(page_title="AKTIF ALARMLAR", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
@@ -21,8 +21,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 
-st.title("Aktif Donanim Arizalari")
-section_header("", "Canli Alarm Paneli", "Cihazlardan gelen hata kodlarinin (Register 107 & 111) detayli dokumu")
+st.title("AKTIF DONANIM ARIZALARI")
+section_header("", "CANLI ALARM PANELI", "CIHAZLARDAN GELEN HATA KODLARININ (REGISTER 107 & 111) DETAYLI DOKUMU")
 
 col_r, col_t = st.columns([1, 3])
 with col_r:
@@ -152,9 +152,9 @@ else:
 
     st.markdown("---")
     kpi_row([
-        {"value": str(len(durumlar)), "label": "Toplam Cihaz", "color": "#6366f1"},
-        {"value": str(hata_sayisi), "label": "Arizali", "color": "#ef4444"},
-        {"value": str(temiz_sayisi), "label": "Saglikli", "color": "#10b981"},
+        {"value": str(len(durumlar)), "label": "TOPLAM CIHAZ", "color": "#6366f1"},
+        {"value": str(hata_sayisi), "label": "ARIZALI", "color": "#ef4444"},
+        {"value": str(temiz_sayisi), "label": "SAGLIKLI", "color": "#10b981"},
     ])
 
     if hata_sayisi == 0:

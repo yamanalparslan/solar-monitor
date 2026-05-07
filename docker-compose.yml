@@ -42,7 +42,7 @@ services:
   solar-monitor:
     <<: *common
     container_name: solar_monitor_pro
-    entrypoint: [ "streamlit", "run", "panel.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none" ]
+    entrypoint: [ "streamlit", "run", "1_PANEL.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none" ]
     ports:
       - "8501:8501"
     depends_on:

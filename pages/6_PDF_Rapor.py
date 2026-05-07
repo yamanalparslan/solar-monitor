@@ -14,7 +14,7 @@ import utils
 from styles import inject_glossy_css, section_header, kpi_row
 from auth import check_auth, logout_button
 
-st.set_page_config(page_title="PDF Rapor", page_icon="", layout="wide")
+st.set_page_config(page_title="PDF RAPOR", page_icon="", layout="wide")
 inject_glossy_css()
 if not check_auth():
     st.stop()
@@ -27,8 +27,8 @@ if 'fabrika_id' not in st.session_state or st.session_state.fabrika_id is None:
     st.stop()
 fab_id = st.session_state.fabrika_id
 
-st.title("Gelismis PDF Raporlayici")
-section_header("", "Belge Olustur", "Donanim analizi ve uretim verilerini profesyonel formata donusturun")
+st.title("GELISMIS PDF RAPORLAYICI")
+section_header("", "BELGE OLUSTUR", "DONANIM ANALIZI VE URETIM VERILERINI PROFESYONEL FORMATA DONUSTURUN")
 
 import collector_async
 cfg = collector_async.load_config(fab_id)

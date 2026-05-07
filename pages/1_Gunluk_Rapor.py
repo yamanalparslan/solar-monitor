@@ -34,7 +34,7 @@ def guvenli_hata_hesapla(hata_degeri):
 # ------------------------------------------
 
 # --- SAYFA AYARLARI VE KONTROLLER ---
-st.set_page_config(page_title="Gunluk Raporlar", page_icon="", layout="wide")
+st.set_page_config(page_title="GUNLUK RAPORLAR", page_icon="", layout="wide")
 inject_glossy_css()
 
 if not check_auth():
@@ -57,8 +57,8 @@ if 'refresh_interval' not in st.session_state:
 
 
 # --- BALIK ---
-st.title("Gunluk Performans ve Uretim Raporu")
-section_header("", "Uretim Analizi", "Secilen tarihe gore tum cihazlarin uretim ve verimlilik ozeti")
+st.title("GUNLUK PERFORMANS VE URETIM RAPORU")
+section_header("", "URETIM ANALIZI", "SECILEN TARIHE GORE TUM CIHAZLARIN URETIM VE VERIMLILIK OZETI")
 
 # --- AYARLARI OKUMA ---
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
@@ -117,9 +117,9 @@ def goster_rapor():
         
         # Eksik olan kpi_row yaps tamamland
         kpi_row([
-            {"value": str(round(total_kwh, 2)) + " kWh", "label": "Toplam Uretim", "color": "#f59e0b"},
-            {"value": str(len(df_rapor)), "label": "Aktif Cihaz", "color": "#10b981"},
-            {"value": str(total_errors), "label": "Toplam Hata", "color": "#ef4444"},
+            {"value": str(round(total_kwh, 2)) + " kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
+            {"value": str(len(df_rapor)), "label": "AKTIF CIHAZ", "color": "#10b981"},
+            {"value": str(total_errors), "label": "TOPLAM HATA", "color": "#ef4444"},
         ])
         
         st.markdown("<br>", unsafe_allow_html=True)

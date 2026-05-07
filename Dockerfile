@@ -22,7 +22,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 COPY --from=builder /install /usr/local
 
 # Uygulama dosyalarını kopyala
-COPY --chown=solar:solar config.py models.py veritabani.py collector.py collector_async.py panel.py auth.py notifications.py utils.py sanal_inverter.py styles.py healthcheck.py api.py prometheus_exporter.py mqtt_listener.py crm_embed.py websocket_manager.py ./
+COPY --chown=solar:solar config.py models.py veritabani.py collector.py collector_async.py 1_PANEL.py auth.py notifications.py utils.py sanal_inverter.py styles.py healthcheck.py api.py prometheus_exporter.py mqtt_listener.py crm_embed.py websocket_manager.py ./
 COPY --chown=solar:solar pages/ ./pages/
 COPY --chown=solar:solar static/ ./static/
 COPY --chown=solar:solar .streamlit/ ./.streamlit/
@@ -45,7 +45,7 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
 USER solar
 
 # Varsayılan: Streamlit panel
-ENTRYPOINT ["streamlit", "run", "panel.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+ENTRYPOINT ["streamlit", "run", "1_PANEL.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
 
 ENV PYTHONIOENCODING=utf-8
 ENV LANG=C.UTF-8

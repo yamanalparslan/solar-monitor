@@ -11,7 +11,7 @@ from crm_embed import inject_embed_mode, is_embed_mode
 
 # --- SAYFA AYARLARI ---
 st.set_page_config(
-    page_title="Solar Monitor",
+    page_title="SOLAR MONITOR",
     layout="wide",
     page_icon="",
     initial_sidebar_state="expanded"
@@ -45,8 +45,8 @@ if st.session_state.fabrika_id is None:
             <h1 style="font-size:2.5rem;font-weight:800;
                 background:linear-gradient(135deg,#6366f1,#a855f7);
                 -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                margin-bottom:8px;">☀️ Solar Monitor</h1>
-            <p style="color:#64748b;font-size:1.1rem;margin-bottom:32px;">İzlemek istediğiniz fabrikayı seçin</p>
+                margin-bottom:8px;">☀️ SOLAR MONITOR</h1>
+            <p style="color:#64748b;font-size:1.1rem;margin-bottom:32px;">IZLEMEK ISTEDIGINIZ FABRIKAYI SECIN</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -55,11 +55,11 @@ if st.session_state.fabrika_id is None:
     with col2:
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🔧 Mekanik Fabrika", use_container_width=True, type="primary"):
+            if st.button("🔧 MEKANIK FABRIKA", use_container_width=True, type="primary"):
                 st.session_state.fabrika_id = "mekanik"
                 st.rerun()
         with c2:
-            if st.button("🏭 Üretim Fabrika", use_container_width=True, type="primary"):
+            if st.button("🏭 URETIM FABRIKASI", use_container_width=True, type="primary"):
                 st.session_state.fabrika_id = "uretim"
                 st.rerun()
     st.stop()
@@ -74,12 +74,12 @@ if 'ayarlar_kaydedildi' not in st.session_state:
 # --- YAN MENU ---
 with st.sidebar:
     # Fabrika değiştirme butonu
-    st.caption(f"{fab_info['ikon']} {fab_info['ad']}")
-    if st.button("🔄 Fabrika Değiştir", use_container_width=True):
+    st.caption(f"{fab_info['ikon']} {fab_info['ad'].upper()}")
+    if st.button("🔄 FABRIKA DEGISTIR", use_container_width=True):
         st.session_state.fabrika_id = None
         st.rerun()
     st.divider()
-    st.header("PULSAR Ayarlari")
+    st.header("PULSAR AYARLARI")
 
     mevcut_ayarlar = veritabani.tum_ayarlari_oku(fab_id)
     interval_options = {
@@ -100,20 +100,20 @@ with st.sidebar:
             break
 
     target_ip = st.text_input(
-        "IP Adresi",
+        "IP ADRESI",
         value=mevcut_ayarlar.get('target_ip', '10.35.14.10'),
         key="target_ip_input",
     )
     target_port = st.number_input(
-        "Port",
+        "PORT",
         value=int(mevcut_ayarlar.get('target_port', 502)),
         step=1,
         key="target_port_input",
     )
 
-    st.info("Virgul veya tire ile ayirin (Orn: 1, 2, 5-8)")
+    st.info("VIRGUL VEYA TIRE ILE AYIRIN (ORN: 1, 2, 5-8)")
     id_input = st.text_input(
-        "Inverter ID Listesi",
+        "INVERTER ID LISTESI",
         value=mevcut_ayarlar.get('slave_ids', '1,2,3'),
         key="slave_ids_input",
     )
@@ -125,10 +125,10 @@ with st.sidebar:
     st.write(f"Izlenecek ID'ler: {utils.format_id_list_display(target_ids)}")
 
     st.divider()
-    st.header("Zamanlayici")
+    st.header("ZAMANLAYICI")
 
     selected_interval = st.select_slider(
-        "Veri Toplama Sikligi",
+        "VERI TOPLAMA SIKLIGI",
         options=list(interval_options.keys()),
         value=current_label,
         key="refresh_rate_slider",
@@ -138,15 +138,15 @@ with st.sidebar:
     st.info(f" Secilen: {selected_interval} ({refresh_rate} saniye)")
 
     st.markdown("---")
-    st.header("Adres Haritasi")
-    with st.expander("Detayli Adres Ayarlari", expanded=False):
+    st.header("ADRES HARITASI")
+    with st.expander("DETAYLI ADRES AYARLARI", expanded=False):
         c_guc_adr = st.number_input(
-            "Guc Adresi",
+            "GUC ADRESI",
             value=int(mevcut_ayarlar.get('guc_addr', 75)),
             key="guc_addr_input",
         )
         c_guc_sc = st.number_input(
-            "Guc Carpan",
+            "GUC CARPAN",
             value=float(mevcut_ayarlar.get('guc_scale', 0.1)),
             step=0.01,
             format="%.4f",
@@ -155,12 +155,12 @@ with st.sidebar:
         )
 
         c_volt_adr = st.number_input(
-            "Voltaj Adresi",
+            "VOLTAJ ADRESI",
             value=int(mevcut_ayarlar.get('volt_addr', 73)),
             key="volt_addr_input",
         )
         c_volt_sc = st.number_input(
-            "Voltaj Carpan",
+            "VOLTAJ CARPAN",
             value=float(mevcut_ayarlar.get('volt_scale', 0.1)),
             step=0.01,
             format="%.4f",
@@ -169,12 +169,12 @@ with st.sidebar:
         )
 
         c_akim_adr = st.number_input(
-            "Akim Adresi",
+            "AKIM ADRESI",
             value=int(mevcut_ayarlar.get('akim_addr', 70)),
             key="akim_addr_input",
         )
         c_akim_sc = st.number_input(
-            "Akim Carpani",
+            "AKIM CARPANI",
             value=float(mevcut_ayarlar.get('akim_scale', 0.1)),
             step=0.01,
             format="%.4f",
@@ -183,12 +183,12 @@ with st.sidebar:
         )
 
         c_isi_adr = st.number_input(
-            "Isi Adresi",
+            "ISI ADRESI",
             value=int(mevcut_ayarlar.get('isi_addr', 93)),
             key="isi_addr_input",
         )
         c_isi_sc = st.number_input(
-            "Isi Carpani",
+            "ISI CARPANI",
             value=float(mevcut_ayarlar.get('isi_scale', 1.0)),
             step=0.01,
             format="%.4f",
@@ -219,13 +219,13 @@ with st.sidebar:
 
     # Yenileme suresi ayar
     st.markdown("---")
-    st.header("Yenileme Ayarlari")
+    st.header("YENILEME AYARLARI")
 
     if 'refresh_interval' not in st.session_state:
         st.session_state.refresh_interval = 30
 
     refresh_interval = st.select_slider(
-        "Otomatik Yenileme Suresi",
+        "OTOMATIK YENILEME SURESI",
         options=[10, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200],
         value=st.session_state.refresh_interval,
         format_func=lambda x: f"{x} saniye"
@@ -236,7 +236,7 @@ with st.sidebar:
     st.caption(f"Panel {refresh_interval} saniyede bir yenilenecek")
 
     st.markdown("---")
-    st.header("Collector Durumu")
+    st.header("COLLECTOR DURUMU")
     # Collector'ın son veriyi ne zaman yazdığını DB'den kontrol et
     _son = veritabani.tum_cihazlarin_son_durumu(fab_id)
     if _son:
@@ -255,8 +255,8 @@ with st.sidebar:
     st.caption("Collector arka planda (Docker) otomatik olarak calismaktadir.")
 
     st.markdown("---")
-    st.header(" Veri Yonetimi")
-    if st.button("Tum Verileri Sil"):
+    st.header(" VERI YONETIMI")
+    if st.button("TUM VERILERI SIL"):
         if veritabani.db_temizle(fab_id):
             kullanici = st.session_state.get('username', 'admin')
             veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
@@ -265,9 +265,9 @@ with st.sidebar:
             st.rerun()
 
 # --- ANA EKRAN ---
-st.title("Gunes Enerjisi Santrali Izleme")
+st.title("GUNES ENERJISI SANTRALI IZLEME")
 
-section_header("", "Canli Filo Durumu", "Tum cihazlarin anlik durum ozeti")
+section_header("", "CANLI FILO DURUMU", "TUM CIHAZLARIN ANLIK DURUM OZETI")
 
 # --- Plotly Grafik Yardmclar ---
 def create_plotly_chart(df, column, title, color, unit="", ymax=None):
@@ -382,17 +382,17 @@ def guncel_verileri_goster():
         for s_id in device["slave_ids"]:
             active_dev_ids.append(s_id)
 
-    # --- Grafik Secimi ---
+    # --- GRAFIK SECIMI ---
     st.markdown("---")
 
-    tab_tekli, tab_karsilastirma = st.tabs([" Tekli Cihaz", "Karsilastirma"])
+    tab_tekli, tab_karsilastirma = st.tabs([" TEKLI CIHAZ", "KARSILASTIRMA"])
 
     with tab_tekli:
         col_sel, col_info = st.columns([1, 3])
         with col_sel:
-            selected_id = st.selectbox("Cihaz Sec:", active_dev_ids, key="tek_cihaz")
+            selected_id = st.selectbox("CIHAZ SEC:", active_dev_ids, key="tek_cihaz")
         with col_info:
-            st.info(" Detayli ariza kodlarini gormek icin sol menuden **Alarmlar** sayfasina gidin.")
+            st.info(" DETAYLI ARIZA KODLARINI GORMEK ICIN SOL MENUDEN ALARMLAR SAYFASINA GIDIN.")
 
         row1_c1, row1_c2 = st.columns(2)
         row2_c1, row2_c2 = st.columns(2)
@@ -406,10 +406,10 @@ def guncel_verileri_goster():
             chart_isi = st.empty()
 
     with tab_karsilastirma:
-        karsilastirma_ids = st.multiselect("Karsilastirilacak Cihazlar:", active_dev_ids, default=active_dev_ids[:3])
-        karsilastirma_metrik = st.selectbox("Metrik:", ["guc", "voltaj", "akim", "sicaklik"],
-                                             format_func=lambda x: {"guc": " Guc (W)", "voltaj": " Voltaj (V)",
-                                                                      "akim": "Akim (A)", "sicaklik": "Sicaklik (C)"}[x])
+        karsilastirma_ids = st.multiselect("KARSILASTIRILACAK CIHAZLAR:", active_dev_ids, default=active_dev_ids[:3])
+        karsilastirma_metrik = st.selectbox("METRIK:", ["guc", "voltaj", "akim", "sicaklik"],
+                                             format_func=lambda x: {"guc": " GUC (W)", "voltaj": " VOLTAJ (V)",
+                                                                      "akim": "AKIM (A)", "sicaklik": "SICAKLIK (C)"}[x])
 
         chart_karsilastirma = st.empty()
 
@@ -440,7 +440,7 @@ def guncel_verileri_goster():
                         mode="gauge+number",
                         value=dev_guc,
                         title={'text': f"ID:{dev_id}", 'font': {'size': 14, 'color': '#94a3b8', 'family': 'Inter'}},
-                        number={'suffix': 'kW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
+                        number={'suffix': 'KW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
                         gauge={
                             'axis': {'range': [0, 500], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
                             'bar': {'color': durum_renk},
@@ -464,13 +464,13 @@ def guncel_verileri_goster():
                         f'</div>', unsafe_allow_html=True
                     )
 
-        # Tablo Guncelleme
-        df_sum = pd.DataFrame([row[:6] for row in summary_data], columns=["ID", "Son Zaman", "Guc (W)", "Voltaj (V)", "Akim (A)", "Isi (C)"])
-        df_sum["Son Zaman"] = pd.to_datetime(df_sum["Son Zaman"], format='mixed', errors='coerce').dt.strftime('%H:%M:%S')
+        # TABLO GUNCELLEME
+        df_sum = pd.DataFrame([row[:6] for row in summary_data], columns=["ID", "SON ZAMAN", "GUC (W)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"])
+        df_sum["SON ZAMAN"] = pd.to_datetime(df_sum["SON ZAMAN"], format='mixed', errors='coerce').dt.strftime('%H:%M:%S')
         df_sum[df_sum.columns[-1]] = pd.to_numeric(df_sum[df_sum.columns[-1]], errors='coerce').fillna(0).apply(utils.normalize_temperature_value).round(1)
         table_spot.dataframe(df_sum.set_index("ID"), width='stretch')
 
-    # 2. PLOTLY GRAFIK GUNCELLEME (Tekli)
+    # 2. PLOTLY GRAFIK GUNCELLEME (TEKLI)
     detail_data = veritabani.son_verileri_getir(selected_id, limit=2880, fabrika_id=fab_id)
     if detail_data:
         try:
@@ -496,18 +496,18 @@ def guncel_verileri_goster():
                 df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                 df_det = df_det.set_index("timestamp")
 
-                chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " Guc", "rgb(255,215,0)", "W", ymax=500), width='stretch')
-                chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " Voltaj", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
-                chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "Akim", "rgb(16,185,129)", "A"), width='stretch')
-                chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "Sicaklik", "rgb(239,83,80)", "C"), width='stretch')
+                chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch')
+                chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
+                chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch')
+                chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch')
         except Exception as e:
-            st.error(f"Grafik verisi islenirken hata: {e}")
+            st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
 
-    # 3. KARILATIRMA GRAFII
+    # 3. KARSILASTIRMA GRAFII
     if karsilastirma_ids:
         colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
-        metrik_labels = {"guc": " Guc Karslastrma (W)", "voltaj": " Voltaj Karslastrma (V)",
-                         "akim": " Akm Karslastrma (A)", "sicaklik": " Scaklk Karslastrma (C)"}
+        metrik_labels = {"guc": " GUC KARSILASTIRMA (W)", "voltaj": " VOLTAJ KARSILASTIRMA (V)",
+                         "akim": " AKIM KARSILASTIRMA (A)", "sicaklik": " SICAKLIK KARSILASTIRMA (C)"}
         
         ymax_val = 500 if karsilastirma_metrik == "guc" else (1000 if karsilastirma_metrik == "voltaj" else None)
         chart_karsilastirma.plotly_chart(
