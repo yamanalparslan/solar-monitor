@@ -61,13 +61,12 @@ else:
                 istatistik = veritabani.tarih_araliginda_ortalamalar(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
                 hatalar = veritabani.hata_sayilarini_getir(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
                 
-                delta = bitis - baslangic
                 cihaz_uretimi = 0
-                for i in range(delta.days + 1):
-                    t_str = (baslangic + timedelta(days=i)).strftime('%Y-%m-%d')
-                    u = veritabani.gunluk_uretim_hesapla(t_str, slave_id=s_id, fabrika_id=fab_id)
-                    if u:
-                        cihaz_uretimi += u.get('uretim_kwh', 0)
+                if istatistik and istatistik.get('toplam_olcum', 0) > 0:
+                    ayarlar = veritabani.tum_ayarlari_oku(fab_id)
+                    refresh_rate = float(ayarlar.get('refresh_rate', 60))
+                    toplam_saat = (istatistik['toplam_olcum'] * refresh_rate) / 3600
+                    cihaz_uretimi = (istatistik['ort_guc'] * toplam_saat) / 1000
                 
                 toplam_uretim += cihaz_uretimi
                 

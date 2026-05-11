@@ -197,11 +197,7 @@ def send_crm_webhook(event_type: str, payload: dict) -> bool:
         if webhook_secret and webhook_secret != "xxxxx":
             import hmac
             body = json.dumps(data, sort_keys=True)
-            signature = hmac.new(
-                webhook_secret.encode("utf-8"),
-                body.encode("utf-8"),
-                hashlib.sha256,
-            ).hexdigest()
+            signature = hmac.new(webhook_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
             headers["X-Solar-Signature"] = signature
 
         resp = requests.post(webhook_url, json=data, headers=headers, timeout=10)

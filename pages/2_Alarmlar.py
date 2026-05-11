@@ -37,8 +37,9 @@ def hata_bit_coz(kod, fault_map):
     hatalar = []
     for bit in range(32):
         if (kod >> bit) & 1:
-            aciklama = fault_map.get(bit, "Bilinmeyen Hata (Bit " + str(bit) + ")")
-            hatalar.append((bit, aciklama))
+            aciklama = fault_map.get(bit, "")
+            if aciklama and aciklama.lower() != "spare":
+                hatalar.append((bit, aciklama))
     return hatalar
 
 
@@ -50,38 +51,44 @@ else:
     hata_sayisi = 0
     temiz_sayisi = 0
 
+    from models import CihazDurumu
     for row in durumlar:
-        dev_id = row[0]
-        h107 = row[6] if len(row) > 6 and row[6] else 0
-        h109 = row[7] if len(row) > 7 and row[7] else 0
-        h111 = row[8] if len(row) > 8 and row[8] else 0
-        h112 = row[9] if len(row) > 9 and row[9] else 0
-        h114 = row[10] if len(row) > 10 and row[10] else 0
-        h115 = row[11] if len(row) > 11 and row[11] else 0
-        h116 = row[12] if len(row) > 12 and row[12] else 0
-        h117 = row[13] if len(row) > 13 and row[13] else 0
-        h118 = row[14] if len(row) > 14 and row[14] else 0
-        h119 = row[15] if len(row) > 15 and row[15] else 0
-        h120 = row[16] if len(row) > 16 and row[16] else 0
-        h121 = row[17] if len(row) > 17 and row[17] else 0
-        h122 = row[18] if len(row) > 18 and row[18] else 0
-        has_error = (h107 != 0) or (h109 != 0) or (h111 != 0) or (h112 != 0) or (h114 != 0) or (h115 != 0) or (h116 != 0) or (h117 != 0) or (h118 != 0) or (h119 != 0) or (h120 != 0) or (h121 != 0) or (h122 != 0)
+        # DB'den donen row'u CihazDurumu ile eslestir (eksik sutun gelme ihtimaline karsi)
+        padded_row = list(row) + [0] * max(0, 19 - len(row))
+        cd = CihazDurumu(*padded_row[:19])
+        
+        dev_id = cd.slave_id
+        h107 = cd.hata_kodu or 0
+        h109 = cd.hata_kodu_109 or 0
+        h111 = cd.hata_kodu_111 or 0
+        h112 = cd.hata_kodu_112 or 0
+        h114 = cd.hata_kodu_114 or 0
+        h115 = cd.hata_kodu_115 or 0
+        h116 = cd.hata_kodu_116 or 0
+        h117 = cd.hata_kodu_117 or 0
+        h118 = cd.hata_kodu_118 or 0
+        h119 = cd.hata_kodu_119 or 0
+        h120 = cd.hata_kodu_120 or 0
+        h121 = cd.hata_kodu_121 or 0
+        h122 = cd.hata_kodu_122 or 0
+        hatalar_107 = hata_bit_coz(h107, FAULT_MAP_107)
+        hatalar_109 = hata_bit_coz(h109, FAULT_MAP_109)
+        hatalar_111 = hata_bit_coz(h111, FAULT_MAP_111)
+        hatalar_112 = hata_bit_coz(h112, FAULT_MAP_112)
+        hatalar_114 = hata_bit_coz(h114, FAULT_MAP_114)
+        hatalar_115 = hata_bit_coz(h115, FAULT_MAP_115)
+        hatalar_116 = hata_bit_coz(h116, FAULT_MAP_116)
+        hatalar_117 = hata_bit_coz(h117, FAULT_MAP_117)
+        hatalar_118 = hata_bit_coz(h118, FAULT_MAP_118)
+        hatalar_119 = hata_bit_coz(h119, FAULT_MAP_119)
+        hatalar_120 = hata_bit_coz(h120, FAULT_MAP_120)
+        hatalar_121 = hata_bit_coz(h121, FAULT_MAP_121)
+        hatalar_122 = hata_bit_coz(h122, FAULT_MAP_122)
+
+        has_error = bool(hatalar_107 or hatalar_109 or hatalar_111 or hatalar_112 or hatalar_114 or hatalar_115 or hatalar_116 or hatalar_117 or hatalar_118 or hatalar_119 or hatalar_120 or hatalar_121 or hatalar_122)
 
         if has_error:
             hata_sayisi += 1
-            hatalar_107 = hata_bit_coz(h107, FAULT_MAP_107)
-            hatalar_109 = hata_bit_coz(h109, FAULT_MAP_109)
-            hatalar_111 = hata_bit_coz(h111, FAULT_MAP_111)
-            hatalar_112 = hata_bit_coz(h112, FAULT_MAP_112)
-            hatalar_114 = hata_bit_coz(h114, FAULT_MAP_114)
-            hatalar_115 = hata_bit_coz(h115, FAULT_MAP_115)
-            hatalar_116 = hata_bit_coz(h116, FAULT_MAP_116)
-            hatalar_117 = hata_bit_coz(h117, FAULT_MAP_117)
-            hatalar_118 = hata_bit_coz(h118, FAULT_MAP_118)
-            hatalar_119 = hata_bit_coz(h119, FAULT_MAP_119)
-            hatalar_120 = hata_bit_coz(h120, FAULT_MAP_120)
-            hatalar_121 = hata_bit_coz(h121, FAULT_MAP_121)
-            hatalar_122 = hata_bit_coz(h122, FAULT_MAP_122)
 
             parts = []
             parts.append('<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">')

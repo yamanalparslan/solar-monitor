@@ -408,7 +408,22 @@ class CihazDurumu:
 
     @property
     def has_error(self) -> bool:
-        return self.hata_kodu != 0 or self.hata_kodu_109 != 0 or self.hata_kodu_111 != 0 or self.hata_kodu_112 != 0 or self.hata_kodu_114 != 0 or self.hata_kodu_115 != 0 or self.hata_kodu_116 != 0 or self.hata_kodu_117 != 0 or self.hata_kodu_118 != 0 or self.hata_kodu_119 != 0 or self.hata_kodu_120 != 0 or self.hata_kodu_121 != 0 or self.hata_kodu_122 != 0
+        from models import get_active_faults
+        return bool(
+            get_active_faults(self.hata_kodu, FAULT_MAP_107) or
+            get_active_faults(self.hata_kodu_109, FAULT_MAP_109) or
+            get_active_faults(self.hata_kodu_111, FAULT_MAP_111) or
+            get_active_faults(self.hata_kodu_112, FAULT_MAP_112) or
+            get_active_faults(self.hata_kodu_114, FAULT_MAP_114) or
+            get_active_faults(self.hata_kodu_115, FAULT_MAP_115) or
+            get_active_faults(self.hata_kodu_116, FAULT_MAP_116) or
+            get_active_faults(self.hata_kodu_117, FAULT_MAP_117) or
+            get_active_faults(self.hata_kodu_118, FAULT_MAP_118) or
+            get_active_faults(self.hata_kodu_119, FAULT_MAP_119) or
+            get_active_faults(self.hata_kodu_120, FAULT_MAP_120) or
+            get_active_faults(self.hata_kodu_121, FAULT_MAP_121) or
+            get_active_faults(self.hata_kodu_122, FAULT_MAP_122)
+        )
 
     @property
     def durum_text(self) -> str:
@@ -418,4 +433,16 @@ class CihazDurumu:
             return "AKTİF"
         return "BEKLEMEDE"
 
+
+def get_active_faults(kod: int, fault_map: dict) -> list:
+    """Belirtilen hata kodunu çözümler ve 'Spare' (boş) olmayan aktif hataları listeler."""
+    hatalar = []
+    if not kod:
+        return hatalar
+    for bit in range(32):
+        if (kod >> bit) & 1:
+            aciklama = fault_map.get(bit, "")
+            if aciklama and aciklama.lower() != "spare":
+                hatalar.append((bit, aciklama))
+    return hatalar
 

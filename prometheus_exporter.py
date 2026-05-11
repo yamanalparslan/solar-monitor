@@ -32,28 +32,41 @@ def update_metrics():
     """
     try:
         from veritabani import FABRIKALAR
+        from models import CihazDurumu
         for fab_id in FABRIKALAR:
-            # Tuple: (slave_id, zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, ...)
             cihaz_durumlari = veritabani.tum_cihazlarin_son_durumu(fab_id)
             
             for cihaz in cihaz_durumlari:
-                s_id = str(cihaz[0])
-                guc = cihaz[2]
-                voltaj = cihaz[3]
-                akim = cihaz[4]
-                sicaklik = cihaz[5]
-                hk107 = cihaz[6]
-                hk109 = cihaz[7] if len(cihaz) > 7 else 0
+                padded_cihaz = list(cihaz) + [0] * max(0, 19 - len(cihaz))
+                cd = CihazDurumu(*padded_cihaz[:19])
+                
+                s_id = str(cd.slave_id)
                 
                 # Prometheus ölçüm ibrelerini (gauge) güncelle
-                solar_guc.labels(slave_id=s_id, fabrika=fab_id).set(guc)
-                solar_voltaj.labels(slave_id=s_id, fabrika=fab_id).set(voltaj)
-                solar_akim.labels(slave_id=s_id, fabrika=fab_id).set(akim)
-                solar_sicaklik.labels(slave_id=s_id, fabrika=fab_id).set(sicaklik)
+                solar_guc.labels(slave_id=s_id, fabrika=fab_id).set(cd.guc)
+                solar_voltaj.labels(slave_id=s_id, fabrika=fab_id).set(cd.voltaj)
+                solar_akim.labels(slave_id=s_id, fabrika=fab_id).set(cd.akim)
+                solar_sicaklik.labels(slave_id=s_id, fabrika=fab_id).set(cd.sicaklik)
                 
-                # Hata kodlarını ayrı labellarla kayıt et
-                solar_hata.labels(slave_id=s_id, register="107", fabrika=fab_id).set(hk107)
-                solar_hata.labels(slave_id=s_id, register="109", fabrika=fab_id).set(hk109)
+                # Tüm Hata kodlarını ayrı labellarla kayıt et
+                hatalar = {
+                    "107": cd.hata_kodu or 0,
+                    "109": cd.hata_kodu_109 or 0,
+                    "111": cd.hata_kodu_111 or 0,
+                    "112": cd.hata_kodu_112 or 0,
+                    "114": cd.hata_kodu_114 or 0,
+                    "115": cd.hata_kodu_115 or 0,
+                    "116": cd.hata_kodu_116 or 0,
+                    "117": cd.hata_kodu_117 or 0,
+                    "118": cd.hata_kodu_118 or 0,
+                    "119": cd.hata_kodu_119 or 0,
+                    "120": cd.hata_kodu_120 or 0,
+                    "121": cd.hata_kodu_121 or 0,
+                    "122": cd.hata_kodu_122 or 0,
+                }
+                
+                for reg, val in hatalar.items():
+                    solar_hata.labels(slave_id=s_id, register=reg, fabrika=fab_id).set(val)
             
     except Exception as e:
         logger.error(f"Prometheus metrik guncelleme hatasi: {e}")

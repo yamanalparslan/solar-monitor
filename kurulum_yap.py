@@ -162,7 +162,7 @@ def ayar_yaz(anahtar, deger):
         print(f"⚠️ Ayar yazma hatası ({anahtar}): {e}")
         return False
 
-def tum_ayarlari_oku():
+def tum_ayarlari_oku(fabrika_id="mekanik"):
     """Tüm ayarları dict olarak döndür"""
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -193,6 +193,12 @@ def veri_ekle(slave_id, data):
     conn.close()
 
 def son_verileri_getir(slave_id, limit=100):
+    try:
+        slave_id = int(slave_id)
+        limit = int(limit)
+    except (ValueError, TypeError):
+        return []
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
@@ -208,8 +214,14 @@ def tum_cihazlarin_son_durumu():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT slave_id, MAX(zaman) as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_111
-        FROM olcumler GROUP BY slave_id ORDER BY slave_id ASC
+        SELECT slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_111
+        FROM olcumler
+        WHERE (slave_id, zaman) IN (
+            SELECT slave_id, MAX(zaman)
+            FROM olcumler
+            GROUP BY slave_id
+        )
+        ORDER BY slave_id ASC
     """)
     rows = cursor.fetchall()
     conn.close()
@@ -235,7 +247,7 @@ import veritabani
 
 def load_config():
     """Veritabanından ayarları yükle"""
-    ayarlar = veritabani.tum_ayarlari_oku()
+    ayarlar = veritabani.tum_ayarlari_oku("mekanik")
     return {
         'target_ip': ayarlar.get('target_ip', '10.35.14.10'),
         'target_port': int(ayarlar.get('target_port', 502)),
@@ -268,6 +280,9 @@ def read_device(client, slave_id, config):
             "akim": rr.registers[2] * config['akim_scale'],
             "sicaklik": rr.registers[3] * config['isi_scale']
         }
+
+        if veriler["voltaj"] == 0 and veriler["akim"] == 0 and veriler["guc"] == 0 and veriler["sicaklik"] == 0:
+            return None
 
         for reg in config['alarm_registers']:
             try:

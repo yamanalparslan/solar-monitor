@@ -226,6 +226,9 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 3):
             if val_guc <= 0 and val_volt > 0 and val_akim > 0:
                 val_guc = round(val_volt * val_akim, 2)
 
+            if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
+                return None
+
             print(
                 f"  [ID {slave_id}] "
                 f"V={val_volt:.1f}V  A={val_akim:.2f}A  G={val_guc:.1f}W  T={val_isi:.1f}C"
@@ -246,7 +249,7 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 3):
 
             alarm_start = min(alarm_adresleri)
             alarm_end = max(alarm_adresleri) + 1 # count=2 olanlar için +1 ekliyoruz
-            alarm_count = (alarm_end - alarm_start) + 1
+            alarm_count = alarm_end - alarm_start
 
             time.sleep(0.05)
             rr_alarm = client.read_holding_registers(address=alarm_start, count=alarm_count, slave=slave_id)
@@ -260,7 +263,7 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 3):
                     
                     if offset >= 0 and (offset + a_count) <= len(alarm_regs):
                         if a_count == 2:
-                            veriler[reg["key"]] = (alarm_regs[offset] << 16) | alarm_regs[offset + 1]
+                            veriler[reg["key"]] = (alarm_regs[offset + 1] << 16) | alarm_regs[offset]
                         else:
                             veriler[reg["key"]] = alarm_regs[offset]
                     else:
@@ -365,12 +368,23 @@ def start_collector():
     # Günlük özet gönderim servisini başlat
     start_daily_webhook_thread()
 
+    fab_configs = {}
+    for fab_id in FABRIKALAR:
+        fab_configs[fab_id] = load_config(fab_id)
+
+    last_config_update = time.time()
+
     while True:
         baslangic = time.time()
         refresh_rate = 60 
+        
+        if time.time() - last_config_update > 30:
+            for fab_id in FABRIKALAR:
+                fab_configs[fab_id] = load_config(fab_id)
+            last_config_update = time.time()
 
         for fab_id in FABRIKALAR:
-            config = load_config(fab_id)
+            config = fab_configs[fab_id]
             port = config["target_port"]
             refresh_rate = config["refresh_rate"]
 
@@ -402,7 +416,7 @@ def start_collector():
         temizlik_sayaci += 1
         if temizlik_sayaci * refresh_rate >= TEMIZLIK_PERIYODU:
             for fab_id in FABRIKALAR:
-                otomatik_veri_temizle(load_config(fab_id))
+                otomatik_veri_temizle(fab_configs[fab_id])
             temizlik_sayaci = 0
 
         _notify_websocket()

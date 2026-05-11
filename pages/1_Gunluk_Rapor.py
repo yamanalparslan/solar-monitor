@@ -10,28 +10,7 @@ import utils
 from styles import inject_glossy_css, section_header, kpi_row
 from auth import check_auth, logout_button
 
-# --- GVENL HATA HESAPLAMA FONKSYONU ---
-def guvenli_hata_hesapla(hata_degeri):
-    """Veritabanndan gelen hata dizgesini (rn: '1/2') gvenli bir ekilde toplar."""
-    try:
-        # Bo, None veya NaN durumlarn kontrol et
-        if pd.isna(hata_degeri) or not str(hata_degeri).strip():
-            return 0
-        
-        # Gelen veriyi string'e evirip '/' iaretinden bl
-        parcalar = str(hata_degeri).split('/')
-        
-        # Beklenen "1/2" formatndaysa
-        if len(parcalar) == 2:
-            return int(parcalar[0].strip()) + int(parcalar[1].strip())
-            
-        # Eer yanllkla "/" olmadan sadece tek bir say ("5") gelirse
-        return int(str(hata_degeri).strip())
-        
-    except (ValueError, AttributeError, TypeError):
-        # Herhangi bir ayrtrma veya dntrme hatas olursa uygulamay kertme, 0 say
-        return 0
-# ------------------------------------------
+
 
 # --- SAYFA AYARLARI VE KONTROLLER ---
 st.set_page_config(page_title="GUNLUK RAPORLAR", page_icon="", layout="wide")
@@ -95,10 +74,14 @@ def goster_rapor():
             hata_str = "0/0"
             if hatalar:
                 hata_str = str(hatalar['hata_107_sayisi']) + " / " + str(hatalar['hata_111_sayisi'])
+            
+            kwh_value = 0
+            if uretim:
+                kwh_value = uretim.get('modbus_uretim', 0) if uretim.get('modbus_uretim', 0) > 0 else uretim.get('uretim_kwh', 0)
                 
             rapor_listesi.append({
                 "Cihaz ID": s_id,
-                "Uretim (kWh)": uretim['uretim_kwh'] if uretim else 0,
+                "Uretim (kWh)": kwh_value,
                 "Ort. Guc (W)": round(istatistik['ort_guc'], 2),
                 "Maks. Guc (W)": istatistik['max_guc'],
                 "Ort. Voltaj (V)": round(istatistik['ort_voltaj'], 1),
@@ -113,7 +96,7 @@ def goster_rapor():
         
         # Yeni ve gvenli hesaplama metodu ile toplamlar alma
         total_kwh = df_rapor["Uretim (kWh)"].sum()
-        total_errors = df_rapor["Hata (107/111)"].apply(guvenli_hata_hesapla).sum()
+        total_errors = df_rapor["Hata (107/111)"].apply(lambda x: sum(int(v) for v in str(x).split('/') if v.strip().isdigit())).sum()
         
         # Eksik olan kpi_row yaps tamamland
         kpi_row([

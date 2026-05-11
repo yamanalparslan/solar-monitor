@@ -53,7 +53,8 @@ def init_db():
             hata_kodu_119 INTEGER DEFAULT 0,
             hata_kodu_120 INTEGER DEFAULT 0,
             hata_kodu_121 INTEGER DEFAULT 0,
-            hata_kodu_122 INTEGER DEFAULT 0
+            hata_kodu_122 INTEGER DEFAULT 0,
+            modbus_uretim REAL DEFAULT 0
         )
     """)
     
@@ -129,6 +130,8 @@ def init_db():
         for hk in ['hata_kodu_109','hata_kodu_111','hata_kodu_112','hata_kodu_114','hata_kodu_115','hata_kodu_116','hata_kodu_117','hata_kodu_118','hata_kodu_119','hata_kodu_120','hata_kodu_121','hata_kodu_122']:
             if hk not in mevcut_sutunlar:
                 cursor.execute(f"ALTER TABLE olcumler ADD COLUMN {hk} INTEGER DEFAULT 0")
+        if 'modbus_uretim' not in mevcut_sutunlar:
+            cursor.execute("ALTER TABLE olcumler ADD COLUMN modbus_uretim REAL DEFAULT 0")
     except:
         pass
 
@@ -153,6 +156,8 @@ def init_db():
             ('volt_addr', '71', 'Voltaj register adresi'),
             ('akim_addr', '72', 'Akım register adresi'),
             ('isi_addr', '74', 'Sıcaklık register adresi'),
+            ('uretim_addr', '36', 'Günlük Üretim register adresi'),
+            ('uretim_scale', '1.0', 'Üretim çarpanı'),
             ('target_ip', fab_info['varsayilan_ip'], 'Modbus IP adresi'),
             ('target_port', '502', 'Modbus Port'),
             ('slave_ids', '1,2,3', 'İnverter ID listesi'),
@@ -213,8 +218,8 @@ def ayar_yaz(anahtar, deger, fabrika_id=VARSAYILAN_FABRIKA):
         print(f"[WARN] Ayar yazma hatası ({anahtar}): {e}")
         return False
 
-def tum_ayarlari_oku(fabrika_id=VARSAYILAN_FABRIKA):
-    """Tüm ayarları dict olarak döndür"""
+def tum_ayarlari_oku(fabrika_id: str):
+    """Belirtilen fabrika_id icin tüm ayarları tek bir sözlükte döndürür."""
     try:
         conn = sqlite3.connect(DB_NAME)
         cursor = conn.cursor()
@@ -228,6 +233,7 @@ def tum_ayarlari_oku(fabrika_id=VARSAYILAN_FABRIKA):
             'refresh_rate': '60', 'guc_scale': '1.0', 'volt_scale': '1.0',
             'akim_scale': '0.1', 'isi_scale': '1.0', 'guc_addr': '70',
             'volt_addr': '71', 'akim_addr': '72', 'isi_addr': '74',
+            'uretim_addr': '36', 'uretim_scale': '1.0',
             'target_ip': fab_ip, 'target_port': '502', 'slave_ids': '1,2,3',
             'veri_saklama_gun': '365'
         }
@@ -254,15 +260,15 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     # Tüm kolonlar sırasıyla INSERT komutuna dahil edildi
     cursor.execute("""
         INSERT INTO olcumler (
-            fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, 
+            fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, modbus_uretim,
             hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, 
             hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, 
             hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         fabrika_id, slave_id, simdi, 
-        data.get('guc', 0), data.get('voltaj', 0), data.get('akim', 0), data.get('sicaklik', 0), 
+        data.get('guc', 0), data.get('voltaj', 0), data.get('akim', 0), data.get('sicaklik', 0), data.get('modbus_uretim', 0),
         hk_107, hk_109, hk_111, hk_112, 
         hk_114, hk_115, hk_116, hk_117, 
         hk_118, hk_119, hk_120, hk_121, hk_122
@@ -271,6 +277,12 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     conn.close()
 
 def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
+    try:
+        slave_id = int(slave_id)
+        limit = int(limit)
+    except (ValueError, TypeError):
+        return []
+
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
@@ -286,12 +298,16 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT slave_id, MAX(zaman) as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+        SELECT slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
         FROM olcumler
-        WHERE fabrika_id = ?
-        GROUP BY slave_id
+        WHERE fabrika_id = ? AND (slave_id, zaman) IN (
+            SELECT slave_id, MAX(zaman)
+            FROM olcumler
+            WHERE fabrika_id = ?
+            GROUP BY slave_id
+        )
         ORDER BY slave_id ASC
-    """, (fabrika_id,))
+    """, (fabrika_id, fabrika_id))
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -423,21 +439,23 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     bitis = f"{tarih} 23:59:59"
     try:
         if slave_id:
-            cursor.execute('''SELECT AVG(guc), COUNT(*) FROM olcumler
+            cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(modbus_uretim) FROM olcumler
                 WHERE fabrika_id = ? AND zaman BETWEEN ? AND ? AND slave_id = ?''',
                 (fabrika_id, baslangic, bitis, slave_id))
         else:
-            cursor.execute('''SELECT AVG(guc), COUNT(*) FROM olcumler
+            cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(modbus_uretim) FROM olcumler
                 WHERE fabrika_id = ? AND zaman BETWEEN ? AND ?''',
                 (fabrika_id, baslangic, bitis))
         sonuc = cursor.fetchone()
         ort_guc = sonuc[0] or 0
         olcum_sayisi = sonuc[1] or 0
+        modbus_uretim = sonuc[2] or 0
         ayarlar = tum_ayarlari_oku(fabrika_id)
         refresh_rate = float(ayarlar.get('refresh_rate', 60))
         toplam_saat = (olcum_sayisi * refresh_rate) / 3600
         uretim_wh = ort_guc * toplam_saat
         return {'uretim_wh': round(uretim_wh, 2), 'uretim_kwh': round(uretim_wh / 1000, 3),
+                'modbus_uretim': round(modbus_uretim, 3),
                 'ort_guc': round(ort_guc, 2), 'calisma_suresi_saat': round(toplam_saat, 2)}
     except Exception as e:
         print(f"[WARN] Üretim hesaplama hatası: {e}")

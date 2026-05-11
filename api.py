@@ -433,8 +433,19 @@ def get_db_stats(fabrika: str = Query("mekanik", description="Fabrika ID"), _=De
 # WebSocket Canlı Veri
 # ─────────────────────────────────────────────
 
+import time
+
+_ws_cache = None
+_ws_cache_time = 0
+_last_broadcast_data = None
+
 def _build_ws_payload() -> dict:
-    """DB'den güncel veriyi okuyup WebSocket payload'ı oluşturur."""
+    """DB'den güncel veriyi okuyup WebSocket payload'ı oluşturur (2 sn önbellekli)."""
+    global _ws_cache, _ws_cache_time
+    
+    if time.time() - _ws_cache_time < 2 and _ws_cache:
+        return _ws_cache
+
     from veritabani import FABRIKALAR
     all_data = {}
     for fab_id in FABRIKALAR:
@@ -453,12 +464,16 @@ def _build_ws_payload() -> dict:
                 "hata_kodu": hata,
             })
         all_data[fab_id] = devices
-    return {
+        
+    payload = {
         "type": "update",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "fabrikalar": all_data,
         "client_count": ws_manager.client_count,
     }
+    _ws_cache = payload
+    _ws_cache_time = time.time()
+    return payload
 
 
 @app.websocket("/ws/live")
@@ -505,10 +520,18 @@ async def ws_notify():
 
     Bu endpoint API Key gerektirmez (iç ağ iletişimi).
     """
+    global _last_broadcast_data
+    
     if ws_manager.client_count == 0:
         return {"status": "no_clients", "clients": 0}
 
     payload = _build_ws_payload()
+    current_data = payload.get("fabrikalar", {})
+    
+    if _last_broadcast_data == current_data:
+        return {"status": "skipped", "clients": ws_manager.client_count}
+        
+    _last_broadcast_data = current_data
     await ws_manager.broadcast(payload)
 
     return {"status": "broadcast_sent", "clients": ws_manager.client_count}

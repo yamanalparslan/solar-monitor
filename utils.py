@@ -104,24 +104,30 @@ def decode_temperature_register(raw_value, configured_scale, min_c=-40.0, max_c=
         return 0.0
 
     signed_raw = to_signed16(raw_value)
-    scale_candidates = [configured_scale, 0.1, 0.01, 0.001]
-    used_scales = []
+    
+    # 1. Oncelikli aday: Veritabanindaki configured_scale
+    # Cihaz asiri isinmis (ornegin 154C) olabilir. Bu yuzden sadece cok absurt
+    # durumlarda (ornegin > 300C) fallback mekanizmasina gec.
+    primary_candidate = signed_raw * float(configured_scale)
+    if -100.0 <= primary_candidate <= 300.0:
+        return primary_candidate
 
+    # 2. Eger yapilandirilmis carpan tamamen hatali bir deger veriyorsa,
+    # olasi yaygin carpanlari deneyerek makul (min_c - max_c) bir sicaklik bul.
+    scale_candidates = [0.1, 0.01, 0.001]
+    
     for scale in scale_candidates:
-        if any(isclose(scale, seen, rel_tol=0.0, abs_tol=1e-12) for seen in used_scales):
-            continue
-        used_scales.append(scale)
-
         candidate = signed_raw * float(scale)
         if min_c <= candidate <= max_c:
             return candidate
 
-    return signed_raw * float(configured_scale)
+    return primary_candidate
 
 
-def normalize_temperature_value(value, min_c=-40.0, max_c=120.0):
+def normalize_temperature_value(value, min_c=-40.0, max_c=300.0):
     """
     Veritabanina yanlis olcekle yazilmis sicakliklari gosterim icin normalize eder.
+    Gercekci isinmalari maskelememek icin max_c varsayilan olarak 300 dereceye cikarilmistir.
     """
     if value is None:
         return 0.0
@@ -130,8 +136,12 @@ def normalize_temperature_value(value, min_c=-40.0, max_c=120.0):
         numeric_value = float(value)
     except (TypeError, ValueError):
         return 0.0
+        
+    # Eger deger halihazirda mantikli araliktaysa hic dokunma.
+    if min_c <= numeric_value <= max_c:
+        return numeric_value
 
-    for divisor in (1, 10, 100, 1000):
+    for divisor in (10, 100, 1000):
         candidate = numeric_value / divisor
         if min_c <= candidate <= max_c:
             return candidate

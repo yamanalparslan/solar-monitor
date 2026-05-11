@@ -54,12 +54,12 @@ def _pick_setting(raw_settings, key, fallback):
     return value, True
 
 
-def load_runtime_config():
+def load_runtime_config(fabrika_id: str = "mekanik"):
     """
     Collector ile ayni aktif ayarlari yukler.
     Veritabani doluysa onu, degilse .env varsayimlarini kullanir.
     """
-    raw_settings = veritabani.tum_ayarlari_oku()
+    raw_settings = veritabani.tum_ayarlari_oku(fabrika_id)
     db_hits = []
 
     target_ip, used_db = _pick_setting(raw_settings, "target_ip", env_config.MODBUS_IP)

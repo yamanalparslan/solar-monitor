@@ -107,6 +107,8 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
         "volt_scale":     float(ayarlar.get("volt_scale") or os.getenv("VOLT_SCALE", 0.1)),
         "akim_scale":     float(ayarlar.get("akim_scale") or os.getenv("AKIM_SCALE", 0.1)),
         "isi_scale":      float(ayarlar.get("isi_scale") or os.getenv("ISI_SCALE", 1.0)),
+        "uretim_addr":    int(ayarlar.get("uretim_addr") or os.getenv("URETIM_ADDR", 36)),
+        "uretim_scale":   float(ayarlar.get("uretim_scale") or os.getenv("URETIM_SCALE", 1.0)),
         "veri_saklama_gun": int(ayarlar.get("veri_saklama_gun", 365)),
         "alarm_registers": [
             {"addr": 107, "key": "hata_kodu",     "count": 2},
@@ -146,7 +148,8 @@ async def read_device_async(
             config["akim_addr"],
             config["volt_addr"],
             config["guc_addr"],
-            config["isi_addr"]
+            config["isi_addr"],
+            config["uretim_addr"]
         ]
         start_addr = min(metrik_adresleri)
         end_addr = max(metrik_adresleri)
@@ -167,29 +170,34 @@ async def read_device_async(
         raw_volt = regs[config["volt_addr"] - start_addr]
         raw_guc  = regs[config["guc_addr"] - start_addr]
         raw_isi  = regs[config["isi_addr"] - start_addr]
+        raw_uretim = regs[config["uretim_addr"] - start_addr]
 
         # ── Deger Donusumleri ──
         val_volt = utils.to_signed16(raw_volt) * config["volt_scale"]
         val_akim = utils.to_signed16(raw_akim) * config["akim_scale"]
         val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
         val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
+        val_uretim = float(raw_uretim) * config["uretim_scale"]
 
         if val_guc <= 0 and val_volt > 0 and val_akim > 0:
             val_guc = round(val_volt * val_akim, 2)
+
+        if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
+            return dev_id, ip_address, slave_id, None
 
         veriler = {
             "guc":      val_guc,
             "voltaj":   val_volt,
             "akim":     val_akim,
             "sicaklik": val_isi,
+            "modbus_uretim": val_uretim,
         }
 
         # ── 2. ADIM: ALARMLARI DINAMIK BLOK OLARAK OKU ──
-        alarm_adresleri = [reg["addr"] for reg in config["alarm_registers"]]
-        if alarm_adresleri:
-            alarm_start = min(alarm_adresleri)
-            alarm_end = max(alarm_adresleri) + 1
-            alarm_count = (alarm_end - alarm_start) + 1
+        if config["alarm_registers"]:
+            alarm_start = min(reg["addr"] for reg in config["alarm_registers"])
+            max_reg = max(config["alarm_registers"], key=lambda r: r["addr"])
+            alarm_count = (max_reg["addr"] + max_reg.get("count", 2)) - alarm_start
 
             await asyncio.sleep(0.05)
             rr_alarm = await client.read_holding_registers(address=alarm_start, count=alarm_count, slave=slave_id)
@@ -203,7 +211,8 @@ async def read_device_async(
                     
                     if offset >= 0 and (offset + a_count) <= len(alarm_regs):
                         if a_count == 2:
-                            veriler[reg["key"]] = (alarm_regs[offset] << 16) | alarm_regs[offset + 1]
+                            # Inverters usually map the first register to bits 0-15 and the second to bits 16-31 for alarms
+                            veriler[reg["key"]] = (alarm_regs[offset + 1] << 16) | alarm_regs[offset]
                         else:
                             veriler[reg["key"]] = alarm_regs[offset]
                     else:
@@ -270,7 +279,7 @@ def start_daily_webhook_thread():
                                         "device_id": dev_id,
                                         "ip_address": ip,
                                         "ozet": {
-                                            "toplam_uretim_kwh": uretim.get("uretim_kwh", 0),
+                                            "toplam_uretim_kwh": uretim.get("modbus_uretim", 0) if uretim.get("modbus_uretim", 0) > 0 else uretim.get("uretim_kwh", 0),
                                             "calisma_suresi_saat": uretim.get("calisma_suresi_saat", 0),
                                             "ortalama_sicaklik": round(ortalama.get("ort_sicaklik", 0) or 0, 2),
                                             "max_guc": round(ortalama.get("max_guc", 0) or 0, 2),
@@ -321,15 +330,21 @@ async def main_loop():
 
     temizlik_sayaci = 0
     TEMIZLIK_PERIYODU = 1800
+    last_config_update = time.time()
 
     while True:
         dongu_baslangic = time.time()
         tasks = []
         task_info = []
+        
+        # 30 saniyede bir veritabanindan ayarlari tazele
+        if time.time() - last_config_update > 30:
+            for fab_id in FABRIKALAR:
+                fab_configs[fab_id] = load_config(fab_id)
+            last_config_update = time.time()
 
         for fab_id in FABRIKALAR:
-            cfg = load_config(fab_id)
-            fab_configs[fab_id] = cfg
+            cfg = fab_configs[fab_id]
             port = cfg["target_port"]
 
             for device in cfg["target_devices"]:

@@ -85,49 +85,50 @@ def veri_uret():
 
 # --- MODBUS SUNUCU GOREVI ---
 async def veri_guncelleyici(context):
-    """Bu fonksiyon her saniye arkaplanda calisip inverter hafizasini gunceller"""
+    """Bu fonksiyon her saniye arkaplanda calisip inverter hafizalarini gunceller"""
+    SLAVE_IDS = [1, 2, 3]
     while True:
-        veriler = veri_uret()
-        
-        # Inverter hafizasina (Holding Register) yaz
-        slave_id = 1
-        
-        # Modbus'a yazilacak sayisal veriler (Son eleman string oldugu icin onu almiyoruz)
-        modbus_verisi = veriler[:5]  # [voltaj, akim_x10, guc, toplam_uretim, sicaklik]
-        
-        store = context[slave_id]
-        
-        # Panel ayarlarına uygun register adresleri:
-        # Register 70: Güç (W)
-        # Register 71: Voltaj (V)
-        # Register 72: Akım (A x10)
-        # Register 73: Toplam Üretim (Wh)
-        # Register 74: Sıcaklık (°C)
-        store.setValues(3, 70, [modbus_verisi[2]])  # Güç
-        store.setValues(3, 71, [modbus_verisi[0]])  # Voltaj
-        store.setValues(3, 72, [modbus_verisi[1]])  # Akım
-        store.setValues(3, 73, [modbus_verisi[3]])  # Toplam Üretim
-        store.setValues(3, 74, [modbus_verisi[4]])  # Sıcaklık
-        
-        # Hata register'ları (2 register'lık 32-bit değer)
-        # Register 107-190: Hata Kodu 1 (0 = hata yok)
-        # Register 111-112: Hata Kodu 2 (0 = hata yok)
-        store.setValues(3, 107, [0, 0])  # Hata yok
-        store.setValues(3, 111, [0, 0])  # Hata yok
-        
-        # Log basalim (Sanal saati de gösterelim)
-        print(f"🕒 {veriler[5]} | ☀️  Guc: {veriler[2]} W | 🌡️  Isi: {veriler[4]} C | ⚡ {veriler[0]} V")
+        sanal_saat_str = ""
+        for slave_id in SLAVE_IDS:
+            veriler = veri_uret()
+            sanal_saat_str = veriler[5]
+            
+            # Modbus'a yazilacak sayisal veriler (Son eleman string oldugu icin onu almiyoruz)
+            modbus_verisi = veriler[:5]  # [voltaj, akim_x10, guc, toplam_uretim, sicaklik]
+            
+            store = context[slave_id]
+            
+            # Panel ayarlarına uygun register adresleri:
+            # Register 70: Güç (W)
+            # Register 71: Voltaj (V)
+            # Register 72: Akım (A x10)
+            # Register 73: Toplam Üretim (Wh)
+            # Register 74: Sıcaklık (°C)
+            store.setValues(3, 70, [modbus_verisi[2]])  # Güç
+            store.setValues(3, 71, [modbus_verisi[0]])  # Voltaj
+            store.setValues(3, 72, [modbus_verisi[1]])  # Akım
+            store.setValues(3, 73, [modbus_verisi[3]])  # Toplam Üretim
+            store.setValues(3, 74, [modbus_verisi[4]])  # Sıcaklık
+            
+            # Hata register'ları (2 register'lık 32-bit değer)
+            store.setValues(3, 107, [0, 0])  # Hata yok
+            store.setValues(3, 111, [0, 0])  # Hata yok
+            
+        # Log basalim (Sadece bir cihazı örnek göstersin, ekran dolmasın)
+        print(f"🕒 {sanal_saat_str} | ☀️  (ID:1) Guc: {modbus_verisi[2]} W | 🌡️  Isi: {modbus_verisi[4]} C | ⚡ {modbus_verisi[0]} V")
         
         await asyncio.sleep(1)
 
 async def sunucuyu_calistir():
-    # Hafiza olustur (200 register - hata kodları için yeterli)
-    store = ModbusSlaveContext(
-        hr=ModbusSequentialDataBlock(0, [0]*200)
-    )
-    context = ModbusServerContext(slaves=store, single=True)
+    # 3 farkli inverter simulasyonu icin 3 ayri hafiza olustur
+    slaves = {
+        1: ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0]*200)),
+        2: ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0]*200)),
+        3: ModbusSlaveContext(hr=ModbusSequentialDataBlock(0, [0]*200))
+    }
+    context = ModbusServerContext(slaves=slaves, single=False)
 
-    print(f"✅ AKILLI INVERTER DEVREDE ({TEST_IP}:{TEST_PORT})")
+    print(f"✅ AKILLI INVERTER DEVREDE ({TEST_IP}:{TEST_PORT}) - Slave ID'ler: 1, 2, 3")
     print("⏳ DÖNGÜ: 6 Dakika (16 Saat Gündüz / 8 Saat Gece)")
     print("-" * 50)
 

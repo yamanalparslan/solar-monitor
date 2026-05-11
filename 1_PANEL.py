@@ -196,6 +196,20 @@ with st.sidebar:
             help="Ondalik olarak yazabilirsiniz. Ornek: 0.01 veya 0.001",
         )
 
+        c_uretim_adr = st.number_input(
+            "GUNLUK URETIM ADRESI",
+            value=int(mevcut_ayarlar.get('uretim_addr', 36)),
+            key="uretim_addr_input",
+        )
+        c_uretim_sc = st.number_input(
+            "GUNLUK URETIM CARPANI",
+            value=float(mevcut_ayarlar.get('uretim_scale', 1.0)),
+            step=0.01,
+            format="%.4f",
+            key="uretim_scale_input",
+            help="Ondalik olarak yazabilirsiniz. Ornek: 1.0 veya 0.1",
+        )
+
     submitted = st.button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
 
     if submitted:
@@ -211,6 +225,8 @@ with st.sidebar:
         veritabani.ayar_yaz('akim_scale', c_akim_sc, fab_id)
         veritabani.ayar_yaz('isi_addr', c_isi_adr, fab_id)
         veritabani.ayar_yaz('isi_scale', c_isi_sc, fab_id)
+        veritabani.ayar_yaz('uretim_addr', c_uretim_adr, fab_id)
+        veritabani.ayar_yaz('uretim_scale', c_uretim_sc, fab_id)
 
         st.success("Ayarlar kaydedildi! Collector bir sonraki okuma dongusunda guncellenecek.")
         kullanici = st.session_state.get('username', 'admin')
@@ -282,6 +298,11 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         name=title
     ))
     
+    x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+    if not df.empty:
+        target_date = df.index.min().strftime("%Y-%m-%d")
+        x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
+        
     yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False)
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
@@ -298,7 +319,7 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
             zeroline=False,
             dtick=1800000,
             tickformat="%H:%M",
-            range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+            range=x_range
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
@@ -309,6 +330,8 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
 
 def create_comparison_chart(ids, metric, title, colors, ymax=None):
     fig = go.Figure()
+    x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+    
     for i, dev_id in enumerate(ids):
         data = veritabani.son_verileri_getir(dev_id, limit=2880, fabrika_id=fab_id)
         if not data:
@@ -335,6 +358,10 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         df["timestamp"] = pd.to_datetime(df["timestamp"], format='mixed', errors='coerce')
         df = df.dropna(subset=['timestamp'])
         df = df.sort_values(by="timestamp", ascending=True)
+        
+        if not df.empty:
+            target_date = df["timestamp"].min().strftime("%Y-%m-%d")
+            x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
 
         color = colors[i % len(colors)]
         fig.add_trace(go.Scatter(
@@ -357,7 +384,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
             gridcolor='rgba(255,255,255,0.04)',
             dtick=1800000,
             tickformat="%H:%M",
-            range=[datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
+            range=x_range
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
@@ -370,154 +397,158 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
     return fig
 
 # --- Cihaz Saglk Kartlar ---
+import collector_async
+cfg = collector_async.load_config(fab_id)
+active_dev_ids = []
+for device in cfg["target_devices"]:
+    for s_id in device["slave_ids"]:
+        active_dev_ids.append(s_id)
+
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
-def guncel_verileri_goster():
-    gauge_spot = st.empty()
-    table_spot = st.empty()
-
-    import collector_async
-    cfg = collector_async.load_config(fab_id)
-    active_dev_ids = []
-    for device in cfg["target_devices"]:
-        for s_id in device["slave_ids"]:
-            active_dev_ids.append(s_id)
-
-    # --- GRAFIK SECIMI ---
-    st.markdown("---")
-
-    tab_tekli, tab_karsilastirma = st.tabs([" TEKLI CIHAZ", "KARSILASTIRMA"])
-
-    with tab_tekli:
-        col_sel, col_info = st.columns([1, 3])
-        with col_sel:
-            selected_id = st.selectbox("CIHAZ SEC:", active_dev_ids, key="tek_cihaz")
-        with col_info:
-            st.info(" DETAYLI ARIZA KODLARINI GORMEK ICIN SOL MENUDEN ALARMLAR SAYFASINA GIDIN.")
-
-        row1_c1, row1_c2 = st.columns(2)
-        row2_c1, row2_c2 = st.columns(2)
-        with row1_c1:
-            chart_guc = st.empty()
-        with row1_c2:
-            chart_volt = st.empty()
-        with row2_c1:
-            chart_akim = st.empty()
-        with row2_c2:
-            chart_isi = st.empty()
-
-    with tab_karsilastirma:
-        karsilastirma_ids = st.multiselect("KARSILASTIRILACAK CIHAZLAR:", active_dev_ids, default=active_dev_ids[:3])
-        karsilastirma_metrik = st.selectbox("METRIK:", ["guc", "voltaj", "akim", "sicaklik"],
-                                             format_func=lambda x: {"guc": " GUC (W)", "voltaj": " VOLTAJ (V)",
-                                                                      "akim": "AKIM (A)", "sicaklik": "SICAKLIK (C)"}[x])
-
-        chart_karsilastirma = st.empty()
-
-    status_spot = st.empty()
-
+def render_summary_section():
     # 1. TABLO VE KART GUNCELLEME
     summary_data = veritabani.tum_cihazlarin_son_durumu(fab_id)
     if summary_data:
-        with gauge_spot.container():
-            num_devices = len(summary_data)
-            cols_per_row = min(num_devices, 4)
-            gauge_cols = st.columns(cols_per_row)
+        num_devices = len(summary_data)
+        cols_per_row = min(num_devices, 4)
+        gauge_cols = st.columns(cols_per_row)
 
-            for idx, row in enumerate(summary_data):
-                col_idx = idx % cols_per_row
-                dev_id = row[0]
-                dev_guc = row[2] if row[2] is not None else 0
-                dev_volt = round(float(row[3]), 1) if row[3] is not None else 0
-                dev_akim = round(float(row[4]), 2) if row[4] is not None else 0
-                dev_temp = round(utils.normalize_temperature_value(row[5]), 1) if row[5] is not None else 0
-                dev_hata = (row[6] if len(row) > 6 and row[6] else 0) or (row[7] if len(row) > 7 and row[7] else 0)
+        from models import CihazDurumu
+        for idx, row in enumerate(summary_data):
+            col_idx = idx % cols_per_row
+            
+            # Make sure the row has enough elements to unpack into CihazDurumu
+            padded_row = list(row) + [0] * max(0, 19 - len(row))
+            cd = CihazDurumu(*padded_row[:19])
+            
+            dev_id = cd.slave_id
+            dev_guc = cd.guc if cd.guc is not None else 0
+            dev_volt = round(float(cd.voltaj), 1) if cd.voltaj is not None else 0
+            dev_akim = round(float(cd.akim), 2) if cd.akim is not None else 0
+            dev_temp = round(utils.normalize_temperature_value(cd.sicaklik), 1) if cd.sicaklik is not None else 0
+            dev_hata = cd.has_error
 
-                durum_renk = "#ef4444" if dev_hata else ("#10b981" if dev_guc > 0 else "#f59e0b")
-                durum_text = "ARIZA" if dev_hata else ("AKTIF" if dev_guc > 0 else "BEKLEMEDE")
+            durum_renk = "#ef4444" if dev_hata else ("#10b981" if dev_guc > 0 else "#f59e0b")
+            durum_text = "ARIZA" if dev_hata else ("AKTIF" if dev_guc > 0 else "BEKLEMEDE")
 
-                with gauge_cols[col_idx]:
-                    fig_gauge = go.Figure(go.Indicator(
-                        mode="gauge+number",
-                        value=dev_guc,
-                        title={'text': f"ID:{dev_id}", 'font': {'size': 14, 'color': '#94a3b8', 'family': 'Inter'}},
-                        number={'suffix': 'KW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
-                        gauge={
-                            'axis': {'range': [0, 500], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
-                            'bar': {'color': durum_renk},
-                            'bgcolor': 'rgba(15, 23, 42, 0.6)',
-                            'borderwidth': 1,
-                            'bordercolor': 'rgba(255, 255, 255, 0.06)',
-                            'steps': [
-                                {'range': [0, max(dev_guc * 1.5, 500) * 0.3], 'color': 'rgba(15, 23, 42, 0.4)'},
-                                {'range': [max(dev_guc * 1.5, 500) * 0.3, max(dev_guc * 1.5, 500) * 0.7], 'color': 'rgba(30, 41, 59, 0.4)'},
-                                {'range': [max(dev_guc * 1.5, 500) * 0.7, max(dev_guc * 1.5, 500)], 'color': 'rgba(99, 102, 241, 0.08)'},
-                            ],
-                        },
-                    ))
-                    fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=185, margin=dict(l=20, r=20, t=40, b=10), font=dict(color='#94a3b8', family='Inter'))
-                    st.plotly_chart(fig_gauge, width='stretch', key=f"gauge_dyn_{dev_id}")
+            with gauge_cols[col_idx]:
+                fig_gauge = go.Figure(go.Indicator(
+                    mode="gauge+number",
+                    value=dev_guc,
+                    title={'text': f"ID:{dev_id}", 'font': {'size': 14, 'color': '#94a3b8', 'family': 'Inter'}},
+                    number={'suffix': 'KW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
+                    gauge={
+                        'axis': {'range': [0, 500], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
+                        'bar': {'color': durum_renk},
+                        'bgcolor': 'rgba(15, 23, 42, 0.6)',
+                        'borderwidth': 1,
+                        'bordercolor': 'rgba(255, 255, 255, 0.06)',
+                        'steps': [
+                            {'range': [0, max(dev_guc * 1.5, 500) * 0.3], 'color': 'rgba(15, 23, 42, 0.4)'},
+                            {'range': [max(dev_guc * 1.5, 500) * 0.3, max(dev_guc * 1.5, 500) * 0.7], 'color': 'rgba(30, 41, 59, 0.4)'},
+                            {'range': [max(dev_guc * 1.5, 500) * 0.7, max(dev_guc * 1.5, 500)], 'color': 'rgba(99, 102, 241, 0.08)'},
+                        ],
+                    },
+                ))
+                fig_gauge.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=185, margin=dict(l=20, r=20, t=40, b=10), font=dict(color='#94a3b8', family='Inter'))
+                st.plotly_chart(fig_gauge, width='stretch', key=f"gauge_dyn_{dev_id}")
 
-                    st.markdown(
-                        f'<div style="text-align:center; font-size:0.85rem; color:#94a3b8; margin-top:-10px; font-family: Inter, sans-serif;">'
-                        f'{dev_volt:.1f}V &nbsp; {dev_akim:.2f}A &nbsp; {dev_temp:.1f}°C'
-                        f' &nbsp; | &nbsp; <span style="color:{durum_renk};font-weight:700;">{durum_text}</span>'
-                        f'</div>', unsafe_allow_html=True
-                    )
+                st.markdown(
+                    f'<div style="text-align:center; font-size:0.85rem; color:#94a3b8; margin-top:-10px; font-family: Inter, sans-serif;">'
+                    f'{dev_volt:.1f}V &nbsp; {dev_akim:.2f}A &nbsp; {dev_temp:.1f}°C'
+                    f' &nbsp; | &nbsp; <span style="color:{durum_renk};font-weight:700;">{durum_text}</span>'
+                    f'</div>', unsafe_allow_html=True
+                )
 
         # TABLO GUNCELLEME
         df_sum = pd.DataFrame([row[:6] for row in summary_data], columns=["ID", "SON ZAMAN", "GUC (W)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"])
         df_sum["SON ZAMAN"] = pd.to_datetime(df_sum["SON ZAMAN"], format='mixed', errors='coerce').dt.strftime('%H:%M:%S')
         df_sum[df_sum.columns[-1]] = pd.to_numeric(df_sum[df_sum.columns[-1]], errors='coerce').fillna(0).apply(utils.normalize_temperature_value).round(1)
-        table_spot.dataframe(df_sum.set_index("ID"), width='stretch')
+        st.dataframe(df_sum.set_index("ID"), width='stretch')
 
-    # 2. PLOTLY GRAFIK GUNCELLEME (TEKLI)
-    detail_data = veritabani.son_verileri_getir(selected_id, limit=2880, fabrika_id=fab_id)
-    if detail_data:
-        try:
-            cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
-            df_det = pd.DataFrame(detail_data, columns=cols_det[:len(detail_data[0])] if detail_data else cols_det)
+render_summary_section()
+
+# --- GRAFIK SECIMI ---
+st.markdown("---")
+
+tab_tekli, tab_karsilastirma = st.tabs([" TEKLI CIHAZ", "KARSILASTIRMA"])
+
+with tab_tekli:
+    col_sel, col_info = st.columns([1, 3])
+    with col_sel:
+        selected_id = st.selectbox("CIHAZ SEC:", active_dev_ids, key="tek_cihaz")
+    with col_info:
+        st.info(" DETAYLI ARIZA KODLARINI GORMEK ICIN SOL MENUDEN ALARMLAR SAYFASINA GIDIN.")
+
+    @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
+    def render_tek_cihaz_grafikleri(sel_id):
+        row1_c1, row1_c2 = st.columns(2)
+        row2_c1, row2_c2 = st.columns(2)
+        chart_guc = row1_c1.empty()
+        chart_volt = row1_c2.empty()
+        chart_akim = row2_c1.empty()
+        chart_isi = row2_c2.empty()
+
+        detail_data = veritabani.son_verileri_getir(sel_id, limit=2880, fabrika_id=fab_id)
+        if detail_data:
+            try:
+                cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
+                df_det = pd.DataFrame(detail_data, columns=cols_det[:len(detail_data[0])] if detail_data else cols_det)
+                
+                df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], format='mixed', errors='coerce')
+                df_det["guc"] = pd.to_numeric(df_det["guc"], errors='coerce')
+                df_det["voltaj"] = pd.to_numeric(df_det["voltaj"], errors='coerce')
+                df_det["akim"] = pd.to_numeric(df_det["akim"], errors='coerce')
+                df_det["sicaklik"] = pd.to_numeric(df_det["sicaklik"], errors='coerce').apply(utils.normalize_temperature_value)
+                df_det = df_det[
+                    ~(
+                        df_det["guc"].fillna(0).eq(0)
+                        & df_det["voltaj"].fillna(0).eq(0)
+                        & df_det["akim"].fillna(0).eq(0)
+                        & df_det["sicaklik"].fillna(0).eq(0)
+                    )
+                ]
+                if not df_det.empty:
+                    df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
+                    df_det = df_det.set_index("timestamp")
+
+                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch')
+                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
+                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch')
+                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch')
+            except Exception as e:
+                st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
+
+    render_tek_cihaz_grafikleri(selected_id)
+
+with tab_karsilastirma:
+    karsilastirma_ids = st.multiselect("KARSILASTIRILACAK CIHAZLAR:", active_dev_ids, default=active_dev_ids[:3])
+    karsilastirma_metrik = st.selectbox("METRIK:", ["guc", "voltaj", "akim", "sicaklik"],
+                                         format_func=lambda x: {"guc": " GUC (W)", "voltaj": " VOLTAJ (V)",
+                                                                  "akim": "AKIM (A)", "sicaklik": "SICAKLIK (C)"}[x])
+
+    @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
+    def render_karsilastirma_grafik(k_ids, k_metrik):
+        if k_ids:
+            colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
+            metrik_labels = {"guc": " GUC KARSILASTIRMA (W)", "voltaj": " VOLTAJ KARSILASTIRMA (V)",
+                             "akim": " AKIM KARSILASTIRMA (A)", "sicaklik": " SICAKLIK KARSILASTIRMA (C)"}
             
-            df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], format='mixed', errors='coerce')
-            df_det["guc"] = pd.to_numeric(df_det["guc"], errors='coerce')
-            df_det["voltaj"] = pd.to_numeric(df_det["voltaj"], errors='coerce')
-            df_det["akim"] = pd.to_numeric(df_det["akim"], errors='coerce')
-            df_det["sicaklik"] = pd.to_numeric(df_det["sicaklik"], errors='coerce').apply(utils.normalize_temperature_value)
-            df_det = df_det[
-                ~(
-                    df_det["guc"].fillna(0).eq(0)
-                    & df_det["voltaj"].fillna(0).eq(0)
-                    & df_det["akim"].fillna(0).eq(0)
-                    & df_det["sicaklik"].fillna(0).eq(0)
-                )
-            ]
-            if df_det.empty:
-                pass
-            else:
-                df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
-                df_det = df_det.set_index("timestamp")
+            ymax_val = 500 if k_metrik == "guc" else (1000 if k_metrik == "voltaj" else None)
+            st.plotly_chart(
+                create_comparison_chart(k_ids, k_metrik, metrik_labels[k_metrik], colors, ymax=ymax_val),
+                width='stretch'
+            )
 
-                chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch')
-                chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
-                chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch')
-                chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch')
-        except Exception as e:
-            st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
+    render_karsilastirma_grafik(karsilastirma_ids, karsilastirma_metrik)
 
-    # 3. KARSILASTIRMA GRAFII
-    if karsilastirma_ids:
-        colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
-        metrik_labels = {"guc": " GUC KARSILASTIRMA (W)", "voltaj": " VOLTAJ KARSILASTIRMA (V)",
-                         "akim": " AKIM KARSILASTIRMA (A)", "sicaklik": " SICAKLIK KARSILASTIRMA (C)"}
-        
-        ymax_val = 500 if karsilastirma_metrik == "guc" else (1000 if karsilastirma_metrik == "voltaj" else None)
-        chart_karsilastirma.plotly_chart(
-            create_comparison_chart(karsilastirma_ids, karsilastirma_metrik, metrik_labels[karsilastirma_metrik], colors, ymax=ymax_val),
-            width='stretch'
-        )
-
-    # Collector durumunu kontrol et
+@st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
+def render_status_bar():
+    summary_data = veritabani.tum_cihazlarin_son_durumu(fab_id)
     collector_aktif = False
     veri_bos_gorunuyor = False
+    gecen_sure = 0
+    
     if summary_data:
         from datetime import datetime
         try:
@@ -535,20 +566,19 @@ def guncel_verileri_goster():
         except Exception:
             pass
 
-    with status_spot:
-        if collector_aktif and veri_bos_gorunuyor:
-            status_bar(False,
-                f'⚠️ <b>Collector aktif ama veri bos gorunuyor</b> — '
-                f'Son kayit {int(gecen_sure)}s once. Modbus adres/function ayari kontrol edilmeli.')
-        elif collector_aktif:
-            status_bar(True,
-                f'✅ <b>Canlı Veri Akışı</b> — DB her '
-                f'{st.session_state.refresh_interval}s yenileniyor | '
-                f'Collector son veri: {int(gecen_sure)}s önce')
-        else:
-            status_bar(False,
-                '⚠️ <b>Collector Bağlantısı Yok</b> — '
-                'Sistem arka planda (Docker) veri çekmeyi durdurmuş olabilir. '
-                'Panel DB\'deki mevcut verileri gösteriyor.')
+    if collector_aktif and veri_bos_gorunuyor:
+        status_bar(False,
+            f'⚠️ <b>Collector aktif ama veri bos gorunuyor</b> — '
+            f'Son kayit {int(gecen_sure)}s once. Modbus adres/function ayari kontrol edilmeli.')
+    elif collector_aktif:
+        status_bar(True,
+            f'✅ <b>Canlı Veri Akışı</b> — DB her '
+            f'{st.session_state.refresh_interval}s yenileniyor | '
+            f'Collector son veri: {int(gecen_sure)}s önce')
+    else:
+        status_bar(False,
+            '⚠️ <b>Collector Bağlantısı Yok</b> — '
+            'Sistem arka planda (Docker) veri çekmeyi durdurmuş olabilir. '
+            'Panel DB\'deki mevcut verileri gösteriyor.')
 
-guncel_verileri_goster()
+render_status_bar()
