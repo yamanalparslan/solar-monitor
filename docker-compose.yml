@@ -21,7 +21,7 @@ x-common: &common
   volumes:
     - ./data:/app/data
     - ./backups:/app/backups
-    - ./:/app
+    # Üretim güvenliği: Kaynak kodun tamamı host'tan bağlanmaz. Image üzerinden çalışır.
   environment:
     - PYTHONUNBUFFERED=1
     - DB_NAME=/app/data/solar_log.db
@@ -94,7 +94,7 @@ services:
 
   # ─── Grafana Dashboard ───
   solar-grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.0
     container_name: solar_grafana
     restart: unless-stopped
     ports:
@@ -103,20 +103,26 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-solar_secure}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - solar-prometheus
 
   # ─── MQTT Broker ───
   solar-mosquitto:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto:2.0.18
     container_name: solar_mosquitto
     restart: unless-stopped
     ports:
-      - "1883:1883"
+      # Güvenlik: Sadece iç ağa (localhost) publish et, dışarı açma
+      - "127.0.0.1:1883:1883"
+    environment:
+      - MQTT_USER=${MQTT_USER:-solaradmin}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:-solar_secure}
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+    command: >
+      sh -c "touch /tmp/passwd && mosquitto_passwd -b /tmp/passwd $${MQTT_USER} $${MQTT_PASSWORD} && exec mosquitto -c /mosquitto/config/mosquitto.conf"
 
   # ─── MQTT Dinleyici ───
   solar-mqtt-listener:

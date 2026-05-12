@@ -2,6 +2,17 @@ import sqlite3
 import os
 from datetime import datetime, timedelta
 
+def get_db_connection():
+    """Çoklu container ve thread erişimi için WAL modunda bağlantı oluşturur."""
+    conn = sqlite3.connect(DB_NAME, timeout=30.0)
+    # WAL (Write-Ahead Logging) modunu aktif et: okuma ve yazmalar birbirini kilitlemez
+    conn.execute("PRAGMA journal_mode=WAL;")
+    # Performans için senkronizasyonu normale indir
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    # DB meşgulse timeout süresini uzat
+    conn.execute("PRAGMA busy_timeout=30000;")
+    return conn
+
 # ── Fabrika Tanımları ──
 FABRIKALAR = {
     "mekanik": {"ad": "Mekanik Fabrika", "ikon": "🔧", "varsayilan_ip": "10.35.14.10"},
@@ -27,7 +38,7 @@ def init_db():
     # Debug için yol bilgisini yazdıralım
     print(f"[DB] Veritabanı Bağlanıyor: {DB_NAME}")
     
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # 1. Ölçümler Tablosu
@@ -190,7 +201,7 @@ def init_db():
 def ayar_oku(anahtar, varsayilan=None, fabrika_id=VARSAYILAN_FABRIKA):
     """Veritabanından ayar oku"""
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT deger FROM ayarlar WHERE fabrika_id = ? AND anahtar = ?', (fabrika_id, anahtar))
         sonuc = cursor.fetchone()
@@ -205,7 +216,7 @@ def ayar_oku(anahtar, varsayilan=None, fabrika_id=VARSAYILAN_FABRIKA):
 def ayar_yaz(anahtar, deger, fabrika_id=VARSAYILAN_FABRIKA):
     """Veritabanına ayar yaz"""
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT OR REPLACE INTO ayarlar (fabrika_id, anahtar, deger, guncelleme_zamani)
@@ -221,7 +232,7 @@ def ayar_yaz(anahtar, deger, fabrika_id=VARSAYILAN_FABRIKA):
 def tum_ayarlari_oku(fabrika_id: str):
     """Belirtilen fabrika_id icin tüm ayarları tek bir sözlükte döndürür."""
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT anahtar, deger FROM ayarlar WHERE fabrika_id = ?', (fabrika_id,))
         ayarlar = {row[0]: row[1] for row in cursor.fetchall()}
@@ -239,7 +250,7 @@ def tum_ayarlari_oku(fabrika_id: str):
         }
 
 def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     simdi = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
     
@@ -283,7 +294,7 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     except (ValueError, TypeError):
         return []
 
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
@@ -295,7 +306,7 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     return rows[::-1]
 
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
         SELECT slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
@@ -313,7 +324,7 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     return rows
 
 def db_temizle(fabrika_id=None):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         if fabrika_id:
@@ -335,7 +346,7 @@ def eski_verileri_temizle(gun_sayisi=None, fabrika_id=None):
     gun_sayisi None ise ayarlardan oku
     gun_sayisi 0 ise sınırsız saklama (silme yapma)
     """
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
@@ -367,7 +378,7 @@ def eski_verileri_temizle(gun_sayisi=None, fabrika_id=None):
 
 def veritabani_istatistikleri(fabrika_id=None):
     """Veritabanı boyutu ve kayıt sayısı hakkında bilgi"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
@@ -408,7 +419,7 @@ def veritabani_istatistikleri(fabrika_id=None):
 
 def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     """Belirtilen tarih aralığındaki ortalama değerler"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     baslangic_str = f"{baslangic} 00:00:00"
     bitis_str = f"{bitis} 23:59:59"
@@ -433,7 +444,7 @@ def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VAR
 
 def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     """Belirli bir gün için toplam enerji üretimi tahmini (Wh)"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     baslangic = f"{tarih} 00:00:00"
     bitis = f"{tarih} 23:59:59"
@@ -465,7 +476,7 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
 
 def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     """Belirtilen tarih aralığındaki hata kayıtlarını getir"""
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     baslangic_str = f"{baslangic} 00:00:00"
     bitis_str = f"{bitis} 23:59:59"
@@ -516,7 +527,7 @@ def audit_log_kaydet(kullanici, islem, detay=""):
         detay: Ek açıklama
     """
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO audit_log (kullanici, islem, detay, zaman)
@@ -537,7 +548,7 @@ def audit_log_getir(limit=100):
         list of tuples: (id, kullanici, islem, detay, zaman)
     """
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, kullanici, islem, detay, zaman

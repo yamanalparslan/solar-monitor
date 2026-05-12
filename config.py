@@ -76,6 +76,9 @@ class Config:
     MQTT_HOST: str = field(default_factory=lambda: _env("MQTT_HOST", "localhost"))
     MQTT_PORT: int = field(default_factory=lambda: _env_int("MQTT_PORT", 1883))
     MQTT_TOPIC: str = field(default_factory=lambda: _env("MQTT_TOPIC", "solar/telemetry"))
+    MQTT_USER: str = field(default_factory=lambda: _env("MQTT_USER", "solaradmin"))
+    MQTT_PASSWORD: str = field(default_factory=lambda: _env("MQTT_PASSWORD", "solar_secure"))
+    MQTT_SECRET_TOKEN: str = field(default_factory=lambda: _env("MQTT_SECRET_TOKEN", ""))
 
     # --- Authentication ---
     AUTH_ENABLED: bool = field(default_factory=lambda: _env_bool("AUTH_ENABLED", True))

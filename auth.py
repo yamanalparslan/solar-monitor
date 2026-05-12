@@ -147,6 +147,9 @@ def check_auth() -> bool:
 
     # Zaten giri yaplm mInfinite
     if st.session_state.get("authenticated"):
+        _, expected_hash = _get_credentials()
+        if expected_hash == _DEFAULT_ADMIN_HASH:
+            st.warning("⚠️ **Güvenlik Uyarısı:** Varsayılan yönetici şifresini kullanıyorsunuz. Lütfen sistemi güvenli hale getirmek için `.env` dosyasından `AUTH_PASSWORD_HASH` değerini güncelleyin.")
         return True
 
     # Login ekrann gster
@@ -189,19 +192,31 @@ def _show_login_form():
             submitted = st.form_submit_button("Giris Yap", width='stretch', type="primary")
 
             if submitted:
-                expected_user, expected_hash = _get_credentials()
-
-                if username_input == expected_user and _verify_password(password_input, expected_hash):
-                    st.session_state["authenticated"] = True
-                    st.session_state["username"] = username_input
-                    st.rerun()
+                import time
+                
+                # Bruteforce koruması: basit gecikme ve deneme sınırı
+                if "login_attempts" not in st.session_state:
+                    st.session_state["login_attempts"] = 0
+                
+                if st.session_state["login_attempts"] >= 3:
+                    st.error("Çok fazla hatalı deneme yaptınız. Lütfen 30 saniye bekleyin.")
+                    time.sleep(5) # Güvenlik amaçlı block (Streamlit UI'ı duraklatır)
                 else:
-                    st.error("Kullanici adi veya sifre hatali!")
+                    expected_user, expected_hash = _get_credentials()
+                    if username_input == expected_user and _verify_password(password_input, expected_hash):
+                        st.session_state["authenticated"] = True
+                        st.session_state["username"] = username_input
+                        st.session_state["login_attempts"] = 0
+                        st.rerun()
+                    else:
+                        st.session_state["login_attempts"] += 1
+                        st.error(f"Kullanici adi veya sifre hatali! (Kalan deneme: {3 - st.session_state['login_attempts']})")
+                        time.sleep(1) # Time-delay attack mitigation
 
         st.markdown("""
         <div class="login-footer">
-            Varsayilan: admin / admin<br>
-            .env dosyasindan degistirilebilir.
+            Sisteme giris yapmak icin yetkili bilgilerinizi kullanin.<br>
+            (Ayarlar .env dosyasindan yapilandirilabilir)
         </div>
         """, unsafe_allow_html=True)
 
@@ -225,3 +240,14 @@ def logout_button():
 def get_current_user() -> str:
     """Mevcut oturumdaki kullanc adn dner."""
     return st.session_state.get("username", "admin")
+
+def get_user_role(username: str) -> str:
+    """Kullanıcının rolünü .env'den (USER_ROLES) okur. Varsayılan: viewer."""
+    roles_str = os.getenv("USER_ROLES", "admin:admin")
+    roles = {}
+    for pair in roles_str.split(","):
+        if ":" in pair:
+            u, r = pair.split(":", 1)
+            roles[u.strip()] = r.strip().lower()
+    
+    return roles.get(username, "viewer")

@@ -71,20 +71,20 @@ veritabani.init_db()
 # API Key Doğrulama (basit)
 # ─────────────────────────────────────────────
 
-def verify_api_key(x_api_key: Optional[str] = Header(None)):
+def verify_api_key(x_api_key: Optional[str] = Header(None), api_key: Optional[str] = Query(None)):
     """API Key doğrulama.
 
-    .env'de CRM_API_KEY=xxxxx olarak ayarlayın.
-    xxxxx veya boş ise doğrulama atlanır (geliştirme modu).
+    .env'de CRM_API_KEY=gizli_anahtar olarak ayarlayın.
     """
-    expected_key = os.getenv("CRM_API_KEY", "xxxxx")
+    expected_key = os.getenv("CRM_API_KEY", "")
 
-    # Key ayarlanmamışsa doğrulama yapma (geliştirme modu)
-    if not expected_key or expected_key == "xxxxx":
-        return True
+    # Fail-Secure: Eğer key ayarlanmamışsa veya varsayılan (güvensiz) değerlerdeyse erişimi tamamen reddet
+    if not expected_key or expected_key in ("xxxxx", "PLACEHOLDER", "DEFAULT"):
+        raise HTTPException(status_code=500, detail="Güvenlik Uyarısı: Sunucuda CRM_API_KEY yapılandırılmamış. API erişimi kapalı.")
 
-    if x_api_key != expected_key:
-        raise HTTPException(status_code=401, detail="Geçersiz API anahtarı")
+    provided_key = x_api_key or api_key
+    if not provided_key or provided_key != expected_key:
+        raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
     return True
 
 
@@ -477,15 +477,22 @@ def _build_ws_payload() -> dict:
 
 
 @app.websocket("/ws/live")
-async def websocket_live(ws: WebSocket):
-    """WebSocket canlı veri endpointi.
+async def websocket_live(ws: WebSocket, token: str = Query(None)):
+    """WebSocket canlı veri endpointi (Token korumali).
 
-    Bağlantı kurulduğunda anlık veriyi gönderir,
-    sonra collector'dan bildirim gelene kadar veya
-    periyodik olarak güncelleme yapar.
-
-    Bağlantı: ws://SUNUCU_IP:8503/ws/live
+    Bağlantı: ws://SUNUCU_IP:8503/ws/live?token=XXX
     """
+    expected_key = os.getenv("CRM_API_KEY", "")
+    
+    # Güvenlik Kontrolü
+    if not expected_key or expected_key in ("xxxxx", "PLACEHOLDER", "DEFAULT"):
+        await ws.close(code=1011, reason="API Key is not configured")
+        return
+        
+    if token != expected_key:
+        await ws.close(code=1008, reason="Invalid API Key")
+        return
+
     await ws_manager.connect(ws)
 
     # İlk bağlantıda anlık veriyi gönder
@@ -512,13 +519,11 @@ async def websocket_live(ws: WebSocket):
 
 
 @app.post("/ws/notify", tags=["WebSocket"])
-async def ws_notify():
+async def ws_notify(_=Depends(verify_api_key)):
     """Collector'dan bildirim alır ve tüm WS istemcilerine yayınlar.
 
     Collector veri yazdıktan sonra bu endpoint'e POST yapar.
     API, DB'den güncel veriyi okuyup bağlı tüm istemcilere push eder.
-
-    Bu endpoint API Key gerektirmez (iç ağ iletişimi).
     """
     global _last_broadcast_data
     
@@ -540,10 +545,10 @@ async def ws_notify():
 # ─── Canlı Dashboard HTML ───
 
 @app.get("/live", response_class=HTMLResponse, tags=["Dashboard"])
-async def live_dashboard():
+async def live_dashboard(_=Depends(verify_api_key)):
     """WebSocket canlı izleme dashboard'u.
 
-    Tarayıcıdan http://SUNUCU_IP:8503/live açarak
+    Tarayıcıdan http://SUNUCU_IP:8503/live?api_key=XXX açarak
     gerçek zamanlı inverter verilerini izleyebilirsiniz.
     """
     html_path = os.path.join(os.path.dirname(__file__), "static", "live_dashboard.html")
@@ -564,4 +569,6 @@ if __name__ == "__main__":
     print(f"[*] Docs: http://localhost:{port}/docs")
     print(f"[*] Live: http://localhost:{port}/live")
     print(f"[*] WS:   ws://localhost:{port}/ws/live")
-    uvicorn.run("api:app", host="0.0.0.0", port=port, reload=True)
+    
+    # Üretim (production) ortamı için reload=False
+    uvicorn.run("api:app", host="0.0.0.0", port=port, reload=False)

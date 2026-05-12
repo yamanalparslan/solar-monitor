@@ -30,9 +30,14 @@ def on_message(client, userdata, msg):
         logger.debug(f"Mesaj Alindi [{msg.topic}]: {payload}")
         
         # Beklenen JSON Formatı:
-        # {"slave_id": 10, "guc": 1500, "voltaj": 220, "akim": 6.8, "sicaklik": 45.2, "hata_kodu": 0, "hata_kodu_193": 0}
+        # {"slave_id": 10, "guc": 1500, "voltaj": 220, "akim": 6.8, "sicaklik": 45.2, "hata_kodu": 0, "hata_kodu_193": 0, "token": "gizli"}
         veri = json.loads(payload)
         
+        # Token tabanlı payload doğrulama (Eğer token ayarlanmışsa)
+        if config.MQTT_SECRET_TOKEN and veri.get("token") != config.MQTT_SECRET_TOKEN:
+            logger.warning("Yetkisiz payload reddedildi: Gecersiz veya eksik token.")
+            return
+
         slave_id = veri.get("slave_id")
         if slave_id is None:
             logger.warning("Mesaj islenemedi: 'slave_id' eksik.")
@@ -67,6 +72,8 @@ def start_mqtt_listener():
     
     # İstemci ayarları
     client = mqtt.Client(client_id="SolarMonitor_Server", clean_session=True)
+    if config.MQTT_USER and config.MQTT_PASSWORD:
+        client.username_pw_set(config.MQTT_USER, config.MQTT_PASSWORD)
     client.on_connect = on_connect
     client.on_message = on_message
     

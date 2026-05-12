@@ -47,6 +47,9 @@ def _ws_notify_sync():
         import urllib.request
         req = urllib.request.Request(WS_NOTIFY_URL, data=b"", method="POST")
         req.add_header("Content-Type", "application/json")
+        api_key = os.getenv("CRM_API_KEY", "")
+        if api_key:
+            req.add_header("x-api-key", api_key)
         urllib.request.urlopen(req, timeout=2)
     except Exception:
         pass

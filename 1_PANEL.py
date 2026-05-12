@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import veritabani
 import utils
 from styles import inject_glossy_css, section_header, status_bar, kpi_row
-from auth import check_auth, logout_button
+from auth import check_auth, logout_button, get_current_user, get_user_role
 from crm_embed import inject_embed_mode, is_embed_mode
 
 # --- SAYFA AYARLARI ---
@@ -78,6 +78,9 @@ with st.sidebar:
     if st.button("🔄 FABRIKA DEGISTIR", use_container_width=True):
         st.session_state.fabrika_id = None
         st.rerun()
+    current_user = get_current_user()
+    user_role = get_user_role(current_user)
+
     st.divider()
     st.header("PULSAR AYARLARI")
 
@@ -210,7 +213,11 @@ with st.sidebar:
             help="Ondalik olarak yazabilirsiniz. Ornek: 1.0 veya 0.1",
         )
 
-    submitted = st.button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
+    if user_role == "admin":
+        submitted = st.button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
+    else:
+        submitted = False
+        st.warning("Ayarları kaydetmek için 'admin' yetkisi gereklidir.")
 
     if submitted:
         veritabani.ayar_yaz('target_ip', target_ip, fab_id)
@@ -270,15 +277,34 @@ with st.sidebar:
         st.error("🔴 DB'de hiç veri yok")
     st.caption("Collector arka planda (Docker) otomatik olarak calismaktadir.")
 
-    st.markdown("---")
-    st.header(" VERI YONETIMI")
-    if st.button("TUM VERILERI SIL"):
-        if veritabani.db_temizle(fab_id):
-            kullanici = st.session_state.get('username', 'admin')
-            veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
-            st.success("Temizlendi!")
-            time.sleep(1)
-            st.rerun()
+    if user_role == "admin":
+        st.markdown("---")
+        st.header(" VERI YONETIMI")
+        
+        # Çift Onay (Double Confirmation) Sistemi
+        if "confirm_delete" not in st.session_state:
+            st.session_state.confirm_delete = False
+            
+        if not st.session_state.confirm_delete:
+            if st.button("TUM VERILERI SIL", type="secondary"):
+                st.session_state.confirm_delete = True
+                st.rerun()
+        else:
+            st.warning("⚠️ DİKKAT: Tüm veriler kalıcı olarak silinecek. Onaylıyor musunuz?")
+            col_y, col_n = st.columns(2)
+            with col_y:
+                if st.button("EVET, SİL", type="primary"):
+                    if veritabani.db_temizle(fab_id):
+                        kullanici = st.session_state.get('username', 'admin')
+                        veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
+                        st.success("Temizlendi!")
+                        st.session_state.confirm_delete = False
+                        time.sleep(1)
+                        st.rerun()
+            with col_n:
+                if st.button("İPTAL"):
+                    st.session_state.confirm_delete = False
+                    st.rerun()
 
 # --- ANA EKRAN ---
 st.title("GUNES ENERJISI SANTRALI IZLEME")
