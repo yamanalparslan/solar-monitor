@@ -300,7 +300,7 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     
     x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
     if not df.empty:
-        target_date = df.index.min().strftime("%Y-%m-%d")
+        target_date = df.index.max().strftime("%Y-%m-%d")
         x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
         
     yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False)
@@ -360,7 +360,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         df = df.sort_values(by="timestamp", ascending=True)
         
         if not df.empty:
-            target_date = df["timestamp"].min().strftime("%Y-%m-%d")
+            target_date = df["timestamp"].max().strftime("%Y-%m-%d")
             x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
 
         color = colors[i % len(colors)]
