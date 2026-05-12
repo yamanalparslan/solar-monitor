@@ -407,6 +407,25 @@ class CihazDurumu:
     aktif: bool = False
 
     @property
+    def active_fault_count(self) -> int:
+        from models import get_active_faults
+        return len(
+            get_active_faults(self.hata_kodu, FAULT_MAP_107) +
+            get_active_faults(self.hata_kodu_109, FAULT_MAP_109) +
+            get_active_faults(self.hata_kodu_111, FAULT_MAP_111) +
+            get_active_faults(self.hata_kodu_112, FAULT_MAP_112) +
+            get_active_faults(self.hata_kodu_114, FAULT_MAP_114) +
+            get_active_faults(self.hata_kodu_115, FAULT_MAP_115) +
+            get_active_faults(self.hata_kodu_116, FAULT_MAP_116) +
+            get_active_faults(self.hata_kodu_117, FAULT_MAP_117) +
+            get_active_faults(self.hata_kodu_118, FAULT_MAP_118) +
+            get_active_faults(self.hata_kodu_119, FAULT_MAP_119) +
+            get_active_faults(self.hata_kodu_120, FAULT_MAP_120) +
+            get_active_faults(self.hata_kodu_121, FAULT_MAP_121) +
+            get_active_faults(self.hata_kodu_122, FAULT_MAP_122)
+        )
+
+    @property
     def has_error(self) -> bool:
         from models import get_active_faults
         return bool(

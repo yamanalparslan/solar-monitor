@@ -453,9 +453,13 @@ def render_summary_section():
             dev_akim = round(float(cd.akim), 2) if cd.akim is not None else 0
             dev_temp = round(utils.normalize_temperature_value(cd.sicaklik), 1) if cd.sicaklik is not None else 0
             dev_hata = cd.has_error
+            alarm_count = cd.active_fault_count
 
-            durum_renk = "#ef4444" if dev_hata else ("#10b981" if dev_guc > 0 else "#f59e0b")
-            durum_text = "ARIZA" if dev_hata else ("AKTIF" if dev_guc > 0 else "BEKLEMEDE")
+            durum_renk = "#10b981" if dev_guc > 0 else "#f59e0b"
+            if alarm_count > 0:
+                durum_text = f"{alarm_count} ALARM"
+            else:
+                durum_text = "AKTIF" if dev_guc > 0 else "BEKLEMEDE"
 
             with gauge_cols[col_idx]:
                 fig_gauge = go.Figure(go.Indicator(
