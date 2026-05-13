@@ -5,7 +5,7 @@ from datetime import datetime
 import plotly.graph_objects as go
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, status_bar, kpi_row
+from styles import inject_glossy_css, section_header, status_bar, kpi_row, solar_table, toast
 from auth import check_auth, logout_button, get_current_user, get_user_role
 from crm_embed import inject_embed_mode, is_embed_mode
 
@@ -323,16 +323,16 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         hovertemplate=f'%{{x|%H:%M:%S}}<br>{title}: %{{y:.1f}} {unit}<extra></extra>',
         name=title
     ))
-    
+
     x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
     if not df.empty:
         target_date = df.index.max().strftime("%Y-%m-%d")
         x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
-        
+
     yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False)
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
-        
+
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(10, 14, 26, 0.5)',
@@ -340,8 +340,8 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         height=260,
         title=dict(text=title, font=dict(size=13, color='#94a3b8', family='Inter')),
         xaxis=dict(
-            gridcolor='rgba(255,255,255,0.04)', 
-            showgrid=True, 
+            gridcolor='rgba(255,255,255,0.04)',
+            showgrid=True,
             zeroline=False,
             dtick=1800000,
             tickformat="%H:%M",
@@ -350,16 +350,22 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor='rgba(15, 23, 42, 0.95)',
+            bordercolor='rgba(99, 102, 241, 0.35)',
+            font=dict(family='Inter', size=12, color='#e2e8f0'),
+            align='left',
+        ),
     )
     return fig
 
 
-@st.cache_data(ttl=lambda: max(10, st.session_state.get("refresh_interval", 30)), show_spinner=False)
+@st.cache_data(ttl=30, show_spinner=False)
 def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
     """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir.
 
-    TTL, panelin otomatik yenileme suresiyle (refresh_interval) eslestirilir;
-    bu sayede her run_every tetiklendiginde gereksiz DB sorgusu yapilmaz.
+    TTL 30 saniye olarak sabitlendi — lambda TTL, cachetools'un cache-read
+    sirasinda session_state erisemediginde None dondurup crash'e yol aciyordu.
     """
     return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
 
@@ -425,6 +431,12 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor='rgba(15, 23, 42, 0.95)',
+            bordercolor='rgba(99, 102, 241, 0.35)',
+            font=dict(family='Inter', size=12, color='#e2e8f0'),
+            align='left',
+        ),
         legend=dict(
             orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
             bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8')
@@ -500,11 +512,24 @@ def render_summary_section():
                     f'</div>', unsafe_allow_html=True
                 )
 
-        # TABLO GUNCELLEME
-        df_sum = pd.DataFrame([row[:6] for row in summary_data], columns=["ID", "SON ZAMAN", "GUC (W)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"])
-        df_sum["SON ZAMAN"] = pd.to_datetime(df_sum["SON ZAMAN"], format='mixed', errors='coerce').dt.strftime('%H:%M:%S')
-        df_sum[df_sum.columns[-1]] = pd.to_numeric(df_sum[df_sum.columns[-1]], errors='coerce').fillna(0).apply(utils.normalize_temperature_value).round(1)
-        st.dataframe(df_sum.set_index("ID"), width='stretch')
+        # TABLO: st.dataframe yerine solar_table (hover row highlight)
+        tablo_rows = []
+        for row in summary_data:
+            zaman_fmt = pd.to_datetime(row[1], format='mixed', errors='coerce')
+            zaman_fmt = zaman_fmt.strftime('%H:%M:%S') if pd.notna(zaman_fmt) else "-"
+            isi_val = utils.normalize_temperature_value(float(row[5] or 0))
+            tablo_rows.append([
+                row[0],          # ID
+                zaman_fmt,
+                f"{float(row[2] or 0):.1f}",
+                f"{float(row[3] or 0):.1f}",
+                f"{float(row[4] or 0):.2f}",
+                f"{isi_val:.1f}",
+            ])
+        solar_table(
+            tablo_rows,
+            headers=["ID", "SON ZAMAN", "GUC (W)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"],
+        )
 
 render_summary_section()
 
@@ -552,10 +577,10 @@ with tab_tekli:
                     df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                     df_det = df_det.set_index("timestamp")
 
-                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch')
-                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch')
-                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch')
-                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch')
+                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch', config={"displayModeBar": False})
+                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch', config={"displayModeBar": False})
+                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch', config={"displayModeBar": False})
+                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch', config={"displayModeBar": False})
             except Exception as e:
                 st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
 
@@ -581,6 +606,7 @@ with tab_karsilastirma:
             )
 
     render_karsilastirma_grafik(karsilastirma_ids, karsilastirma_metrik)
+
 
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def render_status_bar():

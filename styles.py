@@ -18,7 +18,7 @@ import streamlit as st
 GLOSSY_CSS = """
 <style>
 /*  GOOGLE FONT  */
-@import url('https://fonts.googleapis.com/css2Infinitefamily=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /*  ROOT DEKENLER  */
 :root {
@@ -528,19 +528,120 @@ div[data-testid="stDateInput"] > div > div > input {
 }
 
 /*  ANIMASYONLAR  */
+
+/* Sayfa gecis animasyonu — her navigasyonda smooth fade+slide */
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.main .block-container {
+    animation: page-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Sidebar acilip kapanma animasyonu */
+section[data-testid="stSidebar"] {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity   0.20s ease !important;
+}
+
+/* Eski fade-in (geri uyumluluk) */
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-@keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.2); }
-    50% { box-shadow: 0 0 18px rgba(99, 102, 241, 0.35); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 .animate-in {
     animation: fadeInUp 0.4s ease-out;
 }
+
+/* Pulse glow */
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.2); }
+    50%       { box-shadow: 0 0 18px rgba(99, 102, 241, 0.35); }
+}
 .pulse {
     animation: pulse-glow 2s infinite;
+}
+
+/* ── Skeleton Loading ── */
+@keyframes shimmer {
+    from { background-position: -200% 0; }
+    to   { background-position:  200% 0; }
+}
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        rgba(30, 41, 59, 0.4) 25%,
+        rgba(51, 65, 85, 0.7) 50%,
+        rgba(30, 41, 59, 0.4) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 8px;
+}
+.skeleton-line {
+    height: 16px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+}
+.skeleton-line.wide  { width: 100%; }
+.skeleton-line.mid   { width: 65%; }
+.skeleton-line.short { width: 35%; }
+.skeleton-card {
+    height: 120px;
+    border-radius: var(--radius);
+}
+
+/* ── Toast Bildirim ── */
+@keyframes toast-in {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes toast-out {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(60%); }
+}
+.toast-wrap {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+.toast {
+    min-width: 260px;
+    max-width: 360px;
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    animation: toast-in 0.3s cubic-bezier(0.22,1,0.36,1) forwards;
+    pointer-events: all;
+}
+.toast-success {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+}
+.toast-error {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+}
+.toast-info {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #a5b4fc;
+}
+.toast-icon {
+    margin-right: 10px;
+    font-size: 1rem;
 }
 </style>
 """
@@ -595,9 +696,91 @@ def kpi_row(items: list):
 
 
 def alarm_card(device_id: int, has_error: bool, content_html: str):
-    """Alarm kart oluturur."""
+    """Alarm kart olusturur."""
     cls = "alarm-card-error" if has_error else "alarm-card-ok"
     st.markdown(f'<div class="{cls}">{content_html}</div>', unsafe_allow_html=True)
 
 
+def toast(message: str, tipo: str = "info", icon: str = ""):
+    """Sag alt kosede kayan bildirim gosterir.
 
+    Args:
+        message: Gosterilecek metin
+        tipo: 'success' | 'error' | 'info'
+        icon: Emoji veya bos birakabilirsiniz
+    """
+    icon_defaults = {"success": "✅", "error": "❌", "info": "ℹ️"}
+    _icon = icon or icon_defaults.get(tipo, "")
+    st.markdown(
+        f"""
+        <div class="toast-wrap">
+          <div class="toast toast-{tipo}">
+            <span class="toast-icon">{_icon}</span>{message}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def solar_table(
+    rows: list,
+    headers: list,
+    status_col_idx: int | None = None,
+    status_colors: dict | None = None,
+):
+    """Premium HTML tablo olusturur.
+
+    Args:
+        rows: [[hucre1, hucre2, ...], ...] seklinde veri listesi
+        headers: Sutun basliklarinin listesi
+        status_col_idx: Renk kodlamak istedigimiz sutunun indeksi (opsiyonel)
+        status_colors: {deger: renk_hex} eslestirmesi (opsiyonel)
+    """
+    _sc = status_colors or {}
+
+    th_cells = "".join(f"<th>{h}</th>" for h in headers)
+    body_rows = ""
+    for row in rows:
+        td_cells = ""
+        for i, cell in enumerate(row):
+            style = ""
+            if status_col_idx is not None and i == status_col_idx:
+                color = _sc.get(str(cell), "")
+                if color:
+                    style = f' style="color:{color};font-weight:600"'
+            td_cells += f"<td{style}>{cell}</td>"
+        body_rows += f"<tr>{td_cells}</tr>"
+
+    html = f"""
+    <style>
+    .solar-table-wrap {{ overflow-x: auto; border-radius: var(--radius); }}
+    .solar-table {{
+        width: 100%; border-collapse: collapse;
+        font-family: 'Inter', sans-serif; font-size: 0.84rem;
+    }}
+    .solar-table th {{
+        background: rgba(99,102,241,0.12);
+        padding: 10px 16px; text-align: left;
+        color: #94a3b8; text-transform: uppercase;
+        letter-spacing: 0.9px; font-size: 0.71rem; font-weight: 600;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        white-space: nowrap;
+    }}
+    .solar-table td {{
+        padding: 11px 16px;
+        color: #e2e8f0;
+        border-bottom: 1px solid rgba(255,255,255,0.04);
+        transition: background 0.15s;
+    }}
+    .solar-table tr:hover td {{ background: rgba(99,102,241,0.06); }}
+    .solar-table tr:last-child td {{ border-bottom: none; }}
+    </style>
+    <div class="solar-table-wrap">
+      <table class="solar-table">
+        <thead><tr>{th_cells}</tr></thead>
+        <tbody>{body_rows}</tbody>
+      </table>
+    </div>
+    """
+    st.markdown(html, unsafe_allow_html=True)

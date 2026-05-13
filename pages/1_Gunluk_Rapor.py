@@ -7,7 +7,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, kpi_row
+from styles import inject_glossy_css, section_header, kpi_row, solar_table
 from auth import check_auth, logout_button
 
 
@@ -71,55 +71,73 @@ def goster_rapor():
         hatalar = veritabani.hata_sayilarini_getir(tarih_str, tarih_str, slave_id=s_id, fabrika_id=fab_id)
         
         if istatistik and istatistik.get('toplam_olcum', 0) > 0:
-            hata_str = "0/0"
+            # Tum 13 alarm register toplami
+            hata_toplam = 0
             if hatalar:
-                hata_str = str(hatalar['hata_107_sayisi']) + " / " + str(hatalar['hata_111_sayisi'])
-            
+                hata_toplam = sum(
+                    hatalar.get(k, 0) or 0
+                    for k in [
+                        'hata_107_sayisi', 'hata_109_sayisi', 'hata_111_sayisi',
+                        'hata_112_sayisi', 'hata_114_sayisi', 'hata_115_sayisi',
+                        'hata_116_sayisi', 'hata_117_sayisi', 'hata_118_sayisi',
+                        'hata_119_sayisi', 'hata_120_sayisi', 'hata_121_sayisi',
+                        'hata_122_sayisi',
+                    ]
+                )
+
             kwh_value = 0
             if uretim:
                 kwh_value = uretim.get('modbus_uretim', 0) if uretim.get('modbus_uretim', 0) > 0 else uretim.get('uretim_kwh', 0)
-                
+
             rapor_listesi.append({
                 "Cihaz ID": s_id,
-                "Uretim (kWh)": kwh_value,
-                "Ort. Guc (W)": round(istatistik['ort_guc'], 2),
-                "Maks. Guc (W)": istatistik['max_guc'],
+                "Uretim (kWh)": round(kwh_value, 3),
+                "Ort. Guc (W)": round(istatistik['ort_guc'], 1),
+                "Maks. Guc (W)": round(istatistik['max_guc'], 1),
                 "Ort. Voltaj (V)": round(istatistik['ort_voltaj'], 1),
-                "Ort. Sicaklik (C)": round(istatistik['ort_sicaklik'], 1) if istatistik.get('toplam_olcum', 0) > 0 else 0,
-                "Hata (107/111)": hata_str,
-                "Calisma (Saat)": uretim['calisma_suresi_saat'] if uretim else 0
+                "Ort. Sicaklik (C)": round(utils.normalize_temperature_value(istatistik.get('ort_sicaklik', 0) or 0), 1),
+                "Toplam Hata": hata_toplam,
+                "Calisma (Saat)": round(uretim['calisma_suresi_saat'], 2) if uretim else 0
             })
 
     # --- TABLO VE GRAFK GSTERM ---
     if rapor_listesi:
         df_rapor = pd.DataFrame(rapor_listesi)
         
-        # Yeni ve gvenli hesaplama metodu ile toplamlar alma
         total_kwh = df_rapor["Uretim (kWh)"].sum()
-        total_errors = df_rapor["Hata (107/111)"].apply(lambda x: sum(int(v) for v in str(x).split('/') if v.strip().isdigit())).sum()
-        
-        # Eksik olan kpi_row yaps tamamland
+        total_errors = df_rapor["Toplam Hata"].sum()
+
         kpi_row([
-            {"value": str(round(total_kwh, 2)) + " kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
+            {"value": f"{total_kwh:.3f} kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
             {"value": str(len(df_rapor)), "label": "AKTIF CIHAZ", "color": "#10b981"},
-            {"value": str(total_errors), "label": "TOPLAM HATA", "color": "#ef4444"},
+            {"value": str(int(total_errors)), "label": "TOPLAM HATA", "color": "#ef4444"},
         ])
-        
+
         st.markdown("<br>", unsafe_allow_html=True)
-        st.dataframe(
-            df_rapor.set_index("Cihaz ID"),
-            column_config={
-                "Uretim (kWh)": st.column_config.NumberColumn(format="%.2f kWh"),
-                "Ort. Guc (W)": st.column_config.NumberColumn(format="%.2f W"),
-                "Maks. Guc (W)": st.column_config.NumberColumn(format="%.2f W"),
-                "Ort. Voltaj (V)": st.column_config.NumberColumn(format="%.1f V"),
-                "Ort. Sicaklik (C)": st.column_config.NumberColumn(format="%.1f °C"),
-                "Calisma (Saat)": st.column_config.NumberColumn(format="%.1f sa"),
-            },
-            use_container_width=True,
+
+        # solar_table ile premium HTML tablo
+        tablo_headers = ["CIHAZ", "URETIM (kWh)", "ORT. GUC (W)", "MAKS. GUC (W)", "ORT. VOLTAJ (V)", "ORT. ISI (C)", "HATA", "CALISMA (sa)"]
+        tablo_rows = [
+            [
+                f"Inv {r['Cihaz ID']}",
+                f"{r['Uretim (kWh)']:.3f}",
+                f"{r['Ort. Guc (W)']:.1f}",
+                f"{r['Maks. Guc (W)']:.1f}",
+                f"{r['Ort. Voltaj (V)']:.1f}",
+                f"{r['Ort. Sicaklik (C)']:.1f}",
+                str(r['Toplam Hata']),
+                f"{r['Calisma (Saat)']:.2f}",
+            ]
+            for r in rapor_listesi
+        ]
+        solar_table(
+            tablo_rows,
+            headers=tablo_headers,
+            status_col_idx=6,
+            status_colors={"0": "#10b981"},   # hata 0 ise yesil
         )
-        
-        # CSV ndirme
+
+        # CSV indirme
         csv = df_rapor.to_csv(index=False).encode('utf-8-sig')
         st.download_button("CSV Indir", csv, "gunluk_rapor_" + tarih_str + ".csv", "text/csv")
         

@@ -50,37 +50,72 @@ else:
     
     if st.button("Raporu Hazirla", type="primary"):
         with st.spinner("PDF dokumani olusturuluyor... Lutfen bekleyin."):
-            # Rapor verilerini topla
             baslangic_str = baslangic.strftime('%Y-%m-%d')
             bitis_str = bitis.strftime('%Y-%m-%d')
-            
+
+            # DB ayarlarini once oku — dongu disinda (N+1 sorgu engeli)
+            ayarlar = veritabani.tum_ayarlari_oku(fab_id)
+
+            # Tarih araligindaki tum gunleri listele
+            gun_sayisi = (bitis - baslangic).days + 1
+            gun_listesi = [
+                (baslangic + timedelta(days=i)).strftime('%Y-%m-%d')
+                for i in range(gun_sayisi)
+            ]
+
             rapor_verileri = []
             toplam_uretim = 0
-            
+
             for s_id in slave_ids:
-                istatistik = veritabani.tarih_araliginda_ortalamalar(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
-                hatalar = veritabani.hata_sayilarini_getir(baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id)
-                
-                cihaz_uretimi = 0
+                # --- Uretim: her gun icin ayri hesapla, topla ---
+                # gunluk_uretim_hesapla() modbus_uretim register'ini onceliklendirir;
+                # register yoksa veya 0 ise avg_guc * sure formulune dusar.
+                cihaz_uretimi_kwh = 0.0
+                for gun_str in gun_listesi:
+                    gun_uretim = veritabani.gunluk_uretim_hesapla(
+                        gun_str, slave_id=s_id, fabrika_id=fab_id
+                    ) or {}
+                    modbus_val = gun_uretim.get('modbus_uretim', 0) or 0
+                    hesap_val  = gun_uretim.get('uretim_kwh', 0) or 0
+                    # modbus_uretim > 0 ise Modbus register degeri kullan, yoksa hesaplanan
+                    cihaz_uretimi_kwh += modbus_val if modbus_val > 0 else hesap_val
+
+                toplam_uretim += cihaz_uretimi_kwh
+
+                # --- Istatistik & hata ozeti ---
+                istatistik = veritabani.tarih_araliginda_ortalamalar(
+                    baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id
+                )
+                hatalar = veritabani.hata_sayilarini_getir(
+                    baslangic_str, bitis_str, slave_id=s_id, fabrika_id=fab_id
+                )
+
                 if istatistik and istatistik.get('toplam_olcum', 0) > 0:
-                    ayarlar = veritabani.tum_ayarlari_oku(fab_id)
-                    refresh_rate = float(ayarlar.get('refresh_rate', 60))
-                    toplam_saat = (istatistik['toplam_olcum'] * refresh_rate) / 3600
-                    cihaz_uretimi = (istatistik['ort_guc'] * toplam_saat) / 1000
-                
-                toplam_uretim += cihaz_uretimi
-                
-                if istatistik and istatistik.get('toplam_olcum', 0) > 0:
+                    # Tum 13 alarm register'i topla (hata_107 + hata_109 + ... + hata_122)
                     hata_sayisi = 0
                     if hatalar:
-                        hata_sayisi = hatalar['hata_107_sayisi'] + hatalar['hata_111_sayisi']
-                    
+                        hata_sayisi = sum(
+                            hatalar.get(k, 0) or 0
+                            for k in [
+                                'hata_107_sayisi', 'hata_109_sayisi', 'hata_111_sayisi',
+                                'hata_112_sayisi', 'hata_114_sayisi', 'hata_115_sayisi',
+                                'hata_116_sayisi', 'hata_117_sayisi', 'hata_118_sayisi',
+                                'hata_119_sayisi', 'hata_120_sayisi', 'hata_121_sayisi',
+                                'hata_122_sayisi',
+                            ]
+                        )
+
+                    # Ham sicaklik degerini normalize et (Modbus raw -> gercek °C)
+                    ort_sicaklik = utils.normalize_temperature_value(
+                        istatistik.get('ort_sicaklik', 0) or 0
+                    )
+
                     rapor_verileri.append([
                         f"Inverter {s_id}",
-                        f"{cihaz_uretimi:.2f} kWh",
+                        f"{cihaz_uretimi_kwh:.2f} kWh",
                         f"{istatistik['ort_guc']:.1f} W",
                         f"{istatistik['max_guc']:.1f} W",
-                        f"{istatistik['ort_sicaklik']:.1f} C",
+                        f"{ort_sicaklik:.1f} C",
                         str(hata_sayisi)
                     ])
 

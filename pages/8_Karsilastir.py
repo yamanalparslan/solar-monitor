@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani, utils
-from styles import inject_glossy_css, section_header, kpi_row
+from styles import inject_glossy_css, section_header, kpi_row, solar_table
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="KARSILASTIRMA", page_icon="", layout="wide")
@@ -89,12 +89,18 @@ if secili:
         yaxis=dict(gridcolor='rgba(255,255,255,0.04)', title=metrik_birim[metrik]),
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
+        hoverlabel=dict(
+            bgcolor='rgba(15, 23, 42, 0.95)',
+            bordercolor='rgba(99, 102, 241, 0.35)',
+            font=dict(family='Inter', size=12, color='#e2e8f0'),
+            align='left',
+        ),
         legend=dict(
             orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
             bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8')
         ),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
     # zet tablo
     if ozet_veriler:
@@ -111,7 +117,9 @@ if secili:
         kpi_row(kpi_items)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        df_ozet = pd.DataFrame(ozet_veriler).set_index("Cihaz")
-        st.dataframe(df_ozet, use_container_width=True)
+        solar_table(
+            [[oz['Cihaz'], str(oz['Ortalama']), str(oz['Maks']), str(oz['Min'])] for oz in ozet_veriler],
+            headers=["CIHAZ", f"ORTALAMA ({metrik_birim[metrik]})", f"MAKS ({metrik_birim[metrik]})", f"MIN ({metrik_birim[metrik]})"],
+        )
 else:
     st.markdown("""<div class="glossy-card" style="text-align:center;"><div style="font-size:2rem; margin-bottom:8px;"></div><div style="font-size:1rem; color:#94a3b8; font-family:Inter,sans-serif;">Karsilastirmak icin en az bir cihaz secin.</div></div>""", unsafe_allow_html=True)

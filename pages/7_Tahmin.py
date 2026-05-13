@@ -9,7 +9,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, kpi_row
+from styles import inject_glossy_css, section_header, kpi_row, toast
 from auth import check_auth, logout_button
 
 # --- GES FİZİKSEL MODEL PARAMETRELERİ ---
@@ -149,11 +149,17 @@ if st.button("Simülasyonu Başlat", type="primary"):
             height=450,
             margin=dict(l=10, r=10, t=20, b=10),
             xaxis=dict(gridcolor='rgba(255,255,255,0.04)', title="Zaman"),
-            yaxis=dict(gridcolor='rgba(255,255,255,0.04)', title="Güç Çıkışı (kW)"),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.04)', title="Guc Cikisi (kW)"),
             font=dict(color='#94a3b8', family='Inter'),
             hovermode='x unified',
+            hoverlabel=dict(
+                bgcolor='rgba(15, 23, 42, 0.95)',
+                bordercolor='rgba(99, 102, 241, 0.35)',
+                font=dict(family='Inter', size=12, color='#e2e8f0'),
+                align='left',
+            ),
             legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'))
         )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        st.success("Analiz tamamlandı. Model, meteorolojik tahminler ile panel fizyolojisini birleştirerek gerçekçi üretim eğrisini çıkarttı.")
+
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        toast("Analiz tamamlandi. Model meteorolojik tahminler ile panel fizyolojisini birlestirdi.", tipo="success")

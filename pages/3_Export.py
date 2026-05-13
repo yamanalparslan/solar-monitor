@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani, utils
-from styles import inject_glossy_css, section_header
+from styles import inject_glossy_css, section_header, solar_table
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="VERI AKTARIMI", page_icon="", layout="wide")
@@ -44,7 +44,14 @@ if st.button("Verileri Getir", type="primary"):
         df = df[(df["zaman"].dt.date >= baslangic) & (df["zaman"].dt.date <= bitis)]
         if len(df) > 0:
             st.success(" " + str(len(df)) + " kayit bulundu.")
-            st.dataframe(df, width='stretch')
+            # Ilk 200 satiri solar_table ile goster
+            preview = df.head(200)
+            solar_table(
+                preview.values.tolist(),
+                headers=list(preview.columns),
+            )
+            if len(df) > 200:
+                st.caption(f"Tum {len(df)} kayit CSV'de mevcut, onizleme ilk 200 satirla sinirlidir.")
             st.download_button("CSV Indir", df.to_csv(index=False).encode('utf-8-sig'), "export.csv", "text/csv")
         else:
             st.info("Aralikta veri yok.")
