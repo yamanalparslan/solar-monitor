@@ -262,7 +262,7 @@
     // ── Ayarlar ──
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('api_key') || urlParams.get('token') || '';
-    const WS_URL = `ws://${window.location.host}/ws/live?token=${token}`;
+    const WS_URL = `ws://${window.location.host}/ws/live`;
     const RECONNECT_DELAY = 3000;
 
     let ws = null;
@@ -284,6 +284,9 @@
         ws = new WebSocket(WS_URL);
 
         ws.onopen = () => {
+            // İlk bağlantıda token gönder (auth)
+            ws.send(JSON.stringify({ type: 'auth', token: token }));
+
             badge.className = 'status-badge connected';
             statusText.textContent = 'Canlı Bağlantı';
             clientInfo.textContent = 'WebSocket aktif';

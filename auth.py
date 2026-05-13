@@ -14,7 +14,24 @@ Kullanm:
 import os
 import hashlib
 import streamlit as st
+import time
 
+# Brute-force koruması için in-memory global sayaç
+_FAILED_LOGINS = {} # key -> {"attempts": 0, "lockout_until": 0.0}
+
+def _get_client_ip():
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "headers"):
+            return st.context.headers.get("X-Forwarded-For", "unknown")
+    except Exception:
+        pass
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+        headers = _get_websocket_headers()
+        return headers.get("X-Forwarded-For", "unknown")
+    except Exception:
+        pass
+    return "unknown"
 
 # PBKDF2 sabitleri
 _PBKDF2_ITERATIONS = 100_000
@@ -192,25 +209,36 @@ def _show_login_form():
             submitted = st.form_submit_button("Giris Yap", width='stretch', type="primary")
 
             if submitted:
-                import time
+                client_ip = _get_client_ip()
+                rate_key = f"{client_ip}_{username_input}"
                 
-                # Bruteforce koruması: basit gecikme ve deneme sınırı
-                if "login_attempts" not in st.session_state:
-                    st.session_state["login_attempts"] = 0
+                if rate_key not in _FAILED_LOGINS:
+                    _FAILED_LOGINS[rate_key] = {"attempts": 0, "lockout_until": 0.0}
                 
-                if st.session_state["login_attempts"] >= 3:
-                    st.error("Çok fazla hatalı deneme yaptınız. Lütfen 30 saniye bekleyin.")
-                    time.sleep(5) # Güvenlik amaçlı block (Streamlit UI'ı duraklatır)
+                rate_record = _FAILED_LOGINS[rate_key]
+                current_time = time.time()
+                
+                if current_time < rate_record["lockout_until"]:
+                    kalan = int(rate_record["lockout_until"] - current_time)
+                    st.error(f"Çok fazla hatalı deneme yaptınız. Lütfen {kalan} saniye bekleyin.")
                 else:
+                    # Süre dolmuşsa resetle
+                    if rate_record["attempts"] >= 3:
+                        rate_record["attempts"] = 0
+                        
                     expected_user, expected_hash = _get_credentials()
                     if username_input == expected_user and _verify_password(password_input, expected_hash):
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username_input
-                        st.session_state["login_attempts"] = 0
+                        rate_record["attempts"] = 0 # Başarılı girişte sıfırla
                         st.rerun()
                     else:
-                        st.session_state["login_attempts"] += 1
-                        st.error(f"Kullanici adi veya sifre hatali! (Kalan deneme: {3 - st.session_state['login_attempts']})")
+                        rate_record["attempts"] += 1
+                        if rate_record["attempts"] >= 3:
+                            rate_record["lockout_until"] = current_time + 30
+                            st.error("Çok fazla hatalı deneme yaptınız. Lütfen 30 saniye bekleyin.")
+                        else:
+                            st.error(f"Kullanici adi veya sifre hatali! (Kalan deneme: {3 - rate_record['attempts']})")
                         time.sleep(1) # Time-delay attack mitigation
 
         st.markdown("""

@@ -439,11 +439,39 @@ _ws_cache = None
 _ws_cache_time = 0
 _last_broadcast_data = None
 
-def _build_ws_payload() -> dict:
-    """DB'den güncel veriyi okuyup WebSocket payload'ı oluşturur (2 sn önbellekli)."""
-    global _ws_cache, _ws_cache_time
+# Collector refresh_rate'ini DB'den okuyarak cache TTL'ini hesaplar.
+# Collector veriyi N saniyede bir yazıyorsa N/2 saniyeden once cache'i
+# yenilemek gereksizdir — hem DB yükünü azaltır hem de stale veri riskini düşürür.
+def _get_ws_cache_ttl() -> float:
+    """Aktif fabrikalarin minimum refresh_rate degerinin yarisini dondurur.
     
-    if time.time() - _ws_cache_time < 2 and _ws_cache:
+    En az 5, en fazla 120 saniye ile sinirlandirilir.
+    """
+    try:
+        from veritabani import FABRIKALAR, tum_ayarlari_oku
+        rates = []
+        for fab_id in FABRIKALAR:
+            ayarlar = tum_ayarlari_oku(fab_id)
+            try:
+                rates.append(float(ayarlar.get("refresh_rate", 60)))
+            except (TypeError, ValueError):
+                rates.append(60.0)
+        min_rate = min(rates) if rates else 60.0
+        return max(5.0, min(120.0, min_rate / 2))
+    except Exception:
+        return 30.0  # Güvenli varsayilan
+
+
+def _build_ws_payload() -> dict:
+    """DB'den guncel veriyi okuyup WebSocket payload'i olusturur.
+
+    Cache TTL, collector refresh_rate'inin yarısı kadar tutulur;
+    bu sayede collector henuz yeni veri yazmadan tekrar DB'ye gidilmez.
+    """
+    global _ws_cache, _ws_cache_time
+
+    cache_ttl = _get_ws_cache_ttl()
+    if time.time() - _ws_cache_time < cache_ttl and _ws_cache:
         return _ws_cache
 
     from veritabani import FABRIKALAR
@@ -464,7 +492,7 @@ def _build_ws_payload() -> dict:
                 "hata_kodu": hata,
             })
         all_data[fab_id] = devices
-        
+
     payload = {
         "type": "update",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -477,10 +505,11 @@ def _build_ws_payload() -> dict:
 
 
 @app.websocket("/ws/live")
-async def websocket_live(ws: WebSocket, token: str = Query(None)):
-    """WebSocket canlı veri endpointi (Token korumali).
+async def websocket_live(ws: WebSocket):
+    """WebSocket canlı veri endpointi (Token ilk mesajda beklenir).
 
-    Bağlantı: ws://SUNUCU_IP:8503/ws/live?token=XXX
+    Bağlantı: ws://SUNUCU_IP:8503/ws/live
+    İlk Mesaj: {"type": "auth", "token": "XXX"}
     """
     expected_key = os.getenv("CRM_API_KEY", "")
     
@@ -488,12 +517,28 @@ async def websocket_live(ws: WebSocket, token: str = Query(None)):
     if not expected_key or expected_key in ("xxxxx", "PLACEHOLDER", "DEFAULT"):
         await ws.close(code=1011, reason="API Key is not configured")
         return
-        
-    if token != expected_key:
-        await ws.close(code=1008, reason="Invalid API Key")
+
+    await ws.accept()
+
+    try:
+        import json
+        auth_text = await asyncio.wait_for(ws.receive_text(), timeout=5.0)
+        auth_data = json.loads(auth_text)
+        if auth_data.get("type") != "auth" or auth_data.get("token") != expected_key:
+            await ws.close(code=1008, reason="Invalid API Key")
+            return
+    except Exception:
+        await ws.close(code=1008, reason="Auth failed or timeout")
         return
 
-    await ws_manager.connect(ws)
+    # ws_manager zaten accept yapiyor ama biz manuel accept yaptigimiz icin
+    # manager._active icine manuel de ekleyebiliriz ya da manager'i guncelleyebiliriz.
+    # Ancak manager.connect(ws) bir hata fırlatabilir, 
+    # o yüzden manager._active.append(ws) yapalım:
+    ws_manager._active.append(ws)
+    import logging
+    logger = logging.getLogger("websocket")
+    logger.info("WS istemci bağlandı (%d aktif)", ws_manager.client_count)
 
     # İlk bağlantıda anlık veriyi gönder
     try:

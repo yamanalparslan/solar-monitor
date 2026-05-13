@@ -306,19 +306,35 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     return rows[::-1]
 
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
+    """
+    Her cihazin (slave_id) en son kayitli olcumunu dondurur.
+
+    Performans notu:
+        MAX(id) GROUP BY yaklasimi, correlated subquery'den daha hizlidir:
+          - SQLite INTEGER PRIMARY KEY, fiziksel rowid ile ozdestir
+          - MAX(id) per slave_id, tablonun en buyuk (= en gec eklenen)
+            satirinin PK'sini dogrudan verir
+          - IS ve id IN (...) birlikte PK indexini kullanarak
+            her fabrika icin O(cihaz_sayisi) lookup yapar, tam tablo
+            taramasi gerekmez (SQLite 3.8.3+ EXPLAIN QUERY PLAN ile dogrulanabilir)
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+        SELECT slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik,
+               hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112,
+               hata_kodu_114, hata_kodu_115, hata_kodu_116,
+               hata_kodu_117, hata_kodu_118, hata_kodu_119,
+               hata_kodu_120, hata_kodu_121, hata_kodu_122
         FROM olcumler
-        WHERE fabrika_id = ? AND (slave_id, zaman) IN (
-            SELECT slave_id, MAX(zaman)
+        WHERE id IN (
+            SELECT MAX(id)
             FROM olcumler
             WHERE fabrika_id = ?
             GROUP BY slave_id
         )
         ORDER BY slave_id ASC
-    """, (fabrika_id, fabrika_id))
+    """, (fabrika_id,))
     rows = cursor.fetchall()
     conn.close()
     return rows

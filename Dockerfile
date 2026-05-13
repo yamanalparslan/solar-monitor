@@ -21,8 +21,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Builder'dan bağımlılıkları kopyala
 COPY --from=builder /install /usr/local
 
-# Uygulama dosyalarını kopyala
-COPY --chown=solar:solar config.py models.py veritabani.py collector.py collector_async.py 1_PANEL.py auth.py notifications.py utils.py sanal_inverter.py styles.py healthcheck.py api.py prometheus_exporter.py mqtt_listener.py crm_embed.py websocket_manager.py modbus_diagnostics.py modbus_probe.py ./
+# Uygulama dosyalarını kopyala — wildcard ile, yeni modül eklenince Dockerfile güncellemeye gerek yok
+COPY --chown=solar:solar *.py ./
 COPY --chown=solar:solar pages/ ./pages/
 COPY --chown=solar:solar static/ ./static/
 COPY --chown=solar:solar .streamlit/ ./.streamlit/

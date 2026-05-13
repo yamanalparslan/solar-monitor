@@ -408,7 +408,7 @@ class CihazDurumu:
 
     @property
     def active_fault_count(self) -> int:
-        from models import get_active_faults
+        """Tüm alarm register'lardaki aktif (Spare olmayan) hata bitlerinin toplam sayısı."""
         return len(
             get_active_faults(self.hata_kodu, FAULT_MAP_107) +
             get_active_faults(self.hata_kodu_109, FAULT_MAP_109) +
@@ -427,7 +427,7 @@ class CihazDurumu:
 
     @property
     def has_error(self) -> bool:
-        from models import get_active_faults
+        """Herhangi bir kayitli ve Spare olmayan alarm biti var mi?"""
         return bool(
             get_active_faults(self.hata_kodu, FAULT_MAP_107) or
             get_active_faults(self.hata_kodu_109, FAULT_MAP_109) or

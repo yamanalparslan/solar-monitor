@@ -354,12 +354,22 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     return fig
 
 
+@st.cache_data(ttl=lambda: max(10, st.session_state.get("refresh_interval", 30)), show_spinner=False)
+def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
+    """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir.
+
+    TTL, panelin otomatik yenileme suresiyle (refresh_interval) eslestirilir;
+    bu sayede her run_every tetiklendiginde gereksiz DB sorgusu yapilmaz.
+    """
+    return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
+
+
 def create_comparison_chart(ids, metric, title, colors, ymax=None):
     fig = go.Figure()
     x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
     
     for i, dev_id in enumerate(ids):
-        data = veritabani.son_verileri_getir(dev_id, limit=2880, fabrika_id=fab_id)
+        data = _fetch_device_data(dev_id, fab_id)
         if not data:
             continue
             
