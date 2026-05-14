@@ -108,7 +108,7 @@ def goster_rapor():
         total_errors = df_rapor["Toplam Hata"].sum()
 
         kpi_row([
-            {"value": f"{total_kwh:.3f} kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
+            {"value": f"{total_kwh:.1f} kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
             {"value": str(len(df_rapor)), "label": "AKTIF CIHAZ", "color": "#10b981"},
             {"value": str(int(total_errors)), "label": "TOPLAM HATA", "color": "#ef4444"},
         ])
@@ -120,7 +120,7 @@ def goster_rapor():
         tablo_rows = [
             [
                 f"Inv {r['Cihaz ID']}",
-                f"{r['Uretim (kWh)']:.3f}",
+                f"{r['Uretim (kWh)']:.1f}",
                 f"{r['Ort. Guc (W)']:.1f}",
                 f"{r['Maks. Guc (W)']:.1f}",
                 f"{r['Ort. Voltaj (V)']:.1f}",
