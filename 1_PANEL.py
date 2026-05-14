@@ -1,7 +1,7 @@
 import streamlit as st
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import veritabani
 import utils
@@ -360,7 +360,7 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     return fig
 
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
 def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
     """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir.
 
