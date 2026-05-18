@@ -120,8 +120,8 @@ async def read_device_async(
         val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
         val_uretim = float(raw_uretim) * config["uretim_scale"]
 
-        if val_guc <= 0 and val_volt > 0 and val_akim > 0:
-            val_guc = round(val_volt * val_akim, 2)
+        # Eğer inverter gücü 0 gönderiyorsa, volt * akım hesabı ile sahte güç üretilmesini engelledik.
+        # Bu sayede Modbus'ta 0 ise panelde de tam olarak 0 görünür.
 
         if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
             return dev_id, ip_address, slave_id, None

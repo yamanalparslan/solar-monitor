@@ -161,8 +161,8 @@ def read_device(client, slave_id: int, config: dict, max_retries: int = 3):
             val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
             val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
 
-            if val_guc <= 0 and val_volt > 0 and val_akim > 0:
-                val_guc = round(val_volt * val_akim, 2)
+            # Eğer inverter gücü 0 gönderiyorsa, volt * akım hesabı ile sahte güç üretilmesini engelledik.
+            # Bu sayede Modbus'ta 0 ise panelde de tam olarak 0 görünür.
 
             if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
                 return None
