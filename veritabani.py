@@ -594,3 +594,32 @@ def audit_log_getir(limit=100):
     except Exception as e:
         print(f"[WARN] Audit log getirme hatası: {e}")
         return []
+
+
+def gecmis_alarmlari_getir(fabrika_id, limit=100):
+    """Gecmis alarmlari (herhangi bir hata kodu > 0 olan olcumler) getirir."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT slave_id, zaman, hata_kodu, hata_kodu_109, hata_kodu_111, 
+                   hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, 
+                   hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, 
+                   hata_kodu_121, hata_kodu_122
+            FROM olcumler 
+            WHERE fabrika_id = ? AND (
+                hata_kodu > 0 OR hata_kodu_109 > 0 OR hata_kodu_111 > 0 OR 
+                hata_kodu_112 > 0 OR hata_kodu_114 > 0 OR hata_kodu_115 > 0 OR 
+                hata_kodu_116 > 0 OR hata_kodu_117 > 0 OR hata_kodu_118 > 0 OR 
+                hata_kodu_119 > 0 OR hata_kodu_120 > 0 OR hata_kodu_121 > 0 OR 
+                hata_kodu_122 > 0
+            )
+            ORDER BY zaman DESC LIMIT ?
+        """, (fabrika_id, limit))
+        rows = cursor.fetchall()
+        return rows
+    except Exception as e:
+        print(f"[WARN] Gecmis alarm getirme hatasi: {e}")
+        return []
+    finally:
+        conn.close()
