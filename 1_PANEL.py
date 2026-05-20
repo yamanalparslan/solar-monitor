@@ -261,7 +261,7 @@ with st.sidebar:
     st.markdown("---")
     st.header("COLLECTOR DURUMU")
     # Collector'ın son veriyi ne zaman yazdığını DB'den kontrol et
-    _son = veritabani.tum_cihazlarin_son_durumu(fab_id)
+    _son = _fetch_summary_data(fab_id)
     if _son:
         try:
             _sz = max(r[1] for r in _son if r[1])
@@ -299,7 +299,6 @@ with st.sidebar:
                         veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
                         st.success("Temizlendi!")
                         st.session_state.confirm_delete = False
-                        time.sleep(1)
                         st.rerun()
             with col_n:
                 if st.button("İPTAL"):
@@ -359,6 +358,11 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     )
     return fig
 
+
+@st.cache_data(ttl=timedelta(seconds=2), show_spinner=False)
+def _fetch_summary_data(fab_id: str):
+    """Aynı saniye içerisinde defalarca db okumasını engellemek için cache'lenir."""
+    return veritabani.tum_cihazlarin_son_durumu(fab_id)
 
 @st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
 def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
@@ -455,7 +459,7 @@ for device in cfg["target_devices"]:
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def render_summary_section():
     # 1. TABLO VE KART GUNCELLEME
-    summary_data = veritabani.tum_cihazlarin_son_durumu(fab_id)
+    summary_data = _fetch_summary_data(fab_id)
     if summary_data:
         num_devices = len(summary_data)
         cols_per_row = min(num_devices, 4)
@@ -610,7 +614,7 @@ with tab_karsilastirma:
 
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def render_status_bar():
-    summary_data = veritabani.tum_cihazlarin_son_durumu(fab_id)
+    summary_data = _fetch_summary_data(fab_id)
     collector_aktif = False
     veri_bos_gorunuyor = False
     gecen_sure = 0

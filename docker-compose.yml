@@ -103,7 +103,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-solar_secure}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?Lutfen .env dosyasinda GRAFANA_PASSWORD belirleyin}
       - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - solar-prometheus
@@ -118,7 +118,7 @@ services:
       - "127.0.0.1:1883:1883"
     environment:
       - MQTT_USER=${MQTT_USER:-solaradmin}
-      - MQTT_PASSWORD=${MQTT_PASSWORD:-solar_secure}
+      - MQTT_PASSWORD=${MQTT_PASSWORD:?Lutfen .env dosyasinda MQTT_PASSWORD belirleyin}
     volumes:
       - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
     command: >

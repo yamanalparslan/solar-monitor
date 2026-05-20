@@ -3,10 +3,8 @@ import os
 from datetime import datetime, timedelta
 
 def get_db_connection():
-    """Çoklu container ve thread erişimi için WAL modunda bağlantı oluşturur."""
+    """Çoklu container ve thread erişimi için bağlantı oluşturur."""
     conn = sqlite3.connect(DB_NAME, timeout=30.0)
-    # WAL (Write-Ahead Logging) modunu aktif et: okuma ve yazmalar birbirini kilitlemez
-    conn.execute("PRAGMA journal_mode=WAL;")
     # Performans için senkronizasyonu normale indir
     conn.execute("PRAGMA synchronous=NORMAL;")
     # DB meşgulse timeout süresini uzat
@@ -39,6 +37,8 @@ def init_db():
     print(f"[DB] Veritabanı Bağlanıyor: {DB_NAME}")
     
     conn = get_db_connection()
+    # WAL (Write-Ahead Logging) modunu aktif et: okuma ve yazmalar birbirini kilitlemez
+    conn.execute("PRAGMA journal_mode=WAL;")
     cursor = conn.cursor()
     
     # 1. Ölçümler Tablosu
@@ -94,8 +94,8 @@ def init_db():
             cursor.execute("ALTER TABLE ayarlar ADD COLUMN aciklama TEXT")
         if 'guncelleme_zamani' not in ayarlar_sutunlar:
             cursor.execute("ALTER TABLE ayarlar ADD COLUMN guncelleme_zamani TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    except:
-        pass
+    except Exception as e:
+        print(f"[MIGRATION WARN] ayarlar ek kolon: {e}")
 
     # MIGRATION: ayarlar tablosunda fabrika_id yoksa eski tablodaki verileri tasi
     # ÖNEMLİ: Bu migration varsayılan ayar eklenmeden ÖNCE çalışmalı!
@@ -132,8 +132,8 @@ def init_db():
             cursor.execute("ALTER TABLE olcumler ADD COLUMN fabrika_id TEXT DEFAULT 'mekanik'")
             cursor.execute("UPDATE olcumler SET fabrika_id = 'mekanik' WHERE fabrika_id IS NULL")
             print("[MIGRATION] olcumler tablosuna fabrika_id eklendi")
-    except:
-        pass
+    except Exception as e:
+        print(f"[MIGRATION WARN] olcumler fabrika_id: {e}")
 
     # MIGRATION: hata kolonlari
     try:
@@ -143,8 +143,8 @@ def init_db():
                 cursor.execute(f"ALTER TABLE olcumler ADD COLUMN {hk} INTEGER DEFAULT 0")
         if 'modbus_uretim' not in mevcut_sutunlar:
             cursor.execute("ALTER TABLE olcumler ADD COLUMN modbus_uretim REAL DEFAULT 0")
-    except:
-        pass
+    except Exception as e:
+        print(f"[MIGRATION WARN] olcumler hata kolonlari: {e}")
 
     # fabrika_id index'i (migration'dan sonra güvenli)
     try:
@@ -152,8 +152,8 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_fabrika_slave_zaman 
             ON olcumler(fabrika_id, slave_id, zaman DESC)
         """)
-    except:
-        pass
+    except Exception as e:
+        print(f"[MIGRATION WARN] index olusturma: {e}")
 
     # 3. Varsayılan Ayarları Her Fabrika İçin Ekle (migration'lardan SONRA)
     for fab_id, fab_info in FABRIKALAR.items():
@@ -180,8 +180,8 @@ def init_db():
                     INSERT OR IGNORE INTO ayarlar (fabrika_id, anahtar, deger, aciklama)
                     VALUES (?, ?, ?, ?)
                 """, (fab_id, anahtar, deger, aciklama))
-            except:
-                pass
+            except Exception as e:
+                print(f"[WARN] Varsayilan ayar ekleme hatasi: {e}")
 
     # 5. Audit Log Tablosu
     cursor.execute("""
@@ -238,7 +238,8 @@ def tum_ayarlari_oku(fabrika_id: str):
         ayarlar = {row[0]: row[1] for row in cursor.fetchall()}
         conn.close()
         return ayarlar
-    except:
+    except Exception as e:
+        print(f"[WARN] tum_ayarlari_oku hatasi: {e}")
         fab_ip = FABRIKALAR.get(fabrika_id, {}).get('varsayilan_ip', '10.35.14.10')
         return {
             'refresh_rate': '60', 'guc_scale': '1.0', 'volt_scale': '1.0',
@@ -349,7 +350,8 @@ def db_temizle(fabrika_id=None):
             cursor.execute('DELETE FROM olcumler')
         conn.commit()
         return True
-    except:
+    except Exception as e:
+        print(f"[WARN] db_temizle hatasi: {e}")
         return False
     finally:
         conn.close()
@@ -469,19 +471,34 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
             cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(modbus_uretim) FROM olcumler
                 WHERE fabrika_id = ? AND zaman BETWEEN ? AND ? AND slave_id = ?''',
                 (fabrika_id, baslangic, bitis, slave_id))
+            sonuc = cursor.fetchone()
+            ort_guc = sonuc[0] or 0
+            olcum_sayisi = sonuc[1] or 0
+            modbus_uretim = sonuc[2] or 0
         else:
-            cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(modbus_uretim) FROM olcumler
-                WHERE fabrika_id = ? AND zaman BETWEEN ? AND ?''',
-                (fabrika_id, baslangic, bitis))
-        sonuc = cursor.fetchone()
-        ort_guc = sonuc[0] or 0
-        olcum_sayisi = sonuc[1] or 0
-        modbus_uretim = sonuc[2] or 0
+            cursor.execute('''SELECT AVG(guc), SUM(olcum_sayisi), SUM(max_uretim) FROM (
+                SELECT AVG(guc) as guc, COUNT(*) as olcum_sayisi, MAX(modbus_uretim) as max_uretim
+                FROM olcumler
+                WHERE fabrika_id = ? AND zaman BETWEEN ? AND ?
+                GROUP BY slave_id
+            )''', (fabrika_id, baslangic, bitis))
+            sonuc = cursor.fetchone()
+            ort_guc = sonuc[0] or 0
+            olcum_sayisi = sonuc[1] or 0
+            modbus_uretim = sonuc[2] or 0
+
         ayarlar = tum_ayarlari_oku(fabrika_id)
         refresh_rate = float(ayarlar.get('refresh_rate', 60))
         toplam_saat = (olcum_sayisi * refresh_rate) / 3600
-        uretim_wh = ort_guc * toplam_saat
-        return {'uretim_wh': round(uretim_wh, 2), 'uretim_kwh': round(uretim_wh / 1000, 3),
+        
+        if modbus_uretim > 0:
+            uretim_kwh = modbus_uretim
+            uretim_wh = uretim_kwh * 1000
+        else:
+            uretim_wh = ort_guc * toplam_saat
+            uretim_kwh = uretim_wh / 1000
+
+        return {'uretim_wh': round(uretim_wh, 2), 'uretim_kwh': round(uretim_kwh, 3),
                 'modbus_uretim': round(modbus_uretim, 3),
                 'ort_guc': round(ort_guc, 2), 'calisma_suresi_saat': round(toplam_saat, 2)}
     except Exception as e:

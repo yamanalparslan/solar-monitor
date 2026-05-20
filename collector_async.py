@@ -51,8 +51,8 @@ def _ws_notify_sync():
         if api_key:
             req.add_header("x-api-key", api_key)
         urllib.request.urlopen(req, timeout=2)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("WS notify hatasi: %s", e)
 
 
 async def _notify_websocket():
@@ -232,6 +232,7 @@ async def main_loop():
                 fab_configs[fab_id] = load_config(fab_id)
             last_config_update = time.time()
 
+        active_client_keys = set()
         for fab_id in FABRIKALAR:
             cfg = fab_configs[fab_id]
             port = cfg["target_port"]
@@ -239,6 +240,7 @@ async def main_loop():
             for device in cfg["target_devices"]:
                 ip = device["ip"]
                 client_key = f"{ip}:{port}"
+                active_client_keys.add(client_key)
                 
                 if client_key not in clients:
                     clients[client_key] = AsyncModbusTcpClient(ip, port=port, timeout=3.0)
@@ -249,6 +251,13 @@ async def main_loop():
                     
                     tasks.append(read_device_async(client, dev_id, ip, slave_id, cfg))
                     task_info.append(fab_id)
+
+        # Eski (kullanilmayan) istemcileri kapatarak memory/socket leak engelleme
+        stale_keys = set(clients.keys()) - active_client_keys
+        for key in stale_keys:
+            client_to_remove = clients.pop(key)
+            client_to_remove.close()
+            logger.info("Kullanilmayan baglanti temizlendi: %s", key)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 

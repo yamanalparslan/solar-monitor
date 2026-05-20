@@ -527,7 +527,9 @@ async def websocket_live(ws: WebSocket):
         if auth_data.get("type") != "auth" or auth_data.get("token") != expected_key:
             await ws.close(code=1008, reason="Invalid API Key")
             return
-    except Exception:
+    except Exception as e:
+        import logging
+        logging.getLogger("websocket").warning(f"Auth failed or timeout: {e}")
         await ws.close(code=1008, reason="Auth failed or timeout")
         return
 
@@ -545,8 +547,8 @@ async def websocket_live(ws: WebSocket):
         initial = _build_ws_payload()
         initial["type"] = "initial"
         await ws_manager.send_personal(ws, initial)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Initial WS send failed: {e}")
 
     # Bağlantı açık kaldığı sürece ping/pong bekle
     try:
@@ -559,7 +561,8 @@ async def websocket_live(ws: WebSocket):
                 await ws_manager.send_personal(ws, payload)
     except WebSocketDisconnect:
         ws_manager.disconnect(ws)
-    except Exception:
+    except Exception as e:
+        logger.error(f"WS connection error: {e}")
         ws_manager.disconnect(ws)
 
 
