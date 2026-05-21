@@ -31,9 +31,9 @@ slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
 
 secili = st.multiselect("Karsilastirilacak Cihazlar:", slave_ids, default=slave_ids[:3])
 metrik = st.selectbox("Metrik:", ["guc", "voltaj", "akim", "sicaklik"],
-    format_func=lambda x: {"guc": "Guc (W)", "voltaj": " Voltaj (V)", "akim": "Akim (A)", "sicaklik": "Sicaklik (C)"}[x])
+    format_func=lambda x: {"guc": "Guc (kW)", "voltaj": " Voltaj (V)", "akim": "Akim (A)", "sicaklik": "Sicaklik (C)"}[x])
 
-metrik_birim = {"guc": "W", "voltaj": "V", "akim": "A", "sicaklik": "C"}
+metrik_birim = {"guc": "kW", "voltaj": "V", "akim": "A", "sicaklik": "C"}
 metrik_baslik = {"guc": "Guc Karsilastirma", "voltaj": " Voltaj Karlatrma", "akim": "Akim Karsilastirma", "sicaklik": "Sicaklik Karsilastirma"}
 
 # Veritabanından dönen sütunlar (son_verileri_getir)

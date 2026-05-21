@@ -582,7 +582,7 @@ with tab_tekli:
                     df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                     df_det = df_det.set_index("timestamp")
 
-                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "W", ymax=500), width='stretch', config={"displayModeBar": False})
+                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW", ymax=500), width='stretch', config={"displayModeBar": False})
                     chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch', config={"displayModeBar": False})
                     chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch', config={"displayModeBar": False})
                     chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch', config={"displayModeBar": False})
@@ -594,7 +594,7 @@ with tab_tekli:
 with tab_karsilastirma:
     karsilastirma_ids = st.multiselect("KARSILASTIRILACAK CIHAZLAR:", active_dev_ids, default=active_dev_ids[:3])
     karsilastirma_metrik = st.selectbox("METRIK:", ["guc", "voltaj", "akim", "sicaklik"],
-                                         format_func=lambda x: {"guc": " GUC (W)", "voltaj": " VOLTAJ (V)",
+                                         format_func=lambda x: {"guc": " GUC (kW)", "voltaj": " VOLTAJ (V)",
                                                                   "akim": "AKIM (A)", "sicaklik": "SICAKLIK (C)"}[x])
 
     @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
