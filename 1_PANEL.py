@@ -334,10 +334,7 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         name=title
     ))
 
-    x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
-    if not df.empty:
-        target_date = df.index.max().strftime("%Y-%m-%d")
-        x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
+
 
     yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero')
     if ymax is not None:
@@ -352,9 +349,7 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         xaxis=dict(
             showgrid=False,
             zeroline=False,
-            dtick=1800000,
             tickformat="%H:%M",
-            range=x_range,
             showline=True,
             linecolor='rgba(255,255,255,0.1)'
         ),
@@ -374,8 +369,6 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
 
 def create_comparison_chart(ids, metric, title, colors, ymax=None):
     fig = go.Figure()
-    x_range = [datetime.now().strftime("%Y-%m-%d 00:00:00"), datetime.now().strftime("%Y-%m-%d 23:59:59")]
-    
     for i, dev_id in enumerate(ids):
         data = _fetch_device_data(dev_id, fab_id)
         if not data:
@@ -403,9 +396,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         df = df.dropna(subset=['timestamp'])
         df = df.sort_values(by="timestamp", ascending=True)
         
-        if not df.empty:
-            target_date = df["timestamp"].max().strftime("%Y-%m-%d")
-            x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
+
 
         color = colors[i % len(colors)]
         fig.add_trace(go.Scatter(
@@ -428,10 +419,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
             showgrid=False,
             showline=True,
             linecolor='rgba(255,255,255,0.1)',
-            dtick=1800000,
             tickformat="%H:%M",
-            range=x_range
-
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
