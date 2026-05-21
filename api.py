@@ -533,14 +533,9 @@ async def websocket_live(ws: WebSocket):
         await ws.close(code=1008, reason="Auth failed or timeout")
         return
 
-    # ws_manager zaten accept yapiyor ama biz manuel accept yaptigimiz icin
-    # manager._active icine manuel de ekleyebiliriz ya da manager'i guncelleyebiliriz.
-    # Ancak manager.connect(ws) bir hata fırlatabilir, 
-    # o yüzden manager._active.append(ws) yapalım:
-    ws_manager._active.append(ws)
+    ws_manager.connect(ws)
     import logging
     logger = logging.getLogger("websocket")
-    logger.info("WS istemci bağlandı (%d aktif)", ws_manager.client_count)
 
     # İlk bağlantıda anlık veriyi gönder
     try:

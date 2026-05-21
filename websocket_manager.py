@@ -26,10 +26,10 @@ class ConnectionManager:
     def client_count(self) -> int:
         return len(self._active)
 
-    async def connect(self, ws: WebSocket):
-        """Yeni istemci bağlantısını kabul eder."""
-        await ws.accept()
-        self._active.append(ws)
+    def connect(self, ws: WebSocket):
+        """Yeni istemci bağlantısını listeye ekler."""
+        if ws not in self._active:
+            self._active.append(ws)
         logger.info("WS istemci bağlandı (%d aktif)", self.client_count)
 
     def disconnect(self, ws: WebSocket):
