@@ -133,9 +133,9 @@ if st.button("Simülasyonu Başlat", type="primary"):
             y=df_gelecek['tahmini_guc_W'] / 1000.0, # Grafikte kW göstermek daha okunaklıdır
             mode='lines',
             name='Tahmini Güç (kW)',
-            line=dict(color='#0ea5e9', width=3, shape='spline'),
+            line=dict(color='#0ea5e9', width=3, shape='spline', smoothing=1.3),
             fill='tozeroy',
-            fillcolor='rgba(14, 165, 233, 0.2)'
+            fillcolor='rgba(14, 165, 233, 0.05)'
         ))
         
         # Evirici Limiti Çizgisi (Görsel referans)
@@ -145,17 +145,18 @@ if st.button("Simülasyonu Başlat", type="primary"):
         
         fig.update_layout(
             paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(10,14,26,0.5)',
+            plot_bgcolor='rgba(10,14,26,0.3)',
             height=450,
-            margin=dict(l=10, r=10, t=20, b=10),
-            xaxis=dict(gridcolor='rgba(255,255,255,0.04)', title="Zaman"),
-            yaxis=dict(gridcolor='rgba(255,255,255,0.04)', title="Guc Cikisi (kW)"),
+            margin=dict(l=10, r=10, t=40, b=10),
+            title=dict(text="Gelecek Uretim Tahmini", font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
+            xaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)', title="Zaman"),
+            yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, title="Guc Cikisi (kW)"),
             font=dict(color='#94a3b8', family='Inter'),
             hovermode='x unified',
             hoverlabel=dict(
                 bgcolor='rgba(15, 23, 42, 0.95)',
-                bordercolor='rgba(99, 102, 241, 0.35)',
-                font=dict(family='Inter', size=12, color='#e2e8f0'),
+                bordercolor='rgba(14, 165, 233, 0.5)',
+                font=dict(family='Inter', size=13, color='#f8fafc'),
                 align='left',
             ),
             legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'))

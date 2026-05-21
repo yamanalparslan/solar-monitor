@@ -327,9 +327,9 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     fig.add_trace(go.Scatter(
         x=df.index, y=df[column],
         mode='lines',
-        line=dict(color=color, width=2.5),
+        line=dict(color=color, width=3, shape='spline', smoothing=1.3),
         fill='tozeroy',
-        fillcolor=color.replace(')', ',0.08)').replace('rgb', 'rgba'),
+        fillcolor=color.replace(')', ',0.05)').replace('rgb', 'rgba'),
         hovertemplate=f'%{{x|%H:%M:%S}}<br>{title}: %{{y:.1f}} {unit}<extra></extra>',
         name=title
     ))
@@ -339,31 +339,32 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         target_date = df.index.max().strftime("%Y-%m-%d")
         x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
 
-    yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)', showgrid=True, zeroline=False)
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False)
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10, 14, 26, 0.5)',
-        margin=dict(l=10, r=10, t=35, b=10),
+        plot_bgcolor='rgba(10, 14, 26, 0.3)',
+        margin=dict(l=10, r=10, t=40, b=10),
         height=260,
-        title=dict(text=title, font=dict(size=13, color='#94a3b8', family='Inter')),
+        title=dict(text=title, font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
         xaxis=dict(
-            gridcolor='rgba(255,255,255,0.04)',
-            showgrid=True,
+            showgrid=False,
             zeroline=False,
             dtick=1800000,
             tickformat="%H:%M",
-            range=x_range
+            range=x_range,
+            showline=True,
+            linecolor='rgba(255,255,255,0.1)'
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
         hoverlabel=dict(
             bgcolor='rgba(15, 23, 42, 0.95)',
-            bordercolor='rgba(99, 102, 241, 0.35)',
-            font=dict(family='Inter', size=12, color='#e2e8f0'),
+            bordercolor=color.replace(')', ',0.5)').replace('rgb', 'rgba'),
+            font=dict(family='Inter', size=13, color='#f8fafc'),
             align='left',
         ),
     )
@@ -410,24 +411,27 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         fig.add_trace(go.Scatter(
             x=df["timestamp"], y=df[metric],
             mode='lines', name=f'ID {dev_id}',
-            line=dict(color=color, width=2.5),
+            line=dict(color=color, width=3, shape='spline', smoothing=1.3),
         ))
         
-    yaxis_params = dict(gridcolor='rgba(255,255,255,0.04)')
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False)
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10, 14, 26, 0.5)',
-        margin=dict(l=10, r=10, t=40, b=10),
+        plot_bgcolor='rgba(10, 14, 26, 0.3)',
+        margin=dict(l=10, r=10, t=45, b=10),
         height=360,
-        title=dict(text=title, font=dict(size=14, color='#94a3b8', family='Inter')),
+        title=dict(text=title, font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
         xaxis=dict(
-            gridcolor='rgba(255,255,255,0.04)',
+            showgrid=False,
+            showline=True,
+            linecolor='rgba(255,255,255,0.1)',
             dtick=1800000,
             tickformat="%H:%M",
             range=x_range
+
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),

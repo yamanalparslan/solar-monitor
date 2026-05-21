@@ -68,7 +68,7 @@ if secili:
             x=df["ts"], y=df[metrik],
             mode='lines',
             name=f'ID {did}',
-            line=dict(color=colors[i % len(colors)], width=2.5)
+            line=dict(color=colors[i % len(colors)], width=3, shape='spline', smoothing=1.3)
         ))
 
         # zet istatistik topla
@@ -81,18 +81,18 @@ if secili:
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10,14,26,0.5)',
+        plot_bgcolor='rgba(10,14,26,0.3)',
         height=450,
-        margin=dict(l=10, r=10, t=40, b=10),
-        title=dict(text=metrik_baslik[metrik], font=dict(size=14, color='#94a3b8', family='Inter')),
-        xaxis=dict(gridcolor='rgba(255,255,255,0.04)'),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.04)', title=metrik_birim[metrik]),
+        margin=dict(l=10, r=10, t=45, b=10),
+        title=dict(text=metrik_baslik[metrik], font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
+        xaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, title=metrik_birim[metrik]),
         font=dict(color='#94a3b8', family='Inter'),
         hovermode='x unified',
         hoverlabel=dict(
             bgcolor='rgba(15, 23, 42, 0.95)',
             bordercolor='rgba(99, 102, 241, 0.35)',
-            font=dict(family='Inter', size=12, color='#e2e8f0'),
+            font=dict(family='Inter', size=13, color='#f8fafc'),
             align='left',
         ),
         legend=dict(
