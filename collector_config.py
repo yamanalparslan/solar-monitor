@@ -76,7 +76,10 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
             continue
         if ":" in part:
             ip, ids_str = part.split(":", 1)
-            ids = [int(i.strip()) for i in ids_str.split(",") if i.strip().isdigit()]
+            from utils import parse_id_list
+            ids, errors = parse_id_list(ids_str)
+            if errors:
+                logger.warning("ID parse hatalari: %s", errors)
             target_devices.append({"ip": ip.strip(), "slave_ids": ids})
         else:
             target_devices.append({"ip": part.strip(), "slave_ids": [1]})
