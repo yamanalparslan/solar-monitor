@@ -20,7 +20,7 @@ class TestSonDurumSorgusu(unittest.TestCase):
         veritabani.veri_ekle(2, {"guc": 200, "voltaj": 221, "akim": 6, "sicaklik": 21, "hata_kodu": 0, "hata_kodu_109": 0}, fabrika_id="mekanik")
         veritabani.veri_ekle(1, {"guc": 300, "voltaj": 222, "akim": 7, "sicaklik": 22, "hata_kodu": 11, "hata_kodu_109": 12}, fabrika_id="mekanik")
 
-        rows = veritabani.tum_cihazlarin_son_durumu()
+        rows = veritabani.tum_cihazlarin_son_durumu("mekanik")
 
         self.assertEqual(len(rows), 2)
         
