@@ -195,9 +195,9 @@ def send_crm_webhook(event_type: str, payload: dict) -> bool:
 
         # Webhook secret ile HMAC imza ekle (CRM doğrulama yapabilsin)
         if webhook_secret and webhook_secret != "xxxxx":
-            import hmac
+            from hmac import new as hmac_new
             body = json.dumps(data, sort_keys=True)
-            signature = hmac.new(webhook_secret.encode(), msg=body.encode(), digestmod=hashlib.sha256).hexdigest()
+            signature = hmac_new(webhook_secret.encode(), msg=body.encode(), digestmod=hashlib.sha256).hexdigest()
             headers["X-Solar-Signature"] = signature
 
         resp = requests.post(webhook_url, json=data, headers=headers, timeout=10)
