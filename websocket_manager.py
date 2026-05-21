@@ -46,7 +46,7 @@ class ConnectionManager:
         message = json.dumps(data, ensure_ascii=False, default=str)
         dead = []
 
-        for ws in self._active:
+        for ws in list(self._active):
             try:
                 await ws.send_text(message)
             except Exception:
