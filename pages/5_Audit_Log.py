@@ -22,10 +22,10 @@ st.title(" AUDIT LOG")
 section_header("", "ISLEM GECMISI", "AYAR DEGISIKLIKLERI VE KULLANICI ISLEMLERI")
 
 limit = st.slider("Limit:", 10, 500, 100)
-loglar = veritabani.audit_log_getir(limit=limit)
+loglar = veritabani.audit_log_getir(limit=limit, fabrika_id=fab_id)
 if loglar:
     solar_table(
-        [list(row[1:]) for row in loglar],   # ID sutununu atla
+        [list(row[1:5]) for row in loglar],   # ID sutununu atla, (kullanici, islem, detay, zaman) al
         headers=["KULLANICI", "ISLEM", "DETAY", "ZAMAN"],
     )
 else:

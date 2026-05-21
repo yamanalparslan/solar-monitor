@@ -248,7 +248,7 @@ with st.sidebar:
 
         st.success("Ayarlar kaydedildi! Collector bir sonraki okuma dongusunda guncellenecek.")
         kullanici = st.session_state.get('username', 'admin')
-        veritabani.audit_log_kaydet(kullanici, "ayar_degistir", f"IP={target_ip}, Port={target_port}, IDs={id_input}")
+        veritabani.audit_log_kaydet(kullanici, "ayar_degistir", f"IP={target_ip}, Port={target_port}, IDs={id_input}", fab_id)
         st.rerun()
 
     # Yenileme suresi ayar
@@ -307,7 +307,7 @@ with st.sidebar:
                 if st.button("EVET, SİL", type="primary"):
                     if veritabani.db_temizle(fab_id):
                         kullanici = st.session_state.get('username', 'admin')
-                        veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi")
+                        veritabani.audit_log_kaydet(kullanici, "veri_sil", f"[{fab_id}] Tum olcum verileri silindi", fab_id)
                         st.success("Temizlendi!")
                         st.session_state.confirm_delete = False
                         st.rerun()

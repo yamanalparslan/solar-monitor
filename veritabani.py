@@ -551,21 +551,22 @@ def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN
 
 # ==================== AUDİT LOG FONKSİYONLARI ====================
 
-def audit_log_kaydet(kullanici, islem, detay=""):
+def audit_log_kaydet(kullanici, islem, detay="", fabrika_id=VARSAYILAN_FABRIKA):
     """Audit log kaydı ekle.
     
     Args:
         kullanici: İşlemi yapan kullanıcı
         islem: İşlem tipi (ayar_degistir, veri_sil, vb.)
         detay: Ek açıklama
+        fabrika_id: İşlemin yapıldığı fabrika (varsayılan: VARSAYILAN_FABRIKA)
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO audit_log (kullanici, islem, detay, zaman)
-            VALUES (?, ?, ?, ?)
-        """, (kullanici, islem, detay, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+            INSERT INTO audit_log (kullanici, islem, detay, fabrika_id, zaman)
+            VALUES (?, ?, ?, ?, ?)
+        """, (kullanici, islem, detay, fabrika_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
         conn.commit()
         conn.close()
         return True
@@ -574,20 +575,21 @@ def audit_log_kaydet(kullanici, islem, detay=""):
         return False
 
 
-def audit_log_getir(limit=100):
+def audit_log_getir(limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     """Audit log kayıtlarını getir.
     
     Returns:
-        list of tuples: (id, kullanici, islem, detay, zaman)
+        list of tuples: (id, kullanici, islem, detay, zaman, fabrika_id)
     """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT id, kullanici, islem, detay, zaman
+            SELECT id, kullanici, islem, detay, zaman, fabrika_id
             FROM audit_log
+            WHERE fabrika_id = ?
             ORDER BY zaman DESC LIMIT ?
-        """, (limit,))
+        """, (fabrika_id, limit))
         rows = cursor.fetchall()
         conn.close()
         return rows
