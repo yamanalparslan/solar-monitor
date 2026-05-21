@@ -34,7 +34,7 @@ def test_fault_maps():
     assert 0 in FAULT_MAP_120
     assert 0 in FAULT_MAP_121
     assert 0 in FAULT_MAP_122
-    assert "Insufficient DC voltage" in FAULT_MAP_122[0]
+    assert "INV_DiagnosticTest" in FAULT_MAP_122[0]
 
 def test_olcum_verisi_to_dict():
     data = OlcumVerisi(
