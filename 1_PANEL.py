@@ -71,6 +71,17 @@ fab_info = FABRIKALAR[fab_id]
 if 'ayarlar_kaydedildi' not in st.session_state:
     st.session_state.ayarlar_kaydedildi = False
 
+# --- YARDIMCI FONKSIYONLAR ---
+@st.cache_data(ttl=timedelta(seconds=2), show_spinner=False)
+def _fetch_summary_data(fab_id: str):
+    """Aynı saniye içerisinde defalarca db okumasını engellemek için cache'lenir."""
+    return veritabani.tum_cihazlarin_son_durumu(fab_id)
+
+@st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
+def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
+    """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir."""
+    return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
+
 # --- YAN MENU ---
 with st.sidebar:
     # Fabrika değiştirme butonu
@@ -358,20 +369,6 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     )
     return fig
 
-
-@st.cache_data(ttl=timedelta(seconds=2), show_spinner=False)
-def _fetch_summary_data(fab_id: str):
-    """Aynı saniye içerisinde defalarca db okumasını engellemek için cache'lenir."""
-    return veritabani.tum_cihazlarin_son_durumu(fab_id)
-
-@st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
-def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
-    """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir.
-
-    TTL 30 saniye olarak sabitlendi — lambda TTL, cachetools'un cache-read
-    sirasinda session_state erisemediginde None dondurup crash'e yol aciyordu.
-    """
-    return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
 
 
 def create_comparison_chart(ids, metric, title, colors, ymax=None):

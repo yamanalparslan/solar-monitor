@@ -225,4 +225,16 @@ with tab_gecmis:
             })
             
         df = pd.DataFrame(tablo_verisi)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        
+        items_per_page = 10
+        total_pages = max(1, (len(df) - 1) // items_per_page + 1)
+        
+        if total_pages > 1:
+            page_tabs = st.tabs([f"Sayfa {i+1}" for i in range(total_pages)])
+            for i, tab in enumerate(page_tabs):
+                with tab:
+                    start_idx = i * items_per_page
+                    end_idx = start_idx + items_per_page
+                    st.dataframe(df.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(df, use_container_width=True, hide_index=True)

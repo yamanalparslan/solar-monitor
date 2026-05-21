@@ -87,8 +87,18 @@ def format_id_list_display(ids):
 def to_signed16(value):
     """
     Unsigned 16-bit Modbus register'ini signed integer'a cevirir.
+    Eğer değer inverterin veri göndermediği uyku veya hata anındaki (0x8000 veya 0xFFFF)
+    varsayılan değerleriyse, bunları 0 olarak kabul eder.
     """
+    if value is None:
+        return 0
+        
     value = int(value)
+    
+    # 32768 (0x8000) ve 65535 (0xFFFF) genellikle veri gelmediğinde (offline/sleep) alınan değerlerdir.
+    if value in (32768, 65535):
+        return 0
+        
     return value - 65536 if value > 32767 else value
 
 

@@ -164,9 +164,6 @@ def check_auth() -> bool:
 
     # Zaten giri yaplm mInfinite
     if st.session_state.get("authenticated"):
-        _, expected_hash = _get_credentials()
-        if expected_hash == _DEFAULT_ADMIN_HASH:
-            st.warning("⚠️ **Güvenlik Uyarısı:** Varsayılan yönetici şifresini kullanıyorsunuz. Lütfen sistemi güvenli hale getirmek için `.env` dosyasından `AUTH_PASSWORD_HASH` değerini güncelleyin.")
         return True
 
     # Login ekrann gster
