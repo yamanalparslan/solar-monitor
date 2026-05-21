@@ -339,15 +339,15 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
         target_date = df.index.max().strftime("%Y-%m-%d")
         x_range = [f"{target_date} 00:00:00", f"{target_date} 23:59:59"]
 
-    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False)
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero')
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(10, 14, 26, 0.3)',
-        margin=dict(l=10, r=10, t=40, b=10),
-        height=260,
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=220,
         title=dict(text=title, font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
         xaxis=dict(
             showgrid=False,
@@ -414,15 +414,15 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
             line=dict(color=color, width=3, shape='spline', smoothing=1.3),
         ))
         
-    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False)
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero')
     if ymax is not None:
         yaxis_params['range'] = [0, ymax]
 
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(10, 14, 26, 0.3)',
-        margin=dict(l=10, r=10, t=45, b=10),
-        height=360,
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=280,
         title=dict(text=title, font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
         xaxis=dict(
             showgrid=False,
@@ -582,10 +582,10 @@ with tab_tekli:
                     df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                     df_det = df_det.set_index("timestamp")
 
-                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW", ymax=500), width='stretch', config={"displayModeBar": False})
-                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V", ymax=1000), width='stretch', config={"displayModeBar": False})
-                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch', config={"displayModeBar": False})
-                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch', config={"displayModeBar": False})
+                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW"), use_container_width=True, config={"displayModeBar": False})
+                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V"), use_container_width=True, config={"displayModeBar": False})
+                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), use_container_width=True, config={"displayModeBar": False})
+                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), use_container_width=True, config={"displayModeBar": False})
             except Exception as e:
                 st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
 
@@ -601,13 +601,12 @@ with tab_karsilastirma:
     def render_karsilastirma_grafik(k_ids, k_metrik):
         if k_ids:
             colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
-            metrik_labels = {"guc": " GUC KARSILASTIRMA (W)", "voltaj": " VOLTAJ KARSILASTIRMA (V)",
+            metrik_labels = {"guc": " GUC KARSILASTIRMA (kW)", "voltaj": " VOLTAJ KARSILASTIRMA (V)",
                              "akim": " AKIM KARSILASTIRMA (A)", "sicaklik": " SICAKLIK KARSILASTIRMA (C)"}
             
-            ymax_val = 500 if k_metrik == "guc" else (1000 if k_metrik == "voltaj" else None)
             st.plotly_chart(
-                create_comparison_chart(k_ids, k_metrik, metrik_labels[k_metrik], colors, ymax=ymax_val),
-                width='stretch'
+                create_comparison_chart(k_ids, k_metrik, metrik_labels[k_metrik], colors),
+                use_container_width=True, config={"displayModeBar": False}
             )
 
     render_karsilastirma_grafik(karsilastirma_ids, karsilastirma_metrik)
