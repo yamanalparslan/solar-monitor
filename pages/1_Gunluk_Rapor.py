@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys, os
+import plotly.graph_objects as go
 
 # Yolu ayarlama ve zel modlleri ie aktarma
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -53,9 +54,11 @@ for device in cfg["target_devices"]:
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def goster_rapor():
     # --- TARH SEM ---
-    col_date, col_time, col_btn = st.columns([1, 1, 1])
+    col_date, col_range, col_time, col_btn = st.columns([1, 1, 1, 1])
     with col_date:
         secilen_tarih = st.date_input("Rapor Tarihi:", datetime.now())
+    with col_range:
+        grafik_gun = st.selectbox("Grafik Aralığı:", [7, 14, 30], format_func=lambda x: f"Son {x} Gün")
     with col_time:
         st.caption(f"Son Güncelleme: {datetime.now().strftime('%H:%M:%S')}")
     with col_btn:
@@ -114,6 +117,51 @@ def goster_rapor():
         ])
 
         st.markdown("<br>", unsafe_allow_html=True)
+
+        # --- GÜNLÜK ÜRETİM TRENDİ GRAFİĞİ ---
+        trend_data = []
+        for i in range(grafik_gun - 1, -1, -1):
+            gun_tarih = (secilen_tarih - timedelta(days=i)).strftime('%Y-%m-%d')
+            uretim = veritabani.gunluk_uretim_hesapla(gun_tarih, slave_id=None, fabrika_id=fab_id)
+            if uretim:
+                kwh = uretim.get('modbus_uretim', 0) if uretim.get('modbus_uretim', 0) > 0 else uretim.get('uretim_kwh', 0)
+                trend_data.append({"Tarih": gun_tarih, "Üretim": round(kwh, 2)})
+            else:
+                trend_data.append({"Tarih": gun_tarih, "Üretim": 0})
+                
+        df_trend = pd.DataFrame(trend_data)
+        
+        if not df_trend.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_trend["Tarih"], y=df_trend["Üretim"],
+                mode='lines+markers',
+                name='Günlük Üretim',
+                line=dict(color="#f59e0b", width=3, shape='spline', smoothing=1.3),
+                marker=dict(size=8, color="#f59e0b", line=dict(width=2, color="#1e293b")),
+                fill='tozeroy',
+                fillcolor='rgba(245, 158, 11, 0.05)',
+                hovertemplate='%{x}<br>Üretim: %{y:.1f} kWh<extra></extra>'
+            ))
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(10, 14, 26, 0.3)',
+                margin=dict(l=0, r=0, t=35, b=0),
+                height=280,
+                title=dict(text=f"Tesisin Son {grafik_gun} Günlük Üretim Trendi", font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
+                xaxis=dict(showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
+                yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
+                font=dict(color='#94a3b8', family='Inter'),
+                hovermode='x unified',
+                hoverlabel=dict(
+                    bgcolor='rgba(15, 23, 42, 0.95)',
+                    bordercolor='rgba(245, 158, 11, 0.5)',
+                    font=dict(family='Inter', size=13, color='#f8fafc'),
+                    align='left',
+                ),
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown("<br>", unsafe_allow_html=True)
 
         # solar_table ile premium HTML tablo
         tablo_headers = ["CIHAZ", "URETIM (kWh)", "ORT. GUC (W)", "MAKS. GUC (W)", "ORT. VOLTAJ (V)", "ORT. ISI (C)", "HATA", "CALISMA (sa)"]
