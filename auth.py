@@ -16,8 +16,29 @@ import hashlib
 import streamlit as st
 import time
 
-# Brute-force koruması için in-memory global sayaç
-_FAILED_LOGINS = {} # key -> {"attempts": 0, "lockout_until": 0.0}
+import sqlite3
+import os
+
+_AUTH_DB_PATH = os.path.join("data", "auth.db")
+
+def _get_db():
+    os.makedirs("data", exist_ok=True)
+    conn = sqlite3.connect(_AUTH_DB_PATH, timeout=10.0)
+    conn.execute("CREATE TABLE IF NOT EXISTS failed_logins (rate_key TEXT PRIMARY KEY, attempts INTEGER, lockout_until REAL)")
+    return conn
+
+def _get_rate_record(rate_key):
+    with _get_db() as conn:
+        row = conn.execute("SELECT attempts, lockout_until FROM failed_logins WHERE rate_key=?", (rate_key,)).fetchone()
+        if row:
+            return {"attempts": row[0], "lockout_until": row[1]}
+        return {"attempts": 0, "lockout_until": 0.0}
+
+def _save_rate_record(rate_key, record):
+    with _get_db() as conn:
+        conn.execute("INSERT OR REPLACE INTO failed_logins (rate_key, attempts, lockout_until) VALUES (?, ?, ?)", 
+                     (rate_key, record["attempts"], record["lockout_until"]))
+
 
 def _get_client_ip():
     try:
@@ -209,10 +230,7 @@ def _show_login_form():
                 client_ip = _get_client_ip()
                 rate_key = f"{client_ip}_{username_input}"
                 
-                if rate_key not in _FAILED_LOGINS:
-                    _FAILED_LOGINS[rate_key] = {"attempts": 0, "lockout_until": 0.0}
-                
-                rate_record = _FAILED_LOGINS[rate_key]
+                rate_record = _get_rate_record(rate_key)
                 current_time = time.time()
                 
                 if current_time < rate_record["lockout_until"]:
@@ -228,6 +246,7 @@ def _show_login_form():
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username_input
                         rate_record["attempts"] = 0 # Başarılı girişte sıfırla
+                        _save_rate_record(rate_key, rate_record)
                         st.rerun()
                     else:
                         rate_record["attempts"] += 1
@@ -236,6 +255,7 @@ def _show_login_form():
                             st.error("Çok fazla hatalı deneme yaptınız. Lütfen 30 saniye bekleyin.")
                         else:
                             st.error(f"Kullanici adi veya sifre hatali! (Kalan deneme: {3 - rate_record['attempts']})")
+                        _save_rate_record(rate_key, rate_record)
                         time.sleep(1) # Time-delay attack mitigation
 
         st.markdown("""
