@@ -521,8 +521,28 @@ def render_summary_section():
             ])
         solar_table(
             tablo_rows,
-            headers=["ID", "SON ZAMAN", "GUC (W)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"],
+            headers=["ID", "SON ZAMAN", "GUC (kW)", "VOLTAJ (V)", "AKIM (A)", "ISI (C)"],
         )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Son 7 günlük üretim tablosu
+        from datetime import datetime, timedelta
+        bugun = datetime.now()
+        gunler_headers = []
+        uretim_degerleri = []
+        for i in range(6, -1, -1):
+            t = bugun - timedelta(days=i)
+            gun_str = t.strftime('%Y-%m-%d')
+            ur = veritabani.gunluk_uretim_hesapla(gun_str, slave_id=None, fabrika_id=fab_id)
+            val = 0
+            if ur:
+                val = ur.get('modbus_uretim', 0) if ur.get('modbus_uretim', 0) > 0 else ur.get('uretim_kwh', 0)
+            gunler_headers.append(t.strftime('%d %b'))
+            uretim_degerleri.append(f"{val:.1f}")
+            
+        st.markdown("<div style='text-align: center; color: #94a3b8; margin-bottom: 10px; font-size: 14px; font-weight: bold; font-family: Inter;'>SON 7 GÜN TOPLAM ÜRETİM (kWh)</div>", unsafe_allow_html=True)
+        solar_table([uretim_degerleri], headers=gunler_headers)
 
 render_summary_section()
 
