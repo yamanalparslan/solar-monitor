@@ -113,122 +113,127 @@ with st.sidebar:
             current_label = label
             break
 
-    target_ip = st.text_input(
-        "IP ADRESI",
-        value=mevcut_ayarlar.get('target_ip', '10.35.14.10'),
-        key="target_ip_input",
-    )
-    target_port = st.number_input(
-        "PORT",
-        value=int(mevcut_ayarlar.get('target_port', 502)),
-        step=1,
-        key="target_port_input",
-    )
+    if st.session_state.get('ayarlar_kaydedildi', False):
+        st.success("Ayarlar başarıyla kaydedildi! Collector yeni ayarlarla okumaya devam edecek.")
+        st.session_state.ayarlar_kaydedildi = False
 
-    st.info("VIRGUL VEYA TIRE ILE AYIRIN (ORN: 1, 2, 5-8)")
-    id_input = st.text_input(
-        "INVERTER ID LISTESI",
-        value=mevcut_ayarlar.get('slave_ids', '1,2,3'),
-        key="slave_ids_input",
-    )
-    target_ids, id_errors = utils.parse_id_list(id_input)
-
-    if id_errors:
-        st.warning(f"Bazi ID'ler parse edilemedi: {', '.join(id_errors)}")
-
-    st.write(f"Izlenecek ID'ler: {utils.format_id_list_display(target_ids)}")
-
-    st.divider()
-    st.header("ZAMANLAYICI")
-
-    selected_interval = st.select_slider(
-        "VERI TOPLAMA SIKLIGI",
-        options=list(interval_options.keys()),
-        value=current_label,
-        key="refresh_rate_slider",
-    )
-
-    refresh_rate = interval_options[selected_interval]
-    st.info(f" Secilen: {selected_interval} ({refresh_rate} saniye)")
-
-    st.markdown("---")
-    st.header("ADRES HARITASI")
-    with st.expander("DETAYLI ADRES AYARLARI", expanded=False):
-        c_guc_adr = st.number_input(
-            "GUC ADRESI",
-            value=int(mevcut_ayarlar.get('guc_addr', 75)),
-            key="guc_addr_input",
+    with st.form("ayar_form"):
+        target_ip = st.text_input(
+            "IP ADRESI",
+            value=mevcut_ayarlar.get('target_ip', '10.35.14.10'),
+            key="target_ip_input",
         )
-        c_guc_sc = st.number_input(
-            "GUC CARPAN",
-            value=float(mevcut_ayarlar.get('guc_scale', 0.1)),
-            step=0.01,
-            format="%.4f",
-            key="guc_scale_input",
-            help="Ondalik olarak yazabilirsiniz. Ornek: 0.01",
+        target_port = st.number_input(
+            "PORT",
+            value=int(mevcut_ayarlar.get('target_port', 502)),
+            step=1,
+            key="target_port_input",
         )
 
-        c_volt_adr = st.number_input(
-            "VOLTAJ ADRESI",
-            value=int(mevcut_ayarlar.get('volt_addr', 73)),
-            key="volt_addr_input",
+        st.info("VIRGUL VEYA TIRE ILE AYIRIN (ORN: 1, 2, 5-8)")
+        id_input = st.text_input(
+            "INVERTER ID LISTESI",
+            value=mevcut_ayarlar.get('slave_ids', '1,2,3'),
+            key="slave_ids_input",
         )
-        c_volt_sc = st.number_input(
-            "VOLTAJ CARPAN",
-            value=float(mevcut_ayarlar.get('volt_scale', 0.1)),
-            step=0.01,
-            format="%.4f",
-            key="volt_scale_input",
-            help="Ondalik olarak yazabilirsiniz. Ornek: 0.1",
+        target_ids, id_errors = utils.parse_id_list(id_input)
+
+        if id_errors:
+            st.warning(f"Bazi ID'ler parse edilemedi: {', '.join(id_errors)}")
+
+        st.write(f"Izlenecek ID'ler: {utils.format_id_list_display(target_ids)}")
+
+        st.divider()
+        st.header("ZAMANLAYICI")
+
+        selected_interval = st.select_slider(
+            "VERI TOPLAMA SIKLIGI",
+            options=list(interval_options.keys()),
+            value=current_label,
+            key="refresh_rate_slider",
         )
 
-        c_akim_adr = st.number_input(
-            "AKIM ADRESI",
-            value=int(mevcut_ayarlar.get('akim_addr', 70)),
-            key="akim_addr_input",
-        )
-        c_akim_sc = st.number_input(
-            "AKIM CARPANI",
-            value=float(mevcut_ayarlar.get('akim_scale', 0.1)),
-            step=0.01,
-            format="%.4f",
-            key="akim_scale_input",
-            help="Ondalik olarak yazabilirsiniz. Ornek: 0.01",
-        )
+        refresh_rate = interval_options[selected_interval]
+        st.info(f" Secilen: {selected_interval} ({refresh_rate} saniye)")
 
-        c_isi_adr = st.number_input(
-            "ISI ADRESI",
-            value=int(mevcut_ayarlar.get('isi_addr', 93)),
-            key="isi_addr_input",
-        )
-        c_isi_sc = st.number_input(
-            "ISI CARPANI",
-            value=float(mevcut_ayarlar.get('isi_scale', 1.0)),
-            step=0.01,
-            format="%.4f",
-            key="isi_scale_input",
-            help="Ondalik olarak yazabilirsiniz. Ornek: 0.01 veya 0.001",
-        )
+        st.markdown("---")
+        st.header("ADRES HARITASI")
+        with st.expander("DETAYLI ADRES AYARLARI", expanded=False):
+            c_guc_adr = st.number_input(
+                "GUC ADRESI",
+                value=int(mevcut_ayarlar.get('guc_addr', 75)),
+                key="guc_addr_input",
+            )
+            c_guc_sc = st.number_input(
+                "GUC CARPAN",
+                value=float(mevcut_ayarlar.get('guc_scale', 0.1)),
+                step=0.01,
+                format="%.4f",
+                key="guc_scale_input",
+                help="Ondalik olarak yazabilirsiniz. Ornek: 0.01",
+            )
 
-        c_uretim_adr = st.number_input(
-            "GUNLUK URETIM ADRESI",
-            value=int(mevcut_ayarlar.get('uretim_addr', 36)),
-            key="uretim_addr_input",
-        )
-        c_uretim_sc = st.number_input(
-            "GUNLUK URETIM CARPANI",
-            value=float(mevcut_ayarlar.get('uretim_scale', 1.0)),
-            step=0.01,
-            format="%.4f",
-            key="uretim_scale_input",
-            help="Ondalik olarak yazabilirsiniz. Ornek: 1.0 veya 0.1",
-        )
+            c_volt_adr = st.number_input(
+                "VOLTAJ ADRESI",
+                value=int(mevcut_ayarlar.get('volt_addr', 73)),
+                key="volt_addr_input",
+            )
+            c_volt_sc = st.number_input(
+                "VOLTAJ CARPAN",
+                value=float(mevcut_ayarlar.get('volt_scale', 0.1)),
+                step=0.01,
+                format="%.4f",
+                key="volt_scale_input",
+                help="Ondalik olarak yazabilirsiniz. Ornek: 0.1",
+            )
 
-    if user_role == "admin":
-        submitted = st.button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
-    else:
-        submitted = False
-        st.warning("Ayarları kaydetmek için 'admin' yetkisi gereklidir.")
+            c_akim_adr = st.number_input(
+                "AKIM ADRESI",
+                value=int(mevcut_ayarlar.get('akim_addr', 70)),
+                key="akim_addr_input",
+            )
+            c_akim_sc = st.number_input(
+                "AKIM CARPANI",
+                value=float(mevcut_ayarlar.get('akim_scale', 0.1)),
+                step=0.01,
+                format="%.4f",
+                key="akim_scale_input",
+                help="Ondalik olarak yazabilirsiniz. Ornek: 0.01",
+            )
+
+            c_isi_adr = st.number_input(
+                "ISI ADRESI",
+                value=int(mevcut_ayarlar.get('isi_addr', 93)),
+                key="isi_addr_input",
+            )
+            c_isi_sc = st.number_input(
+                "ISI CARPANI",
+                value=float(mevcut_ayarlar.get('isi_scale', 1.0)),
+                step=0.01,
+                format="%.4f",
+                key="isi_scale_input",
+                help="Ondalik olarak yazabilirsiniz. Ornek: 0.01 veya 0.001",
+            )
+
+            c_uretim_adr = st.number_input(
+                "GUNLUK URETIM ADRESI",
+                value=int(mevcut_ayarlar.get('uretim_addr', 36)),
+                key="uretim_addr_input",
+            )
+            c_uretim_sc = st.number_input(
+                "GUNLUK URETIM CARPANI",
+                value=float(mevcut_ayarlar.get('uretim_scale', 1.0)),
+                step=0.01,
+                format="%.4f",
+                key="uretim_scale_input",
+                help="Ondalik olarak yazabilirsiniz. Ornek: 1.0 veya 0.1",
+            )
+
+        if user_role == "admin":
+            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
+        else:
+            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", disabled=True, use_container_width=True)
+            st.warning("Ayarları kaydetmek için 'admin' yetkisi gereklidir.")
 
     if submitted:
         veritabani.ayar_yaz('target_ip', target_ip, fab_id)
@@ -246,7 +251,7 @@ with st.sidebar:
         veritabani.ayar_yaz('uretim_addr', c_uretim_adr, fab_id)
         veritabani.ayar_yaz('uretim_scale', c_uretim_sc, fab_id)
 
-        st.success("Ayarlar kaydedildi! Collector bir sonraki okuma dongusunda guncellenecek.")
+        st.session_state.ayarlar_kaydedildi = True
         kullanici = st.session_state.get('username', 'admin')
         veritabani.audit_log_kaydet(kullanici, "ayar_degistir", f"IP={target_ip}, Port={target_port}, IDs={id_input}", fab_id)
         st.rerun()
@@ -467,14 +472,11 @@ def render_summary_section():
             dev_volt = round(float(cd.voltaj), 1) if cd.voltaj is not None else 0
             dev_akim = round(float(cd.akim), 2) if cd.akim is not None else 0
             dev_temp = round(utils.normalize_temperature_value(cd.sicaklik), 1) if cd.sicaklik is not None else 0
-            dev_hata = cd.has_error
+            dev_hata = cd.has_critical_or_major_error
             alarm_count = cd.active_fault_count
 
-            durum_renk = "#10b981" if dev_guc > 0 else "#f59e0b"
-            if alarm_count > 0:
-                durum_text = f"{alarm_count} ALARM"
-            else:
-                durum_text = "AKTIF" if dev_guc > 0 else "BEKLEMEDE"
+            durum_renk = cd.durum_renk
+            durum_text = cd.durum_text
 
             with gauge_cols[col_idx]:
                 fig_gauge = go.Figure(go.Indicator(

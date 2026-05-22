@@ -21,12 +21,32 @@ x-common: &common
   volumes:
     - ./data:/app/data
     - ./backups:/app/backups
+    - pgdata:/var/lib/postgresql/data
     # Üretim güvenliği: Kaynak kodun tamamı host'tan bağlanmaz. Image üzerinden çalışır.
   environment:
     - PYTHONUNBUFFERED=1
     - DB_NAME=/app/data/solar_log.db
 
 services:
+  # ─── PostgreSQL / TimescaleDB ───
+  solar-postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: solar_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-solar_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-solar_pass_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-solar_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-solar_user} -d ${POSTGRES_DB:-solar_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ─── Veri Toplayıcı (Async - Ana Collector) ───
   solar-collector:
     <<: *common
@@ -37,6 +57,9 @@ services:
     # - decode_temperature_register ile otomatik sıcaklık scale tespiti
     # - Tüm slave'leri asyncio.gather ile paralel okur
     entrypoint: [ "python", "collector_async.py" ]
+    depends_on:
+      solar-postgres:
+        condition: service_healthy
 
   # ─── Ana Dashboard ───
   solar-monitor:
@@ -46,7 +69,10 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      - solar-collector
+      solar-collector:
+        condition: service_started
+      solar-postgres:
+        condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" ]
       interval: 30s
@@ -65,13 +91,16 @@ services:
       - DB_NAME=/app/data/solar_log.db
       - API_PORT=8503
     depends_on:
-      - solar-collector
+      solar-collector:
+        condition: service_started
+      solar-postgres:
+        condition: service_healthy
 
   # ─── Healthcheck Endpoint ───
   solar-healthcheck:
     <<: *common
     container_name: solar_healthcheck
-    restart: "no"
+    restart: unless-stopped
     ports:
       - "8502:8502"
     entrypoint: [ "python", "healthcheck.py" ]
@@ -128,7 +157,11 @@ services:
   solar-mqtt-listener:
     <<: *common
     container_name: solar_mqtt_listener
-    restart: "no"
+    restart: unless-stopped
     depends_on:
       - solar-mosquitto
     entrypoint: [ "python", "mqtt_listener.py" ]
+
+volumes:
+  pgdata:
+

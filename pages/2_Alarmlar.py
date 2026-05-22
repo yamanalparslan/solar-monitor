@@ -4,7 +4,7 @@ import sys, os
 from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
-from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, FAULT_MAP_114, FAULT_MAP_115, FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122
+from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, FAULT_MAP_114, FAULT_MAP_115, FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122, determine_severity
 from styles import inject_glossy_css, section_header, alarm_card, badge, kpi_row
 from auth import check_auth, logout_button
 
@@ -29,7 +29,8 @@ def hata_bit_coz(kod, fault_map):
         if (kod >> bit) & 1:
             aciklama = fault_map.get(bit, "")
             if aciklama and aciklama.lower() != "spare":
-                hatalar.append((bit, aciklama))
+                sev = determine_severity(aciklama)
+                hatalar.append((bit, aciklama, sev))
     return hatalar
 
 tab_aktif, tab_gecmis = st.tabs(["🔴 AKTIF ALARMLAR", "📜 ALARM GECMISI"])
@@ -60,6 +61,9 @@ with tab_aktif:
             cd = CihazDurumu(*padded_row[:19])
             
             dev_id = cd.slave_id
+            guc = cd.guc
+            voltaj = cd.voltaj
+            
             h107 = cd.hata_kodu or 0
             h109 = cd.hata_kodu_109 or 0
             h111 = cd.hata_kodu_111 or 0
@@ -87,77 +91,74 @@ with tab_aktif:
             hatalar_121 = hata_bit_coz(h121, FAULT_MAP_121)
             hatalar_122 = hata_bit_coz(h122, FAULT_MAP_122)
 
-            has_error = bool(hatalar_107 or hatalar_109 or hatalar_111 or hatalar_112 or hatalar_114 or hatalar_115 or hatalar_116 or hatalar_117 or hatalar_118 or hatalar_119 or hatalar_120 or hatalar_121 or hatalar_122)
+            has_critical_or_major = False
+            has_warning = False
+            
+            for h_list in [hatalar_107, hatalar_109, hatalar_111, hatalar_112, hatalar_114, hatalar_115, hatalar_116, hatalar_117, hatalar_118, hatalar_119, hatalar_120, hatalar_121, hatalar_122]:
+                if h_list:
+                    for bit, aciklama, sev in h_list:
+                        if sev in ["CRITICAL", "MAJOR"]:
+                            has_critical_or_major = True
+                        else:
+                            has_warning = True
 
-            if has_error:
+            is_arizali = False
+            is_uyku = False
+            
+            if has_critical_or_major:
+                is_arizali = True
+            elif voltaj <= 5 and guc <= 0:
+                is_uyku = True
+            elif guc > 0:
+                is_arizali = False
+            else:
+                is_arizali = True
+
+            has_any_error_to_show = bool(has_critical_or_major or has_warning)
+
+            if is_arizali:
                 hata_sayisi += 1
-
-                parts = []
-                parts.append('<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">')
-                parts.append('<span style="font-size:1.3rem;"></span>')
-                parts.append('<span style="font-size:1.1rem; font-weight:700; color:#fca5a5; font-family:Inter,sans-serif;">ID: ' + str(dev_id) + '</span>')
-                parts.append(badge("ARIZA", "danger"))
-                parts.append('</div>')
-
-                if hatalar_107:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 107 Hatalari:</div>')
-                    for bit, aciklama in hatalar_107:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_109:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 109 Hatalari:</div>')
-                    for bit, aciklama in hatalar_109:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_111:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 111 Hatalari:</div>')
-                    for bit, aciklama in hatalar_111:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_112:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 112 Hatalari:</div>')
-                    for bit, aciklama in hatalar_112:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_114:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 114 Hatalari:</div>')
-                    for bit, aciklama in hatalar_114:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_115:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 115 Hatalari:</div>')
-                    for bit, aciklama in hatalar_115:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_116:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 116 Hatalari:</div>')
-                    for bit, aciklama in hatalar_116:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_117:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 117 Hatalari:</div>')
-                    for bit, aciklama in hatalar_117:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_118:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 118 Hatalari:</div>')
-                    for bit, aciklama in hatalar_118:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_119:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 119 Hatalari:</div>')
-                    for bit, aciklama in hatalar_119:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_120:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 120 Hatalari:</div>')
-                    for bit, aciklama in hatalar_120:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_121:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 121 Hatalari:</div>')
-                    for bit, aciklama in hatalar_121:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-                if hatalar_122:
-                    parts.append('<div style="margin:8px 0 4px 0; font-weight:600; color:#f87171; font-family:Inter,sans-serif;">Register 122 Hatalari:</div>')
-                    for bit, aciklama in hatalar_122:
-                        parts.append('<div style="padding:3px 0 3px 16px; color:#fca5a5; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit ' + str(bit) + ': ' + aciklama + '</div>')
-
-                parts.append('<div style="margin-top:8px; font-size:0.75rem; color:#64748b; font-family:Inter,sans-serif;">Hex: R107=0x' + format(h107, "08X") + ' | R109=0x' + format(h109, "08X") + ' | R111=0x' + format(h111, "04X") + ' | R112=0x' + format(h112, "08X") + ' | R114=0x' + format(h114, "04X") + ' | R115=0x' + format(h115, "04X") + ' | R116=0x' + format(h116, "04X") + ' | R117=0x' + format(h117, "04X") + ' | R118=0x' + format(h118, "04X") + ' | R119=0x' + format(h119, "04X") + ' | R120=0x' + format(h120, "04X") + ' | R121=0x' + format(h121, "04X") + ' | R122=0x' + format(h122, "04X") + '</div>')
-                alarm_card(dev_id, True, ''.join(parts))
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#fca5a5; font-family:Inter,sans-serif;">ID: {dev_id}</span>{badge("ARIZA", "danger")}</div>'
+                card_status = "error"
+            elif is_uyku:
+                # uyku_sayisi += 1 (Eger KPI eklenecekse buraya eklenebilir, simdilik temiz sayalim veya sadece ayri gosterelim)
+                # Sadece arizalari sayiyoruz gerisi temiz ya da uyku
+                temiz_sayisi += 1
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#a5b4fc; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
+                card_status = "sleep"
             else:
                 temiz_sayisi += 1
-                content = '<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#6ee7b7; font-family:Inter,sans-serif;">ID: ' + str(dev_id) + '  Sistem Stabil</span>' + badge("OK", "success") + '</div>'
-                alarm_card(dev_id, False, content)
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#6ee7b7; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
+                card_status = "ok"
+
+            if has_any_error_to_show:
+                parts = [card_status_html]
+
+                for h_list, reg_name in [
+                    (hatalar_107, "107"), (hatalar_109, "109"), (hatalar_111, "111"),
+                    (hatalar_112, "112"), (hatalar_114, "114"), (hatalar_115, "115"),
+                    (hatalar_116, "116"), (hatalar_117, "117"), (hatalar_118, "118"),
+                    (hatalar_119, "119"), (hatalar_120, "120"), (hatalar_121, "121"),
+                    (hatalar_122, "122")
+                ]:
+                    if h_list:
+                        parts.append(f'<div style="margin:8px 0 4px 0; font-weight:600; color:#94a3b8; font-family:Inter,sans-serif;">Register {reg_name} Hatalari:</div>')
+                        for bit, aciklama, sev in h_list:
+                            color = "#fca5a5" if sev == "CRITICAL" else ("#fb923c" if sev == "MAJOR" else "#fde047")
+                            bg_color = "rgba(239, 68, 68, 0.15)" if sev == "CRITICAL" else ("rgba(249, 115, 22, 0.15)" if sev == "MAJOR" else "rgba(234, 179, 8, 0.15)")
+                            b_color = "rgba(239, 68, 68, 0.25)" if sev == "CRITICAL" else ("rgba(249, 115, 22, 0.25)" if sev == "MAJOR" else "rgba(234, 179, 8, 0.25)")
+                            badge_html = f'<span style="background:{bg_color}; border:1px solid {b_color}; color:{color}; padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:bold; margin-left:8px;">{sev}</span>'
+                            parts.append(f'<div style="padding:3px 0 3px 16px; color:{color}; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit {bit}: {aciklama} {badge_html}</div>')
+
+                parts.append('<div style="margin-top:8px; font-size:0.75rem; color:#64748b; font-family:Inter,sans-serif;">Hex: R107=0x' + format(h107, "08X") + ' | R109=0x' + format(h109, "08X") + ' | R111=0x' + format(h111, "04X") + ' | R112=0x' + format(h112, "08X") + ' | R114=0x' + format(h114, "04X") + ' | R115=0x' + format(h115, "04X") + ' | R116=0x' + format(h116, "04X") + ' | R117=0x' + format(h117, "04X") + ' | R118=0x' + format(h118, "04X") + ' | R119=0x' + format(h119, "04X") + ' | R120=0x' + format(h120, "04X") + ' | R121=0x' + format(h121, "04X") + ' | R122=0x' + format(h122, "04X") + '</div>')
+                alarm_card(dev_id, card_status, ''.join(parts))
+            else:
+                if is_uyku:
+                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#a5b4fc; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
+                    alarm_card(dev_id, "sleep", content)
+                else:
+                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#6ee7b7; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
+                    alarm_card(dev_id, "ok", content)
 
         st.markdown("---")
         kpi_row([
@@ -213,8 +214,14 @@ with tab_gecmis:
             for kod, f_map, reg in h_maps:
                 if kod > 0:
                     bitler = hata_bit_coz(kod, f_map)
-                    for bit, aciklama in bitler:
-                        tum_hatalar.append(f"R{reg} B{bit}: {aciklama}")
+                    for bit, aciklama, sev in bitler:
+                        if sev == "CRITICAL":
+                            sev_icon = "🔴"
+                        elif sev == "MAJOR":
+                            sev_icon = "🟠"
+                        else:
+                            sev_icon = "🟡"
+                        tum_hatalar.append(f"{sev_icon} R{reg} B{bit}: {aciklama}")
             
             hata_metni = " | ".join(tum_hatalar) if tum_hatalar else "Bilinmeyen Hata"
             

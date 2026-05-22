@@ -398,7 +398,19 @@ div[data-testid="stDateInput"] > div > div > input {
     -webkit-backdrop-filter: blur(8px);
     box-shadow: 0 2px 16px rgba(16, 185, 129, 0.06);
 }
-
+.alarm-card-sleep {
+    background: linear-gradient(145deg, 
+        rgba(99, 102, 241, 0.08) 0%, 
+        rgba(30, 58, 138, 0.15) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-left: 4px solid #6366f1;
+    padding: 18px 22px;
+    border-radius: 14px;
+    margin: 10px 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 2px 16px rgba(99, 102, 241, 0.06);
+}
 
 /*  BADGE / CHIP  */
 .badge {
@@ -695,9 +707,14 @@ def kpi_row(items: list):
     st.markdown(f'<div class="kpi-container">{cards_html}</div>', unsafe_allow_html=True)
 
 
-def alarm_card(device_id: int, has_error: bool, content_html: str):
-    """Alarm kart olusturur."""
-    cls = "alarm-card-error" if has_error else "alarm-card-ok"
+def alarm_card(device_id: int, status: str, content_html: str):
+    """Alarm kart olusturur. status: 'error', 'ok', veya 'sleep' olabilir."""
+    if status == "error":
+        cls = "alarm-card-error"
+    elif status == "sleep":
+        cls = "alarm-card-sleep"
+    else:
+        cls = "alarm-card-ok"
     st.markdown(f'<div class="{cls}">{content_html}</div>', unsafe_allow_html=True)
 
 

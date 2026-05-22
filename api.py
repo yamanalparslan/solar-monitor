@@ -26,7 +26,7 @@ CRM Entegrasyonu:
         Header: X-API-Key: xxxxx  (.env'deki CRM_API_KEY)
 """
 
-from fastapi import FastAPI, HTTPException, Query, Depends, Header, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Depends, Header, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -38,12 +38,18 @@ import uvicorn
 import veritabani
 from websocket_manager import manager as ws_manager
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 # .env yükle
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass
+
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Solar Monitoring API",
@@ -52,6 +58,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ─── CORS — CRM'den erişim izni ───
 allowed_origin = os.getenv("CRM_ALLOWED_ORIGIN", "*")
@@ -71,7 +80,7 @@ veritabani.init_db()
 # API Key Doğrulama (basit)
 # ─────────────────────────────────────────────
 
-def verify_api_key(x_api_key: Optional[str] = Header(None), api_key: Optional[str] = Query(None)):
+def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), api_key: Optional[str] = Query(None)):
     """API Key doğrulama.
 
     .env'de CRM_API_KEY=gizli_anahtar olarak ayarlayın.
@@ -159,7 +168,8 @@ class AlarmInfo(BaseModel):
 # ─────────────────────────────────────────────
 
 @app.get("/", tags=["Sağlık"])
-def root():
+@limiter.limit("10/minute")
+def root(request: Request):
     """API sağlık kontrolü."""
     return {
         "message": "Solar Monitoring API Aktif",
@@ -181,7 +191,8 @@ def root():
 # ── 1. Sistem Durumu ──
 
 @app.get("/api/v1/status", response_model=SystemStatus, tags=["Sistem"])
-def get_system_status(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+@limiter.limit("60/minute")
+def get_system_status(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
     """Sistem genel durumu — CRM ana sayfa widget'ı için ideal."""
     durum = veritabani.tum_cihazlarin_son_durumu(fabrika)
     istatistik = veritabani.veritabani_istatistikleri(fabrika)
@@ -203,7 +214,8 @@ def get_system_status(fabrika: str = Query("mekanik", description="Fabrika ID"),
 # ── 2. Tüm Cihazların Anlık Durumu ──
 
 @app.get("/api/v1/devices", response_model=List[DeviceSummary], tags=["Cihaz"])
-def get_all_devices(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+@limiter.limit("120/minute")
+def get_all_devices(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
     """Tüm inverterlerin anlık durumunu döner."""
     rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
     if not rows:
@@ -237,7 +249,8 @@ def get_all_devices(fabrika: str = Query("mekanik", description="Fabrika ID"), _
 # ── 3. Tekil Cihaz Son Veriler ──
 
 @app.get("/api/v1/devices/{slave_id}/latest", response_model=List[DeviceData], tags=["Cihaz"])
-def get_device_latest(slave_id: int, limit: int = Query(10, ge=1, le=1000), fabrika: str = Query("mekanik"), _=Depends(verify_api_key)):
+@limiter.limit("120/minute")
+def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge=1, le=1000), fabrika: str = Query("mekanik"), _=Depends(verify_api_key)):
     """Belirtilen inverter için son N ölçüm verisini döner."""
     veriler = veritabani.son_verileri_getir(slave_id, limit=limit, fabrika_id=fabrika)
     if not veriler:
@@ -271,7 +284,9 @@ def get_device_latest(slave_id: int, limit: int = Query(10, ge=1, le=1000), fabr
 # ── 4. Tarih Aralığında Geçmiş Veri ──
 
 @app.get("/api/v1/devices/{slave_id}/history", response_model=DateRangeStats, tags=["Cihaz"])
+@limiter.limit("30/minute")
 def get_device_history(
+    request: Request,
     slave_id: int,
     baslangic: date = Query(..., description="Başlangıç tarihi (YYYY-MM-DD)"),
     bitis: date = Query(..., description="Bitiş tarihi (YYYY-MM-DD)"),
@@ -306,7 +321,9 @@ def get_device_history(
 # ── 5. Günlük Üretim Raporu ──
 
 @app.get("/api/v1/production/daily", response_model=DailyProduction, tags=["Üretim"])
+@limiter.limit("30/minute")
 def get_daily_production(
+    request: Request,
     tarih: date = Query(None, description="Tarih (YYYY-MM-DD), boş bırakılırsa bugün"),
     slave_id: Optional[int] = Query(None, description="İnverter ID (boş = tümü)"),
     fabrika: str = Query("mekanik", description="Fabrika ID"),
@@ -341,7 +358,9 @@ def get_daily_production(
 # ── 6. Tarih Aralığı Üretim İstatistikleri ──
 
 @app.get("/api/v1/production/range", response_model=DateRangeStats, tags=["Üretim"])
+@limiter.limit("20/minute")
 def get_production_range(
+    request: Request,
     baslangic: date = Query(..., description="Başlangıç tarihi (YYYY-MM-DD)"),
     bitis: date = Query(..., description="Bitiş tarihi (YYYY-MM-DD)"),
     slave_id: Optional[int] = Query(None, description="İnverter ID (boş = tümü)"),
@@ -376,7 +395,8 @@ def get_production_range(
 # ── 7. Aktif Alarmlar ──
 
 @app.get("/api/v1/alarms", response_model=List[AlarmInfo], tags=["Alarm"])
-def get_active_alarms(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+@limiter.limit("60/minute")
+def get_active_alarms(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
     """Aktif hata kodu olan cihazları listeler."""
     rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
     if not rows:
@@ -406,7 +426,8 @@ def get_active_alarms(fabrika: str = Query("mekanik", description="Fabrika ID"),
 # ── 8. DB İstatistikleri ──
 
 @app.get("/api/v1/stats", tags=["Sistem"])
-def get_db_stats(fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+@limiter.limit("20/minute")
+def get_db_stats(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
     """Veritabanı istatistikleri — kayıt sayısı, boyut, tarih aralığı."""
     istatistik = veritabani.veritabani_istatistikleri(fabrika)
     if not istatistik:
@@ -562,7 +583,9 @@ async def websocket_live(ws: WebSocket):
 
 
 @app.post("/ws/notify", tags=["WebSocket"])
-async def ws_notify(_=Depends(verify_api_key)):
+# Bu uç nokta (endpoint) genelde iç collector tarafından çağrılır. 
+# Dışa kapalı bir ağda çalıştığını varsayarak sınırlamıyoruz (ya da IP filtresi konulabilir).
+async def ws_notify(request: Request, _=Depends(verify_api_key)):
     """Collector'dan bildirim alır ve tüm WS istemcilerine yayınlar.
 
     Collector veri yazdıktan sonra bu endpoint'e POST yapar.
@@ -588,7 +611,8 @@ async def ws_notify(_=Depends(verify_api_key)):
 # ─── Canlı Dashboard HTML ───
 
 @app.get("/live", response_class=HTMLResponse, tags=["Dashboard"])
-async def live_dashboard(_=Depends(verify_api_key)):
+@limiter.limit("20/minute")
+async def live_dashboard(request: Request, _=Depends(verify_api_key)):
     """WebSocket canlı izleme dashboard'u.
 
     Tarayıcıdan http://SUNUCU_IP:8503/live?api_key=XXX açarak

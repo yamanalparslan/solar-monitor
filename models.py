@@ -445,12 +445,51 @@ class CihazDurumu:
         )
 
     @property
-    def durum_text(self) -> str:
-        if self.has_error:
-            return "ARIZA"
+    def has_critical_or_major_error(self) -> bool:
+        """Herhangi bir CRITICAL veya MAJOR alarm var mi?"""
+        for kod, f_map in [
+            (self.hata_kodu, FAULT_MAP_107), (self.hata_kodu_109, FAULT_MAP_109), 
+            (self.hata_kodu_111, FAULT_MAP_111), (self.hata_kodu_112, FAULT_MAP_112),
+            (self.hata_kodu_114, FAULT_MAP_114), (self.hata_kodu_115, FAULT_MAP_115),
+            (self.hata_kodu_116, FAULT_MAP_116), (self.hata_kodu_117, FAULT_MAP_117),
+            (self.hata_kodu_118, FAULT_MAP_118), (self.hata_kodu_119, FAULT_MAP_119),
+            (self.hata_kodu_120, FAULT_MAP_120), (self.hata_kodu_121, FAULT_MAP_121),
+            (self.hata_kodu_122, FAULT_MAP_122)
+        ]:
+            if kod:
+                faults = get_active_faults_with_severity(kod, f_map)
+                if any(sev in ["CRITICAL", "MAJOR"] for _, _, sev in faults):
+                    return True
+        return False
+
+    @property
+    def durum_sistematik(self) -> str:
+        if self.has_critical_or_major_error:
+            return "ARIZALI"
+        elif self.voltaj <= 5 and self.guc <= 0:
+            return "UYKU"
         elif self.guc > 0:
+            return "SAĞLIKLI"
+        return "ARIZALI"
+        
+    @property
+    def durum_renk(self) -> str:
+        durum = self.durum_sistematik
+        if durum == "ARIZALI":
+            return "#ef4444"
+        elif durum == "UYKU":
+            return "#6366f1"
+        else:
+            return "#10b981"
+            
+    @property
+    def durum_text(self) -> str:
+        durum = self.durum_sistematik
+        if durum == "SAĞLIKLI" and self.active_fault_count > 0:
+            return f"AKTİF ({self.active_fault_count} UYARI)"
+        elif durum == "SAĞLIKLI":
             return "AKTİF"
-        return "BEKLEMEDE"
+        return durum
 
 
 def get_active_faults(kod: int, fault_map: dict) -> list:
@@ -463,5 +502,37 @@ def get_active_faults(kod: int, fault_map: dict) -> list:
             aciklama = fault_map.get(bit, "")
             if aciklama and aciklama.lower() != "spare":
                 hatalar.append((bit, aciklama))
+    return hatalar
+
+def determine_severity(aciklama: str) -> str:
+    """Hata açıklamasına göre önem derecesini (CRITICAL, MAJOR, WARNING) belirler."""
+    text = aciklama.lower()
+    
+    # 1. Warning kelimeleri (Öncelikli olarak yakalanması istenenler)
+    if any(k in text for k in ["warning", "derating", "high humidity", "low cabinet temperature", "abnormal string"]):
+        return "WARNING"
+        
+    # 2. Major kelimeleri
+    if any(k in text for k in ["major", "anomaly", "abnormal"]):
+        return "MAJOR"
+        
+    # 3. Critical kelimeleri (veya yukarıda yakalanamayan önemli hatalar)
+    if any(k in text for k in ["fault", "error", "failed", "overvoltage", "undervoltage", "overcurrent", "reverse connection", "backfeed", "low insulation", "unbalance", "outage"]):
+        return "CRITICAL"
+        
+    # Belirsiz ise güvenli tarafta kalıp CRITICAL varsay.
+    return "CRITICAL"
+
+def get_active_faults_with_severity(kod: int, fault_map: dict) -> list:
+    """Belirtilen hata kodunu çözümler ve (bit, aciklama, severity) formatında listeler."""
+    hatalar = []
+    if not kod:
+        return hatalar
+    for bit in range(32):
+        if (kod >> bit) & 1:
+            aciklama = fault_map.get(bit, "")
+            if aciklama and aciklama.lower() != "spare":
+                sev = determine_severity(aciklama)
+                hatalar.append((bit, aciklama, sev))
     return hatalar
 
