@@ -242,6 +242,6 @@ with tab_gecmis:
                 with tab:
                     start_idx = i * items_per_page
                     end_idx = start_idx + items_per_page
-                    st.dataframe(df.iloc[start_idx:end_idx], use_container_width=True, hide_index=True)
+                    st.dataframe(df.iloc[start_idx:end_idx], width='stretch', hide_index=True)
         else:
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)

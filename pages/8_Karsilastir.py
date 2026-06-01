@@ -100,7 +100,7 @@ if secili:
             bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8')
         ),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
 
     # zet tablo
     if ozet_veriler:

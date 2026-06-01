@@ -39,17 +39,19 @@ st.caption(f"Aktif ayar kaynagi: {runtime_config.source}")
 
 section_header("", "Veritabani")
 try:
-    import sqlite3
-    conn = sqlite3.connect(veritabani.DB_NAME)
-    oc = conn.execute("SELECT COUNT(*) FROM olcumler").fetchone()[0]
-    sz = os.path.getsize(veritabani.DB_NAME) if os.path.exists(veritabani.DB_NAME) else 0
+    conn = veritabani.get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM olcumler")
+    oc = cursor.fetchone()[0]
+    cursor.execute("SELECT pg_database_size(current_database())")
+    sz = cursor.fetchone()[0]
     conn.close()
     kpi_row([
         {"value": format(oc, ','), "label": "Olcum", "color": "#22d3ee"},
         {"value": str(round(sz/1024)) + " KB", "label": "DB", "color": "#a855f7"},
     ])
 except Exception as e:
-    st.error("DB Hatas: " + str(e))
+    st.error("DB Hatası: " + str(e))
 
 section_header("", "MQTT")
 c1, c2 = st.columns(2)

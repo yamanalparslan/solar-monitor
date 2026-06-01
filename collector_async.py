@@ -84,34 +84,27 @@ async def read_device_async(
             await client.connect()
             await asyncio.sleep(0.1)
 
-        # ── 1. ADIM: TEMEL METRIKLERI DINAMIK BLOK OLARAK OKU ──
-        metrik_adresleri = [
-            config["akim_addr"],
-            config["volt_addr"],
-            config["guc_addr"],
-            config["isi_addr"],
-            config["uretim_addr"]
-        ]
-        start_addr = min(metrik_adresleri)
-        end_addr = max(metrik_adresleri)
-        count = (end_addr - start_addr) + 1
+        # ── 1. ADIM: TEMEL METRIKLERI TEK TEK OKU ──
+        # Bazi inverterlar cok genis register araliklarini (or: 26'dan 93'e kadar 68 kayit)
+        # tek blokta okumaya izin vermez. Bu yuzden parcali okuyoruz.
+        async def read_single_reg(addr):
+            rr = await client.read_holding_registers(address=addr, count=1, slave=slave_id)
+            if rr.isError():
+                rr = await client.read_input_registers(address=addr, count=1, slave=slave_id)
+            if rr.isError():
+                raise Exception(f"Reg {addr} read error")
+            return rr.registers[0]
 
-        await asyncio.sleep(0.05)
-        rr_temel = await client.read_holding_registers(address=start_addr, count=count, slave=slave_id)
-        
-        if rr_temel.isError():
-            # Input register denemesi (fallback)
-            rr_temel = await client.read_input_registers(address=start_addr, count=count, slave=slave_id)
-            if rr_temel.isError():
-                return dev_id, ip_address, slave_id, None
-
-        regs = rr_temel.registers
-        
-        raw_akim = regs[config["akim_addr"] - start_addr]
-        raw_volt = regs[config["volt_addr"] - start_addr]
-        raw_guc  = regs[config["guc_addr"] - start_addr]
-        raw_isi  = regs[config["isi_addr"] - start_addr]
-        raw_uretim = regs[config["uretim_addr"] - start_addr]
+        try:
+            await asyncio.sleep(0.05)
+            raw_akim = await read_single_reg(config["akim_addr"])
+            raw_volt = await read_single_reg(config["volt_addr"])
+            raw_guc  = await read_single_reg(config["guc_addr"])
+            raw_isi  = await read_single_reg(config["isi_addr"])
+            raw_uretim = await read_single_reg(config["uretim_addr"])
+        except Exception as e:
+            logger.error(f"IP {ip_address} ID {slave_id} baglanti/okuma hatasi: {e}")
+            return dev_id, ip_address, slave_id, None
 
         # ── Deger Donusumleri ──
         val_volt = utils.to_signed16(raw_volt) * config["volt_scale"]
@@ -122,6 +115,8 @@ async def read_device_async(
 
         # Eğer inverter gücü 0 gönderiyorsa, volt * akım hesabı ile sahte güç üretilmesini engelledik.
         # Bu sayede Modbus'ta 0 ise panelde de tam olarak 0 görünür.
+
+        logger.info(f"IP {ip_address} ID {slave_id} okunan: V={val_volt}, I={val_akim}, P={val_guc}, T={val_isi}, U={val_uretim}")
 
         if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
             return dev_id, ip_address, slave_id, None
@@ -134,32 +129,22 @@ async def read_device_async(
             "modbus_uretim": val_uretim,
         }
 
-        # ── 2. ADIM: ALARMLARI DINAMIK BLOK OLARAK OKU ──
+        # ── 2. ADIM: ALARMLARI TEK TEK OKU ──
         if config["alarm_registers"]:
-            alarm_start = min(reg["addr"] for reg in config["alarm_registers"])
-            max_reg = max(config["alarm_registers"], key=lambda r: r["addr"])
-            alarm_count = (max_reg["addr"] + max_reg.get("count", 2)) - alarm_start
-
-            await asyncio.sleep(0.05)
-            rr_alarm = await client.read_holding_registers(address=alarm_start, count=alarm_count, slave=slave_id)
-            
-            if not rr_alarm.isError():
-                alarm_regs = rr_alarm.registers
-                for reg in config["alarm_registers"]:
-                    a_addr = reg["addr"]
-                    a_count = reg.get("count", 2)
-                    offset = a_addr - alarm_start
-                    
-                    if offset >= 0 and (offset + a_count) <= len(alarm_regs):
-                        if a_count == 2:
-                            # Inverters usually map the first register to bits 0-15 and the second to bits 16-31 for alarms
-                            veriler[reg["key"]] = (alarm_regs[offset + 1] << 16) | alarm_regs[offset]
-                        else:
-                            veriler[reg["key"]] = alarm_regs[offset]
+            for reg in config["alarm_registers"]:
+                a_addr = reg["addr"]
+                a_count = reg.get("count", 2)
+                
+                rr_alarm = await client.read_holding_registers(address=a_addr, count=a_count, slave=slave_id)
+                if rr_alarm.isError():
+                    rr_alarm = await client.read_input_registers(address=a_addr, count=a_count, slave=slave_id)
+                
+                if not rr_alarm.isError() and len(rr_alarm.registers) == a_count:
+                    if a_count == 2:
+                        veriler[reg["key"]] = (rr_alarm.registers[1] << 16) | rr_alarm.registers[0]
                     else:
-                        veriler[reg["key"]] = 0
-            else:
-                for reg in config["alarm_registers"]:
+                        veriler[reg["key"]] = rr_alarm.registers[0]
+                else:
                     veriler[reg["key"]] = 0
 
         return dev_id, ip_address, slave_id, veriler

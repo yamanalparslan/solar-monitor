@@ -7,14 +7,13 @@ sağlıklı çalışıp çalışmadığını test eder (Exit code kullanır).
 """
 
 import sys
-import sqlite3
 import veritabani
 from modbus_diagnostics import load_runtime_config, probe_target
 
 def test_database():
     """Veritabanı erişimini ve tablo yapısını doğrular."""
     try:
-        conn = sqlite3.connect(veritabani.DB_NAME)
+        conn = veritabani.get_db_connection()
         cursor = conn.cursor()
         
         # Sadece basit bir sorgu atarak DB okumasını doğrula

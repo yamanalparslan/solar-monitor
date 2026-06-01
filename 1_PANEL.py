@@ -55,11 +55,11 @@ if st.session_state.fabrika_id is None:
     with col2:
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🔧 MEKANIK FABRIKA", use_container_width=True, type="primary"):
+            if st.button("🔧 MEKANIK FABRIKA", width='stretch', type="primary"):
                 st.session_state.fabrika_id = "mekanik"
                 st.rerun()
         with c2:
-            if st.button("🏭 URETIM FABRIKASI", use_container_width=True, type="primary"):
+            if st.button("🏭 URETIM FABRIKASI", width='stretch', type="primary"):
                 st.session_state.fabrika_id = "uretim"
                 st.rerun()
     st.stop()
@@ -86,7 +86,7 @@ def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
 with st.sidebar:
     # Fabrika değiştirme butonu
     st.caption(f"{fab_info['ikon']} {fab_info['ad'].upper()}")
-    if st.button("🔄 FABRIKA DEGISTIR", use_container_width=True):
+    if st.button("🔄 FABRIKA DEGISTIR", width='stretch'):
         st.session_state.fabrika_id = None
         st.rerun()
     current_user = get_current_user()
@@ -230,9 +230,9 @@ with st.sidebar:
             )
 
         if user_role == "admin":
-            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", type="primary", width='stretch')
         else:
-            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", disabled=True, use_container_width=True)
+            submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", disabled=True, width='stretch')
             st.warning("Ayarları kaydetmek için 'admin' yetkisi gereklidir.")
 
     if submitted:
@@ -531,8 +531,28 @@ def render_summary_section():
         # Son 7 günlük üretim tablosu
         from datetime import datetime, timedelta
         bugun = datetime.now()
-        gunler_headers = []
-        uretim_degerleri = []
+        
+        gunler_headers = ["INVERTER"]
+        for i in range(6, -1, -1):
+            gunler_headers.append((bugun - timedelta(days=i)).strftime('%d %b'))
+            
+        tablo_verileri = []
+        
+        # Her inverter icin ayri satir
+        for dev_id in active_dev_ids:
+            row = [f"ID {dev_id}"]
+            for i in range(6, -1, -1):
+                t = bugun - timedelta(days=i)
+                gun_str = t.strftime('%Y-%m-%d')
+                ur = veritabani.gunluk_uretim_hesapla(gun_str, slave_id=dev_id, fabrika_id=fab_id)
+                val = 0
+                if ur:
+                    val = ur.get('modbus_uretim', 0) if ur.get('modbus_uretim', 0) > 0 else ur.get('uretim_kwh', 0)
+                row.append(f"{val:.1f}")
+            tablo_verileri.append(row)
+            
+        # Toplam satiri
+        toplam_row = ["TOPLAM"]
         for i in range(6, -1, -1):
             t = bugun - timedelta(days=i)
             gun_str = t.strftime('%Y-%m-%d')
@@ -540,11 +560,13 @@ def render_summary_section():
             val = 0
             if ur:
                 val = ur.get('modbus_uretim', 0) if ur.get('modbus_uretim', 0) > 0 else ur.get('uretim_kwh', 0)
-            gunler_headers.append(t.strftime('%d %b'))
-            uretim_degerleri.append(f"{val:.1f}")
+            toplam_row.append(f"{val:.1f}")
             
-        st.markdown("<div style='text-align: center; color: #94a3b8; margin-bottom: 10px; font-size: 14px; font-weight: bold; font-family: Inter;'>SON 7 GÜN TOPLAM ÜRETİM (kWh)</div>", unsafe_allow_html=True)
-        solar_table([uretim_degerleri], headers=gunler_headers)
+        if len(active_dev_ids) > 1:
+            tablo_verileri.append(toplam_row)
+            
+        st.markdown("<div style='text-align: center; color: #94a3b8; margin-bottom: 10px; font-size: 14px; font-weight: bold; font-family: Inter;'>SON 7 GÜN ÜRETİM ÖZETİ (kWh)</div>", unsafe_allow_html=True)
+        solar_table(tablo_verileri, headers=gunler_headers)
 
 render_summary_section()
 
@@ -592,10 +614,10 @@ with tab_tekli:
                     df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                     df_det = df_det.set_index("timestamp")
 
-                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW"), use_container_width=True, config={"displayModeBar": False})
-                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V"), use_container_width=True, config={"displayModeBar": False})
-                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), use_container_width=True, config={"displayModeBar": False})
-                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), use_container_width=True, config={"displayModeBar": False})
+                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW"), width='stretch', config={"displayModeBar": False})
+                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V"), width='stretch', config={"displayModeBar": False})
+                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch', config={"displayModeBar": False})
+                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch', config={"displayModeBar": False})
             except Exception as e:
                 st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
 
@@ -616,7 +638,7 @@ with tab_karsilastirma:
             
             st.plotly_chart(
                 create_comparison_chart(k_ids, k_metrik, metrik_labels[k_metrik], colors),
-                use_container_width=True, config={"displayModeBar": False}
+                width='stretch', config={"displayModeBar": False}
             )
 
     render_karsilastirma_grafik(karsilastirma_ids, karsilastirma_metrik)

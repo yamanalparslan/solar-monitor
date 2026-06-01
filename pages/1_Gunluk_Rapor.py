@@ -62,7 +62,7 @@ def goster_rapor():
     with col_time:
         st.caption(f"Son Güncelleme: {datetime.now().strftime('%H:%M:%S')}")
     with col_btn:
-        if st.button("Şimdi Yenile", use_container_width=True):
+        if st.button("Şimdi Yenile", width='stretch'):
             st.rerun()
     tarih_str = secilen_tarih.strftime('%Y-%m-%d')
 
@@ -160,7 +160,7 @@ def goster_rapor():
                     align='left',
                 ),
             )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
             st.markdown("<br>", unsafe_allow_html=True)
 
         # solar_table ile premium HTML tablo

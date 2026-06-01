@@ -46,7 +46,7 @@ with col_status:
 with col_action:
     st.markdown("<br>", unsafe_allow_html=True)
     if not is_running:
-        if st.button("Simulator Baslat", type="primary", use_container_width=True):
+        if st.button("Simulator Baslat", type="primary", width='stretch'):
             script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'sanal_inverter.py'))
             try:
                 if sys.platform == "win32":
@@ -59,7 +59,7 @@ with col_action:
             except Exception as e:
                 st.error(f"Baslatilamadi: {e}")
     else:
-        if st.button("Simulator Durdur", type="secondary", use_container_width=True):
+        if st.button("Simulator Durdur", type="secondary", width='stretch'):
             if st.session_state.sim_process:
                 st.session_state.sim_process.terminate()
                 st.session_state.sim_process = None
@@ -94,7 +94,7 @@ with col_status_c:
 with col_action_c:
     st.markdown("<br>", unsafe_allow_html=True)
     if not is_collector_running():
-        if st.button("Collector Baslat", type="primary", use_container_width=True, key="start_coll"):
+        if st.button("Collector Baslat", type="primary", width='stretch', key="start_coll"):
             script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'collector_async.py'))
             try:
                 if sys.platform == "win32":
@@ -107,7 +107,7 @@ with col_action_c:
             except Exception as e:
                 st.error(f"Hata: {e}")
     else:
-        if st.button("Collector Durdur", type="secondary", use_container_width=True, key="stop_coll"):
+        if st.button("Collector Durdur", type="secondary", width='stretch', key="stop_coll"):
             st.session_state.collector_process.terminate()
             st.session_state.collector_process = None
             time.sleep(1)

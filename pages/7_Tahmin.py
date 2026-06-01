@@ -162,5 +162,5 @@ if st.button("Simülasyonu Başlat", type="primary"):
             legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'))
         )
 
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
         toast("Analiz tamamlandi. Model meteorolojik tahminler ile panel fizyolojisini birlestirdi.", tipo="success")
