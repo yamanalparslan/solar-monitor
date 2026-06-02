@@ -327,7 +327,7 @@ st.title("GUNES ENERJISI SANTRALI IZLEME")
 section_header("", "CANLI FILO DURUMU", "TUM CIHAZLARIN ANLIK DURUM OZETI")
 
 # --- Plotly Grafik Yardmclar ---
-def create_plotly_chart(df, column, title, color, unit="", ymax=None):
+def create_plotly_chart(df, column, title, color, unit="", ymax=None, **kwargs):
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=df.index, y=df[column],
@@ -356,7 +356,8 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
             zeroline=False,
             tickformat="%H:%M",
             showline=True,
-            linecolor='rgba(255,255,255,0.1)'
+            linecolor='rgba(255,255,255,0.1)',
+            range=kwargs.get('fixed_x_range', None)
         ),
         yaxis=yaxis_params,
         font=dict(color='#94a3b8', family='Inter'),
@@ -370,6 +371,44 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None):
     )
     return fig
 
+def create_multi_plotly_chart(df, columns, names, colors, title, unit="", ymax=None, **kwargs):
+    fig = go.Figure()
+    
+    for col, name, color in zip(columns, names, colors):
+        fig.add_trace(go.Scatter(
+            x=df.index, y=df[col],
+            mode='lines',
+            line=dict(color=color, width=2, shape='spline', smoothing=1.3),
+            hovertemplate=f'%{{x|%H:%M:%S}}<br>{name}: %{{y:.1f}} {unit}<extra></extra>',
+            name=name
+        ))
+
+    yaxis_params = dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero')
+    if ymax is not None:
+        yaxis_params['range'] = [0, ymax]
+
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(10, 14, 26, 0.3)',
+        margin=dict(l=0, r=0, t=30, b=0),
+        height=kwargs.get('height', 220),
+        title=dict(text=title, font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
+        xaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            tickformat="%H:%M",
+            showline=True,
+            linecolor='rgba(255,255,255,0.1)',
+            range=kwargs.get('fixed_x_range', None)
+        ),
+        yaxis=yaxis_params,
+        font=dict(color='#94a3b8', family='Inter'),
+        hovermode='x unified',
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    return fig
+
+
 
 
 def create_comparison_chart(ids, metric, title, colors, ymax=None):
@@ -379,7 +418,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         if not data:
             continue
             
-        cols = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
+        cols = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
         df = pd.DataFrame(data, columns=cols[:len(data[0])] if data else cols)
         if "sicaklik" in df.columns:
             df["sicaklik"] = pd.to_numeric(df["sicaklik"], errors='coerce').apply(utils.normalize_temperature_value)
@@ -576,31 +615,46 @@ st.markdown("---")
 tab_tekli, tab_karsilastirma = st.tabs([" TEKLI CIHAZ", "KARSILASTIRMA"])
 
 with tab_tekli:
-    col_sel, col_info = st.columns([1, 3])
+    col_sel, col_metrik, col_info = st.columns([1, 1, 2])
     with col_sel:
         selected_id = st.selectbox("CIHAZ SEC:", active_dev_ids, key="tek_cihaz")
+    with col_metrik:
+        secilen_metrik = st.selectbox("INCELE:", ["GUC", "VOLTAJ", "AKIM", "SICAKLIK"], key="tek_metrik")
     with col_info:
         st.info(" DETAYLI ARIZA KODLARINI GORMEK ICIN SOL MENUDEN ALARMLAR SAYFASINA GIDIN.")
 
     @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
-    def render_tek_cihaz_grafikleri(sel_id):
-        row1_c1, row1_c2 = st.columns(2)
-        row2_c1, row2_c2 = st.columns(2)
-        chart_guc = row1_c1.empty()
-        chart_volt = row1_c2.empty()
-        chart_akim = row2_c1.empty()
-        chart_isi = row2_c2.empty()
+    def render_tek_cihaz_grafikleri(sel_id, metrik_isim):
+        chart_area = st.empty()
 
         detail_data = veritabani.son_verileri_getir(sel_id, limit=2880, fabrika_id=fab_id)
         if detail_data:
             try:
-                cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122"]
+                cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
                 df_det = pd.DataFrame(detail_data, columns=cols_det[:len(detail_data[0])] if detail_data else cols_det)
                 
                 df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], format='mixed', errors='coerce')
                 df_det["guc"] = pd.to_numeric(df_det["guc"], errors='coerce')
                 df_det["voltaj"] = pd.to_numeric(df_det["voltaj"], errors='coerce')
+                
+                if "voltaj_ab" in df_det.columns:
+                    df_det["voltaj_ab"] = pd.to_numeric(df_det["voltaj_ab"], errors='coerce')
+                    df_det["voltaj_bc"] = pd.to_numeric(df_det["voltaj_bc"], errors='coerce')
+                    df_det["voltaj_ca"] = pd.to_numeric(df_det["voltaj_ca"], errors='coerce')
+                else:
+                    df_det["voltaj_ab"] = df_det["voltaj"]
+                    df_det["voltaj_bc"] = df_det["voltaj"]
+                    df_det["voltaj_ca"] = df_det["voltaj"]
+                    
                 df_det["akim"] = pd.to_numeric(df_det["akim"], errors='coerce')
+                if "akim_a" in df_det.columns:
+                    df_det["akim_a"] = pd.to_numeric(df_det["akim_a"], errors='coerce')
+                    df_det["akim_b"] = pd.to_numeric(df_det["akim_b"], errors='coerce')
+                    df_det["akim_c"] = pd.to_numeric(df_det["akim_c"], errors='coerce')
+                else:
+                    df_det["akim_a"] = df_det["akim"]
+                    df_det["akim_b"] = df_det["akim"]
+                    df_det["akim_c"] = df_det["akim"]
                 df_det["sicaklik"] = pd.to_numeric(df_det["sicaklik"], errors='coerce').apply(utils.normalize_temperature_value)
                 df_det = df_det[
                     ~(
@@ -614,14 +668,52 @@ with tab_tekli:
                     df_det = df_det.dropna(subset=['timestamp']).sort_values("timestamp", ascending=True)
                     df_det = df_det.set_index("timestamp")
 
-                    chart_guc.plotly_chart(create_plotly_chart(df_det, "guc", " GUC", "rgb(255,215,0)", "kW"), width='stretch', config={"displayModeBar": False})
-                    chart_volt.plotly_chart(create_plotly_chart(df_det, "voltaj", " VOLTAJ", "rgb(99,102,241)", "V"), width='stretch', config={"displayModeBar": False})
-                    chart_akim.plotly_chart(create_plotly_chart(df_det, "akim", "AKIM", "rgb(16,185,129)", "A"), width='stretch', config={"displayModeBar": False})
-                    chart_isi.plotly_chart(create_plotly_chart(df_det, "sicaklik", "SICAKLIK", "rgb(239,83,80)", "C"), width='stretch', config={"displayModeBar": False})
+                    from datetime import datetime, time
+                    bugun = datetime.now().date()
+                    start_time = datetime.combine(bugun, time.min)
+                    end_time = datetime.combine(bugun, time.max)
+                    fixed_range = [start_time, end_time]
+
+                    if metrik_isim == "VOLTAJ":
+                        # 3 Fazli voltaj grafigi cizelim
+                        fig = create_multi_plotly_chart(
+                            df_det, 
+                            columns=["voltaj_ab", "voltaj_bc", "voltaj_ca"],
+                            names=["Faz AB", "Faz BC", "Faz CA"],
+                            colors=["rgb(239,68,68)", "rgb(34,197,94)", "rgb(59,130,246)"], # Kirmizi, Yesil, Mavi
+                            title=" VOLTAJ (3 FAZ)",
+                            unit="V",
+                            ymax=None,
+                            fixed_x_range=fixed_range,
+                            height=350
+                        )
+                    elif metrik_isim == "AKIM":
+                        # 3 Fazli akim grafigi cizelim
+                        fig = create_multi_plotly_chart(
+                            df_det, 
+                            columns=["akim_a", "akim_b", "akim_c"],
+                            names=["Faz A", "Faz B", "Faz C"],
+                            colors=["rgb(245,158,11)", "rgb(16,185,129)", "rgb(99,102,241)"], # Turuncu, Yesil, Indigo
+                            title=" AKIM (3 FAZ)",
+                            unit="A",
+                            ymax=None,
+                            fixed_x_range=fixed_range,
+                            height=350
+                        )
+                    else:
+                        metrik_map = {
+                            "GUC": ("guc", " GUC", "rgb(255,215,0)", "kW", None),
+                            "SICAKLIK": ("sicaklik", "SICAKLIK", "rgb(239,83,80)", "C", None)
+                        }
+                        col, title, color, unit, height = metrik_map[metrik_isim]
+                        fig = create_plotly_chart(df_det, col, title, color, unit, ymax=None, fixed_x_range=fixed_range)
+                        fig.update_layout(height=350)
+                        
+                    chart_area.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
             except Exception as e:
                 st.error(f"GRAFIK VERISI ISLENIRKEN HATA: {e}")
 
-    render_tek_cihaz_grafikleri(selected_id)
+    render_tek_cihaz_grafikleri(selected_id, secilen_metrik)
 
 with tab_karsilastirma:
     karsilastirma_ids = st.multiselect("KARSILASTIRILACAK CIHAZLAR:", active_dev_ids, default=active_dev_ids[:3])

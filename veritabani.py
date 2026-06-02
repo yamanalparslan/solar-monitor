@@ -57,10 +57,27 @@ def init_db():
             hata_kodu_120 INTEGER DEFAULT 0,
             hata_kodu_121 INTEGER DEFAULT 0,
             hata_kodu_122 INTEGER DEFAULT 0,
-            modbus_uretim DOUBLE PRECISION DEFAULT 0
+            modbus_uretim DOUBLE PRECISION DEFAULT 0,
+            voltaj_ab DOUBLE PRECISION DEFAULT 0,
+            voltaj_bc DOUBLE PRECISION DEFAULT 0,
+            voltaj_ca DOUBLE PRECISION DEFAULT 0,
+            akim_a DOUBLE PRECISION DEFAULT 0,
+            akim_b DOUBLE PRECISION DEFAULT 0,
+            akim_c DOUBLE PRECISION DEFAULT 0
         )
     """)
     
+    # Migration: Add new columns if they don't exist
+    try:
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS voltaj_ab DOUBLE PRECISION DEFAULT 0;")
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS voltaj_bc DOUBLE PRECISION DEFAULT 0;")
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS voltaj_ca DOUBLE PRECISION DEFAULT 0;")
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS akim_a DOUBLE PRECISION DEFAULT 0;")
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS akim_b DOUBLE PRECISION DEFAULT 0;")
+        cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS akim_c DOUBLE PRECISION DEFAULT 0;")
+    except Exception as e:
+        print(f"Migration hatasi: {e}")
+
     # Index: zaman
     cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_zaman 
@@ -181,6 +198,7 @@ def tum_ayarlari_oku(fabrika_id: str):
 
 def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
+    if not conn: return
     cursor = conn.cursor()
     simdi = datetime.now()
     
@@ -198,23 +216,66 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     hk_121 = data.get('hata_kodu_121', 0)
     hk_122 = data.get('hata_kodu_122', 0)
     
-    cursor.execute("""
-        INSERT INTO olcumler (
-            fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, modbus_uretim,
-            hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, 
-            hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, 
-            hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+    try:
+        cursor.execute("""
+            INSERT INTO olcumler (
+                fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, modbus_uretim,
+                hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, 
+                hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, 
+                hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122,
+                voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            fabrika_id, slave_id, simdi, 
+            data.get('guc', 0), data.get('voltaj', 0), data.get('akim', 0), data.get('sicaklik', 0), data.get('modbus_uretim', 0),
+            hk_107, hk_109, hk_111, hk_112, 
+            hk_114, hk_115, hk_116, hk_117, 
+            hk_118, hk_119, hk_120, hk_121, hk_122,
+            data.get('voltaj_ab', 0), data.get('voltaj_bc', 0), data.get('voltaj_ca', 0),
+            data.get('akim_a', 0), data.get('akim_b', 0), data.get('akim_c', 0)
+        ))
+        conn.commit()
+    except Exception as e:
+        print(f"[ERROR] veri_ekle hatasi: {e}")
+    finally:
+        conn.close()
+
+def veri_kaydet(fabrika_id, slave_id, guc, voltaj, akim, sicaklik, modbus_uretim=0, hatalar=None, voltaj_ab=0, voltaj_bc=0, voltaj_ca=0, akim_a=0, akim_b=0, akim_c=0):
+    if hatalar is None: hatalar = []
+    try:
+        conn = get_db_connection()
+        if not conn: return
+        cursor = conn.cursor()
+        
+        simdi = datetime.now()
+        
+        # 1. Olcum tablosuna kaydet
+        query = """
+            INSERT INTO olcumler (
+                fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, modbus_uretim,
+                hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114,
+                hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118,
+                hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122,
+                voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s
+            )
+        """
+        vals = (
+            fabrika_id, slave_id, simdi, guc, voltaj, akim, sicaklik, modbus_uretim,
+            109 in hatalar, 111 in hatalar, 112 in hatalar, 114 in hatalar,
+            115 in hatalar, 116 in hatalar, 117 in hatalar, 118 in hatalar,
+            119 in hatalar, 120 in hatalar, 121 in hatalar, 122 in hatalar,
+            voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """, (
-        fabrika_id, slave_id, simdi, 
-        data.get('guc', 0), data.get('voltaj', 0), data.get('akim', 0), data.get('sicaklik', 0), data.get('modbus_uretim', 0),
-        hk_107, hk_109, hk_111, hk_112, 
-        hk_114, hk_115, hk_116, hk_117, 
-        hk_118, hk_119, hk_120, hk_121, hk_122
-    ))
-    conn.commit()
-    conn.close()
+        cursor.execute(query, vals)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[ERROR] veri_kaydet hatasi: {e}")
 
 def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     try:
@@ -224,9 +285,10 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
         return []
 
     conn = get_db_connection()
+    if not conn: return []
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122
+        SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122, voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
         FROM olcumler WHERE fabrika_id = %s AND slave_id = %s
         ORDER BY zaman DESC LIMIT %s
     """, (fabrika_id, slave_id, limit))

@@ -233,6 +233,23 @@ with tab_gecmis:
             
         df = pd.DataFrame(tablo_verisi)
         
+        import io
+        # Ust kisma indirme butonu koyalim
+        c1, c2 = st.columns([4, 1])
+        with c2:
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Alarm_Gecmisi')
+            excel_data = output.getvalue()
+            
+            st.download_button(
+                label="📥 Excel Olarak Indir",
+                data=excel_data,
+                file_name=f"alarm_gecmisi_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        
         items_per_page = 10
         total_pages = max(1, (len(df) - 1) // items_per_page + 1)
         

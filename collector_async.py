@@ -97,8 +97,16 @@ async def read_device_async(
 
         try:
             await asyncio.sleep(0.05)
-            raw_akim = await read_single_reg(config["akim_addr"])
-            raw_volt = await read_single_reg(config["volt_addr"])
+            # Akim_addr ayarini yok say, 25-26-27'yi hardcode oku:
+            raw_akim_a = await read_single_reg(25)
+            raw_akim_b = await read_single_reg(26)
+            raw_akim_c = await read_single_reg(27)
+            
+            # Volt_addr ayarini yok say, 28-29-30'u hardcode oku:
+            raw_volt_ab = await read_single_reg(28)
+            raw_volt_bc = await read_single_reg(29)
+            raw_volt_ca = await read_single_reg(30)
+            
             raw_guc  = await read_single_reg(config["guc_addr"])
             raw_isi  = await read_single_reg(config["isi_addr"])
             raw_uretim = await read_single_reg(config["uretim_addr"])
@@ -107,8 +115,20 @@ async def read_device_async(
             return dev_id, ip_address, slave_id, None
 
         # ── Deger Donusumleri ──
-        val_volt = utils.to_signed16(raw_volt) * config["volt_scale"]
-        val_akim = utils.to_signed16(raw_akim) * config["akim_scale"]
+        val_volt_ab = utils.to_signed16(raw_volt_ab) * config["volt_scale"]
+        val_volt_bc = utils.to_signed16(raw_volt_bc) * config["volt_scale"]
+        val_volt_ca = utils.to_signed16(raw_volt_ca) * config["volt_scale"]
+        
+        # Voltaj icin genel bir ortalama deger de tutalim
+        val_volt = round((val_volt_ab + val_volt_bc + val_volt_ca) / 3, 2)
+        
+        val_akim_a = utils.to_signed16(raw_akim_a) * config["akim_scale"]
+        val_akim_b = utils.to_signed16(raw_akim_b) * config["akim_scale"]
+        val_akim_c = utils.to_signed16(raw_akim_c) * config["akim_scale"]
+        
+        # Akim icin genel bir ortalama deger de tutalim
+        val_akim = round((val_akim_a + val_akim_b + val_akim_c) / 3, 2)
+        
         val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
         val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
         val_uretim = float(raw_uretim) * config["uretim_scale"]
@@ -124,7 +144,13 @@ async def read_device_async(
         veriler = {
             "guc":      val_guc,
             "voltaj":   val_volt,
+            "voltaj_ab": val_volt_ab,
+            "voltaj_bc": val_volt_bc,
+            "voltaj_ca": val_volt_ca,
             "akim":     val_akim,
+            "akim_a": val_akim_a,
+            "akim_b": val_akim_b,
+            "akim_c": val_akim_c,
             "sicaklik": val_isi,
             "modbus_uretim": val_uretim,
         }
