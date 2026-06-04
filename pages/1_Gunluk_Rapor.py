@@ -133,14 +133,10 @@ def goster_rapor():
         
         if not df_trend.empty:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(
+            fig.add_trace(go.Bar(
                 x=df_trend["Tarih"], y=df_trend["Üretim"],
-                mode='lines+markers',
                 name='Günlük Üretim',
-                line=dict(color="#f59e0b", width=3, shape='spline', smoothing=1.3),
-                marker=dict(size=8, color="#f59e0b", line=dict(width=2, color="#1e293b")),
-                fill='tozeroy',
-                fillcolor='rgba(245, 158, 11, 0.05)',
+                marker_color="#f59e0b",
                 hovertemplate='%{x}<br>Üretim: %{y:.1f} kWh<extra></extra>'
             ))
             fig.update_layout(
@@ -162,6 +158,52 @@ def goster_rapor():
             )
             st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
             st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- O GUNUN GUC PROFILI ---
+            profil_tarih = secilen_tarih.strftime('%Y-%m-%d')
+            conn = veritabani.get_db_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT date_trunc('hour', zaman) as saat, AVG(guc)
+                    FROM olcumler 
+                    WHERE fabrika_id = %s AND DATE(zaman) = %s AND guc > 0
+                    GROUP BY saat
+                    ORDER BY saat
+                """, (fab_id, profil_tarih))
+                rows = cursor.fetchall()
+                conn.close()
+                
+                if rows:
+                    df_guc = pd.DataFrame(rows, columns=['saat', 'ort_guc'])
+                    fig_guc = go.Figure()
+                    fig_guc.add_trace(go.Scatter(
+                        x=df_guc['saat'], y=df_guc['ort_guc'],
+                        mode='lines',
+                        name='Ortalama Güç',
+                        line=dict(color="#10b981", width=3, shape='spline', smoothing=1.3),
+                        fill='tozeroy',
+                        fillcolor='rgba(16, 185, 129, 0.05)',
+                        hovertemplate='%{x|%H:%M}<br>Güç: %{y:.1f} W<extra></extra>'
+                    ))
+                    fig_guc.update_layout(
+                        paper_bgcolor='rgba(0,0,0,0)',
+                        plot_bgcolor='rgba(10, 14, 26, 0.3)',
+                        margin=dict(l=0, r=0, t=35, b=0),
+                        height=280,
+                        title=dict(text=f"{profil_tarih} Tarihli Ortalama Güç Profili (Saatlik)", font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
+                        xaxis=dict(showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
+                        yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero', title="Güç (W)"),
+                        font=dict(color='#94a3b8', family='Inter'),
+                        hovermode='x unified',
+                        hoverlabel=dict(
+                            bgcolor='rgba(15, 23, 42, 0.95)',
+                            bordercolor='rgba(16, 185, 129, 0.5)',
+                            font=dict(family='Inter', size=13, color='#f8fafc'),
+                        )
+                    )
+                    st.plotly_chart(fig_guc, width='stretch', config={"displayModeBar": False})
+                    st.markdown("<br>", unsafe_allow_html=True)
 
         # solar_table ile premium HTML tablo
         tablo_headers = ["CIHAZ", "URETIM (kWh)", "ORT. GUC (W)", "MAKS. GUC (W)", "ORT. VOLTAJ (V)", "ORT. ISI (C)", "HATA", "CALISMA (sa)"]
