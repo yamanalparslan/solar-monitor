@@ -8,7 +8,20 @@ import socket
 from typing import Callable
 
 from pymodbus.client import ModbusTcpClient
-from pymodbus.framer import Framer
+try:
+    from pymodbus.framer import Framer
+except ImportError:
+    from pymodbus.framer.socket_framer import ModbusSocketFramer
+    from pymodbus.framer.rtu_framer import ModbusRtuFramer
+    class FramerCompatMember:
+        def __init__(self, value, framer_class):
+            self.value = value
+            self.framer_class = framer_class
+    class FramerCompat:
+        SOCKET = FramerCompatMember("socket", ModbusSocketFramer)
+        RTU = FramerCompatMember("rtu", ModbusRtuFramer)
+    Framer = FramerCompat
+
 
 import utils
 import veritabani
@@ -188,11 +201,12 @@ def probe_target(
     slave_ids = build_slave_scan_list(runtime_config, exhaustive=exhaustive)
 
     for framer in framers:
+        framer_to_pass = getattr(framer, "framer_class", framer)
         client = client_factory(
             runtime_config.target_ip,
             port=runtime_config.target_port,
             timeout=timeout,
-            framer=framer,
+            framer=framer_to_pass,
         )
         try:
             connected = client.connect()

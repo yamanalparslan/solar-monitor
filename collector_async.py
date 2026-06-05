@@ -73,111 +73,193 @@ from collector_config import load_config, start_daily_webhook_thread  # noqa: F4
 # Cihaz Okuma (Dinamik Blok Okuma - Async)
 # ─────────────────────────────────────────────
 
+async def read_registers_smart(client: AsyncModbusTcpClient, start_addr: int, count: int, slave_id: int):
+    """
+    Önce holding registers olarak blok halinde okumayı dener.
+    Hata alırsa veya boşsa input registers olarak okumayı dener.
+    Hepsinde hata alırsa None döner.
+    """
+    try:
+        rr = await client.read_holding_registers(address=start_addr, count=count, slave=slave_id)
+        if rr is not None and not rr.isError() and getattr(rr, "registers", None):
+            return rr.registers
+    except Exception:
+        pass
+
+    try:
+        rr = await client.read_input_registers(address=start_addr, count=count, slave=slave_id)
+        if rr is not None and not rr.isError() and getattr(rr, "registers", None):
+            return rr.registers
+    except Exception:
+        pass
+
+    return None
+
+
 async def read_device_async(
-    client: AsyncModbusTcpClient, dev_id: int, ip_address: str, slave_id: int, config: dict
+    client: AsyncModbusTcpClient, dev_id: int, ip_address: str, slave_id: int, config: dict, lock: asyncio.Lock
 ) -> tuple:
     """
     Tek bir inverter cihazindan tum verileri asenkron ve dinamik blok okuma ile alir.
     """
     try:
-        if not client.connected:
-            await client.connect()
-            await asyncio.sleep(0.1)
+        async with lock:
+            if not client.connected:
+                await client.connect()
+                await asyncio.sleep(0.1)
+            if not client.connected:
+                raise Exception("TCP connection failed to establish")
 
-        # ── 1. ADIM: TEMEL METRIKLERI TEK TEK OKU ──
-        # Bazi inverterlar cok genis register araliklarini (or: 26'dan 93'e kadar 68 kayit)
-        # tek blokta okumaya izin vermez. Bu yuzden parcali okuyoruz.
-        async def read_single_reg(addr):
-            rr = await client.read_holding_registers(address=addr, count=1, slave=slave_id)
-            if rr.isError():
-                rr = await client.read_input_registers(address=addr, count=1, slave=slave_id)
-            if rr.isError():
-                raise Exception(f"Reg {addr} read error")
-            return rr.registers[0]
+            # ── 1. ADIM: TEMEL METRIKLERI OKU (BLOK VEYA FALLBACK) ──
+            metrik_adresleri = [25, 26, 27, 28, 29, 30, config["guc_addr"], config["isi_addr"], config["uretim_addr"]]
+            start_addr = min(metrik_adresleri)
+            end_addr = max(metrik_adresleri)
+            count = (end_addr - start_addr) + 1
 
-        try:
-            await asyncio.sleep(0.05)
-            # Akim_addr ayarini yok say, 25-26-27'yi hardcode oku:
-            raw_akim_a = await read_single_reg(25)
-            raw_akim_b = await read_single_reg(26)
-            raw_akim_c = await read_single_reg(27)
+            regs = None
+            if count < 50:
+                await asyncio.sleep(0.05)
+                regs = await read_registers_smart(client, start_addr, count, slave_id)
+
+            if regs is not None and len(regs) == count:
+                # Blok okuma başarılı! Değerleri diziden al
+                raw_akim_a = regs[25 - start_addr]
+                raw_akim_b = regs[26 - start_addr]
+                raw_akim_c = regs[27 - start_addr]
+                raw_volt_ab = regs[28 - start_addr]
+                raw_volt_bc = regs[29 - start_addr]
+                raw_volt_ca = regs[30 - start_addr]
+                raw_guc = regs[config["guc_addr"] - start_addr]
+                raw_isi = regs[config["isi_addr"] - start_addr]
+                raw_uretim = regs[config["uretim_addr"] - start_addr]
+            else:
+                # Blok okuma başarısız veya çok geniş, tek tek okuma fallback'i
+                async def read_single_reg(addr):
+                    rr = await client.read_holding_registers(address=addr, count=1, slave=slave_id)
+                    if rr.isError():
+                        rr = await client.read_input_registers(address=addr, count=1, slave=slave_id)
+                    if rr.isError():
+                        raise Exception(f"Reg {addr} read error")
+                    return rr.registers[0]
+
+                try:
+                    await asyncio.sleep(0.05)
+                    # Akim_addr ayarini yok say, 25-26-27'yi hardcode oku:
+                    raw_akim_a = await read_single_reg(25)
+                    raw_akim_b = await read_single_reg(26)
+                    raw_akim_c = await read_single_reg(27)
+                    
+                    # Volt_addr ayarini yok say, 28-29-30'u hardcode oku:
+                    raw_volt_ab = await read_single_reg(28)
+                    raw_volt_bc = await read_single_reg(29)
+                    raw_volt_ca = await read_single_reg(30)
+                    
+                    raw_guc  = await read_single_reg(config["guc_addr"])
+                    raw_isi  = await read_single_reg(config["isi_addr"])
+                    raw_uretim = await read_single_reg(config["uretim_addr"])
+                except Exception as e:
+                    logger.error(f"IP {ip_address} ID {slave_id} baglanti/okuma hatasi: {e}")
+                    try:
+                        client.close()
+                    except Exception:
+                        pass
+                    return dev_id, ip_address, slave_id, None
+
+            # ── Deger Donusumleri ──
+            val_volt_ab = utils.to_signed16(raw_volt_ab) * config["volt_scale"]
+            val_volt_bc = utils.to_signed16(raw_volt_bc) * config["volt_scale"]
+            val_volt_ca = utils.to_signed16(raw_volt_ca) * config["volt_scale"]
             
-            # Volt_addr ayarini yok say, 28-29-30'u hardcode oku:
-            raw_volt_ab = await read_single_reg(28)
-            raw_volt_bc = await read_single_reg(29)
-            raw_volt_ca = await read_single_reg(30)
+            # Voltaj icin genel bir ortalama deger de tutalim
+            val_volt = round((val_volt_ab + val_volt_bc + val_volt_ca) / 3, 2)
             
-            raw_guc  = await read_single_reg(config["guc_addr"])
-            raw_isi  = await read_single_reg(config["isi_addr"])
-            raw_uretim = await read_single_reg(config["uretim_addr"])
-        except Exception as e:
-            logger.error(f"IP {ip_address} ID {slave_id} baglanti/okuma hatasi: {e}")
-            return dev_id, ip_address, slave_id, None
+            val_akim_a = utils.to_signed16(raw_akim_a) * config["akim_scale"]
+            val_akim_b = utils.to_signed16(raw_akim_b) * config["akim_scale"]
+            val_akim_c = utils.to_signed16(raw_akim_c) * config["akim_scale"]
+            
+            # Akim icin genel bir ortalama deger de tutalim
+            val_akim = round((val_akim_a + val_akim_b + val_akim_c) / 3, 2)
+            
+            val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
+            val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
+            val_uretim = float(raw_uretim) * config["uretim_scale"]
 
-        # ── Deger Donusumleri ──
-        val_volt_ab = utils.to_signed16(raw_volt_ab) * config["volt_scale"]
-        val_volt_bc = utils.to_signed16(raw_volt_bc) * config["volt_scale"]
-        val_volt_ca = utils.to_signed16(raw_volt_ca) * config["volt_scale"]
-        
-        # Voltaj icin genel bir ortalama deger de tutalim
-        val_volt = round((val_volt_ab + val_volt_bc + val_volt_ca) / 3, 2)
-        
-        val_akim_a = utils.to_signed16(raw_akim_a) * config["akim_scale"]
-        val_akim_b = utils.to_signed16(raw_akim_b) * config["akim_scale"]
-        val_akim_c = utils.to_signed16(raw_akim_c) * config["akim_scale"]
-        
-        # Akim icin genel bir ortalama deger de tutalim
-        val_akim = round((val_akim_a + val_akim_b + val_akim_c) / 3, 2)
-        
-        val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
-        val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
-        val_uretim = float(raw_uretim) * config["uretim_scale"]
+            logger.info(f"IP {ip_address} ID {slave_id} okunan: V={val_volt}, I={val_akim}, P={val_guc}, T={val_isi}, U={val_uretim}")
 
-        # Eğer inverter gücü 0 gönderiyorsa, volt * akım hesabı ile sahte güç üretilmesini engelledik.
-        # Bu sayede Modbus'ta 0 ise panelde de tam olarak 0 görünür.
+            if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
+                return dev_id, ip_address, slave_id, None
 
-        logger.info(f"IP {ip_address} ID {slave_id} okunan: V={val_volt}, I={val_akim}, P={val_guc}, T={val_isi}, U={val_uretim}")
+            veriler = {
+                "guc":      val_guc,
+                "voltaj":   val_volt,
+                "voltaj_ab": val_volt_ab,
+                "voltaj_bc": val_volt_bc,
+                "voltaj_ca": val_volt_ca,
+                "akim":     val_akim,
+                "akim_a": val_akim_a,
+                "akim_b": val_akim_b,
+                "akim_c": val_akim_c,
+                "sicaklik": val_isi,
+                "modbus_uretim": val_uretim,
+            }
 
-        if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
-            return dev_id, ip_address, slave_id, None
+            # ── 2. ADIM: ALARMLARI OKU (BLOK VEYA FALLBACK) ──
+            if config["alarm_registers"]:
+                alarm_adresleri = [reg["addr"] for reg in config["alarm_registers"]]
+                alarm_start = min(alarm_adresleri)
+                alarm_end = max(alarm_adresleri) + 2
+                alarm_count = alarm_end - alarm_start
 
-        veriler = {
-            "guc":      val_guc,
-            "voltaj":   val_volt,
-            "voltaj_ab": val_volt_ab,
-            "voltaj_bc": val_volt_bc,
-            "voltaj_ca": val_volt_ca,
-            "akim":     val_akim,
-            "akim_a": val_akim_a,
-            "akim_b": val_akim_b,
-            "akim_c": val_akim_c,
-            "sicaklik": val_isi,
-            "modbus_uretim": val_uretim,
-        }
+                alarm_regs = None
+                if alarm_count < 50:
+                    await asyncio.sleep(0.05)
+                    alarm_regs = await read_registers_smart(client, alarm_start, alarm_count, slave_id)
 
-        # ── 2. ADIM: ALARMLARI TEK TEK OKU ──
-        if config["alarm_registers"]:
-            for reg in config["alarm_registers"]:
-                a_addr = reg["addr"]
-                a_count = reg.get("count", 2)
-                
-                rr_alarm = await client.read_holding_registers(address=a_addr, count=a_count, slave=slave_id)
-                if rr_alarm.isError():
-                    rr_alarm = await client.read_input_registers(address=a_addr, count=a_count, slave=slave_id)
-                
-                if not rr_alarm.isError() and len(rr_alarm.registers) == a_count:
-                    if a_count == 2:
-                        veriler[reg["key"]] = (rr_alarm.registers[1] << 16) | rr_alarm.registers[0]
-                    else:
-                        veriler[reg["key"]] = rr_alarm.registers[0]
+                if alarm_regs is not None and len(alarm_regs) == alarm_count:
+                    # Blok okuma başarılı!
+                    for reg in config["alarm_registers"]:
+                        a_addr = reg["addr"]
+                        a_count = reg.get("count", 2)
+                        offset = a_addr - alarm_start
+                        
+                        if offset >= 0 and (offset + a_count) <= len(alarm_regs):
+                            if a_count == 2:
+                                veriler[reg["key"]] = (alarm_regs[offset + 1] << 16) | alarm_regs[offset]
+                            else:
+                                veriler[reg["key"]] = alarm_regs[offset]
+                        else:
+                            veriler[reg["key"]] = 0
                 else:
-                    veriler[reg["key"]] = 0
+                    # Blok okuma başarısız, tek tek okuma fallback'i
+                    try:
+                        for reg in config["alarm_registers"]:
+                            a_addr = reg["addr"]
+                            a_count = reg.get("count", 2)
+                            
+                            rr_alarm = await client.read_holding_registers(address=a_addr, count=a_count, slave=slave_id)
+                            if rr_alarm.isError():
+                                rr_alarm = await client.read_input_registers(address=a_addr, count=a_count, slave=slave_id)
+                            
+                            if not rr_alarm.isError() and len(rr_alarm.registers) == a_count:
+                                if a_count == 2:
+                                    veriler[reg["key"]] = (rr_alarm.registers[1] << 16) | rr_alarm.registers[0]
+                                else:
+                                    veriler[reg["key"]] = rr_alarm.registers[0]
+                            else:
+                                veriler[reg["key"]] = 0
+                    except Exception as e:
+                        logger.warning(f"IP {ip_address} ID {slave_id} alarm okuma hatasi: {e}. Mevcut veriler kaydedilecek.")
 
-        return dev_id, ip_address, slave_id, veriler
+            return dev_id, ip_address, slave_id, veriler
 
     except Exception as exc:
         logger.error("IP %s ID %d baglanti/okuma hatasi: %s", ip_address, slave_id, exc)
+        try:
+            client.close()
+        except Exception:
+            pass
         return dev_id, ip_address, slave_id, None
+
 
 
 # ─────────────────────────────────────────────
@@ -220,6 +302,7 @@ async def main_loop():
 
     fab_configs: dict = {}
     clients: dict = {}
+    locks: dict = {}
 
     for fab_id, fab_info in FABRIKALAR.items():
         cfg = load_config(fab_id)
@@ -257,11 +340,24 @@ async def main_loop():
                     clients[client_key] = AsyncModbusTcpClient(ip, port=port, timeout=3.0)
                 client = clients[client_key]
                 
+                if client_key not in locks:
+                    locks[client_key] = asyncio.Lock()
+                lock = locks[client_key]
+                
                 for slave_id in device["slave_ids"]:
                     dev_id = slave_id
                     
-                    tasks.append(read_device_async(client, dev_id, ip, slave_id, cfg))
-                    task_info.append(fab_id)
+                    task = asyncio.wait_for(
+                        read_device_async(client, dev_id, ip, slave_id, cfg, lock),
+                        timeout=30.0
+                    )
+                    tasks.append(task)
+                    task_info.append({
+                        "fab_id": fab_id,
+                        "ip": ip,
+                        "slave_id": slave_id,
+                        "dev_id": dev_id
+                    })
 
         # Eski (kullanilmayan) istemcileri kapatarak memory/socket leak engelleme
         stale_keys = set(clients.keys()) - active_client_keys
@@ -273,9 +369,15 @@ async def main_loop():
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for i, result in enumerate(results):
-            fab_id = task_info[i]
+            info = task_info[i]
+            fab_id = info["fab_id"]
+            ip_address = info["ip"]
+            slave_id = info["slave_id"]
+            dev_id = info["dev_id"]
+
             if isinstance(result, Exception):
-                logger.error("Gorev istisnasi: %s", result)
+                logger.error(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) - Gorev hatasi: {result}")
+                print(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | [HATA/ZAMAN ASIMI] - {result}")
                 continue
 
             dev_id, ip_address, slave_id, data = result
