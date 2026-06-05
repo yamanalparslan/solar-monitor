@@ -5,11 +5,11 @@ Collector ile ayni aktif ayarlari kullanir.
 
 from modbus_diagnostics import load_runtime_config, probe_target
 
-def run_diagnostic():
+def run_diagnostic(fabrika_id):
     print("=" * 50)
-    print("MODBUS BAGLANTI TESHIS ARACI")
+    print(f"MODBUS BAGLANTI TESHIS ARACI ({fabrika_id.upper()})")
     print("=" * 50)
-    runtime_config = load_runtime_config()
+    runtime_config = load_runtime_config(fabrika_id)
     print(f"Aktif Kaynak: {runtime_config.source}")
     print(f"Hedef IP    : {runtime_config.target_ip}")
     print(f"Hedef Port  : {runtime_config.target_port}")
@@ -23,7 +23,7 @@ def run_diagnostic():
     )
     print("-" * 50)
 
-    probe_result = probe_target(runtime_config, exhaustive=True, timeout=0.7)
+    probe_result = probe_target(runtime_config, exhaustive=True, timeout=1.0)
 
     if not probe_result["tcp_open"]:
         print("[!] KRITIK: TCP portu kapali veya IP yanlis.")
@@ -47,7 +47,8 @@ def run_diagnostic():
             print(f"   [-] {error}")
 
     print("\n" + "=" * 50)
-    print("TESHIS TAMAMLANDI")
+    print("TESHIS TAMAMLANDI\n")
 
 if __name__ == "__main__":
-    run_diagnostic()
+    for fab in ["mekanik", "uretim"]:
+        run_diagnostic(fab)

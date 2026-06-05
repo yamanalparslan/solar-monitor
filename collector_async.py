@@ -25,6 +25,7 @@ import utils
 import veritabani
 from config import setup_logging
 from pymodbus.client import AsyncModbusTcpClient
+import pymodbus.exceptions
 
 # UTF-8 stdout (Windows uyumlulugu)
 if hasattr(sys.stdout, "buffer"):
@@ -139,7 +140,9 @@ async def read_device_async(
                     if rr.isError():
                         rr = await client.read_input_registers(address=addr, count=1, slave=slave_id)
                     if rr.isError():
-                        raise Exception(f"Reg {addr} read error")
+                        if isinstance(rr, pymodbus.exceptions.ModbusIOException):
+                            raise rr
+                        raise Exception(f"Reg {addr} read error: {rr}")
                     return rr.registers[0]
 
                 try:
@@ -240,7 +243,12 @@ async def read_device_async(
                             if rr_alarm.isError():
                                 rr_alarm = await client.read_input_registers(address=a_addr, count=a_count, slave=slave_id)
                             
-                            if not rr_alarm.isError() and len(rr_alarm.registers) == a_count:
+                            if rr_alarm.isError():
+                                if isinstance(rr_alarm, pymodbus.exceptions.ModbusIOException):
+                                    logger.warning(f"IP {ip_address} ID {slave_id} alarm timeout, stopping alarm reads.")
+                                    break
+                                veriler[reg["key"]] = 0
+                            elif len(rr_alarm.registers) == a_count:
                                 if a_count == 2:
                                     veriler[reg["key"]] = (rr_alarm.registers[1] << 16) | rr_alarm.registers[0]
                                 else:
@@ -337,7 +345,7 @@ async def main_loop():
                 active_client_keys.add(client_key)
                 
                 if client_key not in clients:
-                    clients[client_key] = AsyncModbusTcpClient(ip, port=port, timeout=3.0)
+                    clients[client_key] = AsyncModbusTcpClient(ip, port=port, timeout=2.0, retries=3)
                 client = clients[client_key]
                 
                 if client_key not in locks:
@@ -349,7 +357,7 @@ async def main_loop():
                     
                     task = asyncio.wait_for(
                         read_device_async(client, dev_id, ip, slave_id, cfg, lock),
-                        timeout=30.0
+                        timeout=90.0
                     )
                     tasks.append(task)
                     task_info.append({
@@ -359,14 +367,13 @@ async def main_loop():
                         "dev_id": dev_id
                     })
 
-        # Eski (kullanilmayan) istemcileri kapatarak memory/socket leak engelleme
-        stale_keys = set(clients.keys()) - active_client_keys
-        for key in stale_keys:
-            client_to_remove = clients.pop(key)
-            client_to_remove.close()
-            logger.info("Kullanilmayan baglanti temizlendi: %s", key)
-
         results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Tüm istemcileri kapatarak cihazların kilitlenmesini engelleme ve portu serbest bırakma
+        for key in list(clients.keys()):
+            client_to_close = clients.pop(key)
+            client_to_close.close()
+            logger.info("Baglanti kapatildi ve serbest birakildi: %s", key)
 
         for i, result in enumerate(results):
             info = task_info[i]
@@ -376,8 +383,12 @@ async def main_loop():
             dev_id = info["dev_id"]
 
             if isinstance(result, Exception):
-                logger.error(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) - Gorev hatasi: {result}")
-                print(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | [HATA/ZAMAN ASIMI] - {result}")
+                err_msg = str(result)
+                if isinstance(result, asyncio.TimeoutError):
+                    err_msg = "Task TimeoutError (90s)"
+                
+                logger.error(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) - Gorev hatasi: {err_msg}")
+                print(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | [HATA/ZAMAN ASIMI] - {err_msg}")
                 continue
 
             dev_id, ip_address, slave_id, data = result
