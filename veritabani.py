@@ -11,15 +11,19 @@ def get_db_connection():
     user = os.getenv("POSTGRES_USER", "solar_user")
     password = os.getenv("POSTGRES_PASSWORD", "solar_pass_2026")
 
-    # psycopg2 default is thread-safe for new connections
-    conn = psycopg2.connect(
-        host=host,
-        port=port,
-        dbname=dbname,
-        user=user,
-        password=password
-    )
-    return conn
+    try:
+        # psycopg2 default is thread-safe for new connections
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            dbname=dbname,
+            user=user,
+            password=password
+        )
+        return conn
+    except Exception as e:
+        print(f"[DB_HATA] PostgreSQL bağlantısı kurulamadı: {e}")
+        return None
 
 # ── Fabrika Tanımları ──
 FABRIKALAR = {

@@ -111,62 +111,42 @@ async def read_device_async(
             if not client.connected:
                 raise Exception("TCP connection failed to establish")
 
-            # ── 1. ADIM: TEMEL METRIKLERI OKU (BLOK VEYA FALLBACK) ──
-            metrik_adresleri = [25, 26, 27, 28, 29, 30, config["guc_addr"], config["isi_addr"], config["uretim_addr"]]
-            start_addr = min(metrik_adresleri)
-            end_addr = max(metrik_adresleri)
-            count = (end_addr - start_addr) + 1
-
-            regs = None
-            if count < 50:
+            # ── 1. ADIM: TEMEL METRIKLERI PARCALI BLOK OLARAK OKU ──
+            try:
+                # Blok 1: Akim ve Voltaj (25-30 arası, 6 register)
                 await asyncio.sleep(0.05)
-                regs = await read_registers_smart(client, start_addr, count, slave_id)
+                regs_chunk1 = await read_registers_smart(client, 25, 6, slave_id)
+                if not regs_chunk1 or len(regs_chunk1) < 6:
+                    raise Exception("Akim/Voltaj (25-30) okunamadi")
+                
+                raw_akim_a, raw_akim_b, raw_akim_c = regs_chunk1[0], regs_chunk1[1], regs_chunk1[2]
+                raw_volt_ab, raw_volt_bc, raw_volt_ca = regs_chunk1[3], regs_chunk1[4], regs_chunk1[5]
 
-            if regs is not None and len(regs) == count:
-                # Blok okuma başarılı! Değerleri diziden al
-                raw_akim_a = regs[25 - start_addr]
-                raw_akim_b = regs[26 - start_addr]
-                raw_akim_c = regs[27 - start_addr]
-                raw_volt_ab = regs[28 - start_addr]
-                raw_volt_bc = regs[29 - start_addr]
-                raw_volt_ca = regs[30 - start_addr]
-                raw_guc = regs[config["guc_addr"] - start_addr]
-                raw_isi = regs[config["isi_addr"] - start_addr]
-                raw_uretim = regs[config["uretim_addr"] - start_addr]
-            else:
-                # Blok okuma başarısız veya çok geniş, tek tek okuma fallback'i
-                async def read_single_reg(addr):
-                    rr = await client.read_holding_registers(address=addr, count=1, slave=slave_id)
-                    if rr.isError():
-                        rr = await client.read_input_registers(address=addr, count=1, slave=slave_id)
-                    if rr.isError():
-                        if isinstance(rr, pymodbus.exceptions.ModbusIOException):
-                            raise rr
-                        raise Exception(f"Reg {addr} read error: {rr}")
-                    return rr.registers[0]
+                # Blok 2: Uretim (Tekil okuma, bazi inverterlarda hata verebilir diye soft-fail)
+                await asyncio.sleep(0.05)
+                regs_uretim = await read_registers_smart(client, config["uretim_addr"], 1, slave_id)
+                raw_uretim = regs_uretim[0] if (regs_uretim and len(regs_uretim) >= 1) else 0
 
+                # Blok 3: Guc ve Isi Adresleri
+                p_start = min(config["guc_addr"], config["isi_addr"])
+                p_end = max(config["guc_addr"], config["isi_addr"])
+                p_count = (p_end - p_start) + 1
+                
+                await asyncio.sleep(0.05)
+                regs_power = await read_registers_smart(client, p_start, p_count, slave_id)
+                if not regs_power or len(regs_power) < p_count:
+                    raise Exception(f"Guc/Isi ({p_start}-{p_end}) okunamadi")
+                
+                raw_guc = regs_power[config["guc_addr"] - p_start]
+                raw_isi = regs_power[config["isi_addr"] - p_start]
+                
+            except Exception as e:
+                logger.error(f"IP {ip_address} ID {slave_id} veri okuma hatasi: {e}")
                 try:
-                    await asyncio.sleep(0.05)
-                    # Akim_addr ayarini yok say, 25-26-27'yi hardcode oku:
-                    raw_akim_a = await read_single_reg(25)
-                    raw_akim_b = await read_single_reg(26)
-                    raw_akim_c = await read_single_reg(27)
-                    
-                    # Volt_addr ayarini yok say, 28-29-30'u hardcode oku:
-                    raw_volt_ab = await read_single_reg(28)
-                    raw_volt_bc = await read_single_reg(29)
-                    raw_volt_ca = await read_single_reg(30)
-                    
-                    raw_guc  = await read_single_reg(config["guc_addr"])
-                    raw_isi  = await read_single_reg(config["isi_addr"])
-                    raw_uretim = await read_single_reg(config["uretim_addr"])
-                except Exception as e:
-                    logger.error(f"IP {ip_address} ID {slave_id} baglanti/okuma hatasi: {e}")
-                    try:
-                        client.close()
-                    except Exception:
-                        pass
-                    return dev_id, ip_address, slave_id, None
+                    client.close()
+                except Exception:
+                    pass
+                return dev_id, ip_address, slave_id, None
 
             # ── Deger Donusumleri ──
             val_volt_ab = utils.to_signed16(raw_volt_ab) * config["volt_scale"]
