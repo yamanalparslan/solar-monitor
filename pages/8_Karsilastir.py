@@ -45,7 +45,7 @@ if secili:
     ozet_veriler = []
 
     for i, did in enumerate(secili):
-        data = veritabani.son_verileri_getir(did, limit=200, fabrika_id=fab_id)
+        data = veritabani.son_verileri_getir(did, limit=2880, fabrika_id=fab_id)
         if not data:
             continue
         
