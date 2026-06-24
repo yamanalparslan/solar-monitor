@@ -166,12 +166,14 @@ def create_plotly_chart(df, column, title, color, unit="", ymax=None, **kwargs):
 def create_multi_plotly_chart(df, columns, names, colors, title, unit="", ymax=None, **kwargs):
     fig = go.Figure()
     
-    for col, name, color in zip(columns, names, colors):
+    glow_colors = ['rgba(99, 102, 241, 0.25)', 'rgba(236, 72, 153, 0.25)', 'rgba(16, 185, 129, 0.25)', 'rgba(245, 158, 11, 0.25)', 'rgba(168, 85, 247, 0.25)', 'rgba(249, 115, 22, 0.25)', 'rgba(34, 211, 238, 0.25)', 'rgba(232, 121, 249, 0.25)']
+    
+    for i, (col, name, color) in enumerate(zip(columns, names, colors)):
         # Glow effect trace
         fig.add_trace(go.Scatter(
             x=df.index, y=df[col],
             mode='lines',
-            line=dict(color=color.replace(')', ',0.2)').replace('rgb', 'rgba').replace('#', 'rgba(').replace('10b981', '16,185,129').replace('6366f1', '99,102,241').replace('ec4899', '236,72,153').replace('f59e0b', '245,158,11'), width=7, shape='spline', smoothing=1.3),
+            line=dict(color=glow_colors[i % len(glow_colors)], width=7, shape='spline', smoothing=1.3),
             hoverinfo='skip',
             showlegend=False
         ))
@@ -246,7 +248,18 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         
 
 
+        glow_colors = ['rgba(99, 102, 241, 0.25)', 'rgba(236, 72, 153, 0.25)', 'rgba(16, 185, 129, 0.25)', 'rgba(245, 158, 11, 0.25)', 'rgba(168, 85, 247, 0.25)', 'rgba(249, 115, 22, 0.25)', 'rgba(34, 211, 238, 0.25)', 'rgba(232, 121, 249, 0.25)']
         color = colors[i % len(colors)]
+        
+        # Glow trace
+        fig.add_trace(go.Scatter(
+            x=df["timestamp"], y=df[metric],
+            mode='lines',
+            line=dict(color=glow_colors[i % len(glow_colors)], width=7, shape='spline', smoothing=1.3),
+            hoverinfo='skip',
+            showlegend=False
+        ))
+        
         fig.add_trace(go.Scatter(
             x=df["timestamp"], y=df[metric],
             mode='lines', name=f'ID {dev_id}',
