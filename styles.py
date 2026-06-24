@@ -71,8 +71,9 @@ html, body, .stApp {
     }
 }
 
-.block-container {
-    animation: fadeInUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+/* Apply animation to elements inside block-container EXCEPT the parent of top nav */
+.block-container > div > div > div:not(:has(.top-nav-wrapper)) {
+    animation: fadeInUp 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
 }
 
 /*  SCROLLBAR  */
@@ -733,10 +734,11 @@ def render_top_nav():
         position: sticky;
         top: 0;
         z-index: 999999;
-        background: rgba(255, 255, 255, 0.45) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+        background: rgba(255, 255, 255, 0.65) !important;
+        backdrop-filter: blur(40px) saturate(200%) !important;
+        -webkit-backdrop-filter: blur(40px) saturate(200%) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.5) !important;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.08) !important;
         padding: 12px 24px;
         margin-top: -60px; /* Streamlit ust boslugunu kapatmak icin */
         margin-bottom: 24px;

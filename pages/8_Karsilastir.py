@@ -42,6 +42,7 @@ DB_COLUMNS = ["ts", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu
 
 if secili:
     colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
+    glow_colors = ['rgba(99, 102, 241, 0.25)', 'rgba(236, 72, 153, 0.25)', 'rgba(16, 185, 129, 0.25)', 'rgba(245, 158, 11, 0.25)', 'rgba(168, 85, 247, 0.25)', 'rgba(249, 115, 22, 0.25)', 'rgba(34, 211, 238, 0.25)', 'rgba(232, 121, 249, 0.25)']
     fig = go.Figure()
     ozet_veriler = []
 
@@ -69,7 +70,7 @@ if secili:
         fig.add_trace(go.Scatter(
             x=df['ts'], y=df[metrik],
             mode='lines',
-            line=dict(color=colors[i % len(colors)].replace(')', ',0.25)').replace('rgb', 'rgba').replace('#', 'rgba(').replace('10b981', '16,185,129').replace('6366f1', '99,102,241').replace('ec4899', '236,72,153').replace('f59e0b', '245,158,11'), width=7, shape='spline', smoothing=1.3),
+            line=dict(color=glow_colors[i % len(glow_colors)], width=7, shape='spline', smoothing=1.3),
             hoverinfo='skip',
             showlegend=False
         ))
