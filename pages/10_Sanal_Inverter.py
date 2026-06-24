@@ -1,14 +1,15 @@
 import streamlit as st
 import sys, os, time, socket, subprocess
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from styles import inject_glossy_css, section_header, badge
+from styles import render_top_nav, inject_glossy_css, section_header, badge
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="SANAL INVERTER", page_icon="", layout="wide")
 inject_glossy_css()
+render_top_nav()
 if not check_auth():
     st.stop()
-logout_button()
+
 
 st.title("SANAL INVERTER (SIMULATOR)")
 section_header("", "SISTEM SIMULASYONU", "FIZIKSEL PANELLERE BAGLANMADAN TEST VERILERI URETIR")
@@ -35,12 +36,12 @@ with col_status:
     if is_running:
         st.markdown(f'<div class="glossy-card" style="border-left: 4px solid #10b981; padding:20px;">'
                     f'<div style="font-size:1.4rem; color:#10b981; font-weight:700;">SIMULATOR AKTIF</div>'
-                    f'<div style="color:#94a3b8; margin-top:8px;">Sanal inverter arka planda basariyla calisiyor ve 5020 portundan Modbus TCP verisi yayinliyor. Collector bu portu okuyabilir.</div>'
+                    f'<div style="color:#86868B; margin-top:8px;">Sanal inverter arka planda basariyla calisiyor ve 5020 portundan Modbus TCP verisi yayinliyor. Collector bu portu okuyabilir.</div>'
                     f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="glossy-card" style="border-left: 4px solid #ef4444; padding:20px;">'
                     f'<div style="font-size:1.4rem; color:#ef4444; font-weight:700;">SIMULATOR KAPALI</div>'
-                    f'<div style="color:#94a3b8; margin-top:8px;">Sistemde anlik olarak calisan bir sanal inverter tespit edilemedi. Test verisi akisi durmus durumda.</div>'
+                    f'<div style="color:#86868B; margin-top:8px;">Sistemde anlik olarak calisan bir sanal inverter tespit edilemedi. Test verisi akisi durmus durumda.</div>'
                     f'</div>', unsafe_allow_html=True)
 
 with col_action:
@@ -83,12 +84,12 @@ with col_status_c:
     if is_collector_running():
         st.markdown(f'<div class="glossy-card" style="border-left: 4px solid #10b981; padding:20px;">'
                     f'<div style="font-size:1.4rem; color:#10b981; font-weight:700;">COLLECTOR AKTIF</div>'
-                    f'<div style="color:#94a3b8; margin-top:8px;">Arka planda (Asenkron) Modbus verileri cekilerek SQLite veritabanina yaziliyor.</div>'
+                    f'<div style="color:#86868B; margin-top:8px;">Arka planda (Asenkron) Modbus verileri cekilerek SQLite veritabanina yaziliyor.</div>'
                     f'</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="glossy-card" style="border-left: 4px solid #ef4444; padding:20px;">'
                     f'<div style="font-size:1.4rem; color:#ef4444; font-weight:700;">COLLECTOR KAPALI</div>'
-                    f'<div style="color:#94a3b8; margin-top:8px;">Veri toplayici calismiyor. Dashboard guncellenmeyecektir.</div>'
+                    f'<div style="color:#86868B; margin-top:8px;">Veri toplayici calismiyor. Dashboard guncellenmeyecektir.</div>'
                     f'</div>', unsafe_allow_html=True)
 
 with col_action_c:
@@ -119,7 +120,7 @@ section_header("", "Simulasyon Detaylari")
 st.markdown("""
 <div class="glossy-card" style="padding: 20px;">
     <h4>Simulator Parametreleri</h4>
-    <p style="color:#cbd5e1;">Arka planda calisan <code>sanal_inverter.py</code> scripti, fiziksel cihaz eksikligini kapatmak icin su varsayilan degerleri simule eder:</p>
+    <p style="color:#1D1D1F;">Arka planda calisan <code>sanal_inverter.py</code> scripti, fiziksel cihaz eksikligini kapatmak icin su varsayilan degerleri simule eder:</p>
     <ul>
         <li><b>Baglanti Modu:</b> Asenkron Modbus TCP (Port: 5020)</li>
         <li><b>Simule Edilen Cihazlar (Slave ID):</b> 1, 2, 3</li>

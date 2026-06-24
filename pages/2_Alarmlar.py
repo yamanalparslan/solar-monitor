@@ -6,14 +6,15 @@ from datetime import datetime
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, FAULT_MAP_114, FAULT_MAP_115, FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122, determine_severity
-from styles import inject_glossy_css, section_header, alarm_card, badge, kpi_row
+from styles import render_top_nav, inject_glossy_css, section_header, alarm_card, badge, kpi_row
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="AKTIF ALARMLAR", page_icon="", layout="wide")
 inject_glossy_css()
+render_top_nav()
 if not check_auth():
     st.stop()
-logout_button()
+
 veritabani.init_db()
 
 from veritabani import FABRIKALAR
@@ -119,17 +120,17 @@ with tab_aktif:
 
             if is_arizali:
                 hata_sayisi += 1
-                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#fca5a5; font-family:Inter,sans-serif;">ID: {dev_id}</span>{badge("ARIZA", "danger")}</div>'
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#FF3B30; font-family:Outfit,sans-serif;">ID: {dev_id}</span>{badge("ARIZA", "danger")}</div>'
                 card_status = "error"
             elif is_uyku:
                 # uyku_sayisi += 1 (Eger KPI eklenecekse buraya eklenebilir, simdilik temiz sayalim veya sadece ayri gosterelim)
                 # Sadece arizalari sayiyoruz gerisi temiz ya da uyku
                 temiz_sayisi += 1
-                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#a5b4fc; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#0071E3; font-family:Outfit,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
                 card_status = "sleep"
             else:
                 temiz_sayisi += 1
-                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#6ee7b7; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
+                card_status_html = f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;"><span style="font-size:1.1rem; font-weight:700; color:#34C759; font-family:Outfit,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
                 card_status = "ok"
 
             if has_any_error_to_show:
@@ -143,22 +144,22 @@ with tab_aktif:
                     (hatalar_122, "122")
                 ]:
                     if h_list:
-                        parts.append(f'<div style="margin:8px 0 4px 0; font-weight:600; color:#94a3b8; font-family:Inter,sans-serif;">Register {reg_name} Hatalari:</div>')
+                        parts.append(f'<div style="margin:8px 0 4px 0; font-weight:600; color:#86868B; font-family:Outfit,sans-serif;">Register {reg_name} Hatalari:</div>')
                         for bit, aciklama, sev in h_list:
                             color = "#fca5a5" if sev == "CRITICAL" else ("#fb923c" if sev == "MAJOR" else "#fde047")
                             bg_color = "rgba(239, 68, 68, 0.15)" if sev == "CRITICAL" else ("rgba(249, 115, 22, 0.15)" if sev == "MAJOR" else "rgba(234, 179, 8, 0.15)")
                             b_color = "rgba(239, 68, 68, 0.25)" if sev == "CRITICAL" else ("rgba(249, 115, 22, 0.25)" if sev == "MAJOR" else "rgba(234, 179, 8, 0.25)")
                             badge_html = f'<span style="background:{bg_color}; border:1px solid {b_color}; color:{color}; padding:2px 8px; border-radius:12px; font-size:0.7rem; font-weight:bold; margin-left:8px;">{sev}</span>'
-                            parts.append(f'<div style="padding:3px 0 3px 16px; color:{color}; font-size:0.9rem; font-family:Inter,sans-serif;"> Bit {bit}: {aciklama} {badge_html}</div>')
+                            parts.append(f'<div style="padding:3px 0 3px 16px; color:{color}; font-size:0.9rem; font-family:Outfit,sans-serif;"> Bit {bit}: {aciklama} {badge_html}</div>')
 
-                parts.append('<div style="margin-top:8px; font-size:0.75rem; color:#64748b; font-family:Inter,sans-serif;">Hex: R107=0x' + format(h107, "08X") + ' | R109=0x' + format(h109, "08X") + ' | R111=0x' + format(h111, "04X") + ' | R112=0x' + format(h112, "08X") + ' | R114=0x' + format(h114, "04X") + ' | R115=0x' + format(h115, "04X") + ' | R116=0x' + format(h116, "04X") + ' | R117=0x' + format(h117, "04X") + ' | R118=0x' + format(h118, "04X") + ' | R119=0x' + format(h119, "04X") + ' | R120=0x' + format(h120, "04X") + ' | R121=0x' + format(h121, "04X") + ' | R122=0x' + format(h122, "04X") + '</div>')
+                parts.append('<div style="margin-top:8px; font-size:0.75rem; color:#64748b; font-family:Outfit,sans-serif;">Hex: R107=0x' + format(h107, "08X") + ' | R109=0x' + format(h109, "08X") + ' | R111=0x' + format(h111, "04X") + ' | R112=0x' + format(h112, "08X") + ' | R114=0x' + format(h114, "04X") + ' | R115=0x' + format(h115, "04X") + ' | R116=0x' + format(h116, "04X") + ' | R117=0x' + format(h117, "04X") + ' | R118=0x' + format(h118, "04X") + ' | R119=0x' + format(h119, "04X") + ' | R120=0x' + format(h120, "04X") + ' | R121=0x' + format(h121, "04X") + ' | R122=0x' + format(h122, "04X") + '</div>')
                 alarm_card(dev_id, card_status, ''.join(parts))
             else:
                 if is_uyku:
-                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#a5b4fc; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
+                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#0071E3; font-family:Outfit,sans-serif;">ID: {dev_id}  Sistem Uykuda</span>{badge("UYKU", "info")}</div>'
                     alarm_card(dev_id, "sleep", content)
                 else:
-                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#6ee7b7; font-family:Inter,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
+                    content = f'<div style="display:flex; align-items:center; gap:12px;"><span style="font-size:1.3rem;"></span><span style="font-size:1.05rem; font-weight:600; color:#34C759; font-family:Outfit,sans-serif;">ID: {dev_id}  Sistem Stabil</span>{badge("OK", "success")}</div>'
                     alarm_card(dev_id, "ok", content)
 
         st.markdown("---")
@@ -172,7 +173,7 @@ with tab_aktif:
             st.markdown('''
             <div class="glossy-card" style="text-align:center; margin-top:20px;">
                 <div style="font-size:2rem; margin-bottom:8px;"></div>
-                <div style="font-size:1.1rem; font-weight:600; color:#6ee7b7; font-family:Inter,sans-serif;">
+                <div style="font-size:1.1rem; font-weight:600; color:#34C759; font-family:Outfit,sans-serif;">
                     Harika! Sistemde su an hic aktif ariza yok.
                 </div>
             </div>

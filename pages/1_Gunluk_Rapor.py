@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, kpi_row, solar_table
+from styles import render_top_nav, inject_glossy_css, section_header, kpi_row, solar_table
 from auth import check_auth, logout_button
 
 
@@ -16,11 +16,12 @@ from auth import check_auth, logout_button
 # --- SAYFA AYARLARI VE KONTROLLER ---
 st.set_page_config(page_title="GUNLUK RAPORLAR", page_icon="", layout="wide")
 inject_glossy_css()
+render_top_nav()
 
 if not check_auth():
     st.stop()
 
-logout_button()
+
 veritabani.init_db()
 
 # --- Fabrika Kontrolü ---
@@ -136,23 +137,23 @@ def goster_rapor():
             fig.add_trace(go.Bar(
                 x=df_trend["Tarih"], y=df_trend["Üretim"],
                 name='Günlük Üretim',
-                marker_color="#f59e0b",
+                marker=dict(color='rgba(245, 158, 11, 0.75)', line=dict(color='#f59e0b', width=2)),
                 hovertemplate='%{x}<br>Üretim: %{y:.1f} kWh<extra></extra>'
             ))
             fig.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(10, 14, 26, 0.3)',
+                paper_bgcolor='rgba(255,255,255,0)',
+                plot_bgcolor='rgba(255,255,255,0)',
                 margin=dict(l=0, r=0, t=35, b=0),
                 height=280,
-                title=dict(text=f"Tesisin Son {grafik_gun} Günlük Üretim Trendi", font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
-                xaxis=dict(showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
-                yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
-                font=dict(color='#94a3b8', family='Inter'),
+                title=dict(text=f"Tesisin Son {grafik_gun} Günlük Üretim Trendi", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
+                font=dict(color='#86868B', family='Outfit'),
                 hovermode='x unified',
                 hoverlabel=dict(
-                    bgcolor='rgba(15, 23, 42, 0.95)',
+                    bgcolor='rgba(255,255,255,0.95)',
                     bordercolor='rgba(245, 158, 11, 0.5)',
-                    font=dict(family='Inter', size=13, color='#f8fafc'),
+                    font=dict(family='Outfit', size=13, color='#1D1D1F'),
                     align='left',
                 ),
             )
@@ -177,29 +178,40 @@ def goster_rapor():
                 if rows:
                     df_guc = pd.DataFrame(rows, columns=['saat', 'ort_guc'])
                     fig_guc = go.Figure()
+                    
+                    # Glow effect trace
+                    fig_guc.add_trace(go.Scatter(
+                        x=df_guc['saat'], y=df_guc['ort_guc'],
+                        mode='lines',
+                        line=dict(color="rgba(16, 185, 129, 0.25)", width=8, shape='spline', smoothing=1.3),
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
+                    
+                    # Main trace
                     fig_guc.add_trace(go.Scatter(
                         x=df_guc['saat'], y=df_guc['ort_guc'],
                         mode='lines',
                         name='Ortalama Güç',
                         line=dict(color="#10b981", width=3, shape='spline', smoothing=1.3),
                         fill='tozeroy',
-                        fillcolor='rgba(16, 185, 129, 0.05)',
+                        fillcolor='rgba(16, 185, 129, 0.15)',
                         hovertemplate='%{x|%H:%M}<br>Güç: %{y:.1f} W<extra></extra>'
                     ))
                     fig_guc.update_layout(
-                        paper_bgcolor='rgba(0,0,0,0)',
-                        plot_bgcolor='rgba(10, 14, 26, 0.3)',
+                        paper_bgcolor='rgba(255,255,255,0)',
+                        plot_bgcolor='rgba(255,255,255,0)',
                         margin=dict(l=0, r=0, t=35, b=0),
                         height=280,
-                        title=dict(text=f"{profil_tarih} Tarihli Ortalama Güç Profili (Saatlik)", font=dict(size=14, color='#cbd5e1', family='Inter', weight='bold')),
-                        xaxis=dict(showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
-                        yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, zeroline=False, rangemode='tozero', title="Güç (W)"),
-                        font=dict(color='#94a3b8', family='Inter'),
+                        title=dict(text=f"{profil_tarih} Tarihli Ortalama Güç Profili (Saatlik)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                        xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+                        yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="Güç (W)"),
+                        font=dict(color='#86868B', family='Outfit'),
                         hovermode='x unified',
                         hoverlabel=dict(
-                            bgcolor='rgba(15, 23, 42, 0.95)',
+                            bgcolor='rgba(255,255,255,0.95)',
                             bordercolor='rgba(16, 185, 129, 0.5)',
-                            font=dict(family='Inter', size=13, color='#f8fafc'),
+                            font=dict(family='Outfit', size=13, color='#1D1D1F'),
                         )
                     )
                     st.plotly_chart(fig_guc, width='stretch', config={"displayModeBar": False})
@@ -236,7 +248,7 @@ def goster_rapor():
         st.markdown(
             '<div class="glossy-card" style="text-align:center;">'
             '<div style="font-size:2rem; margin-bottom:8px;"></div>'
-            '<div style="font-size:1rem; color:#94a3b8; font-family:Inter,sans-serif;">Secilen tarihte veri bulunamadi.</div>'
+            '<div style="font-size:1rem; color:#86868B; font-family:Outfit,sans-serif;">Secilen tarihte veri bulunamadi.</div>'
             '</div>', 
             unsafe_allow_html=True
         )

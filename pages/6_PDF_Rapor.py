@@ -11,14 +11,15 @@ from reportlab.lib.styles import getSampleStyleSheet
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, kpi_row
+from styles import render_top_nav, inject_glossy_css, section_header, kpi_row
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="PDF RAPOR", page_icon="", layout="wide")
 inject_glossy_css()
+render_top_nav()
 if not check_auth():
     st.stop()
-logout_button()
+
 veritabani.init_db()
 
 from veritabani import FABRIKALAR

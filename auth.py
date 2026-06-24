@@ -8,7 +8,7 @@ Kullanm:
     from auth import check_auth, logout_button
     if not check_auth():
         st.stop()
-    logout_button()
+    
 """
 
 import os
@@ -110,7 +110,7 @@ def _get_credentials() -> tuple[str, str]:
 # 
 _LOGIN_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2Infinitefamily=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2Infinitefamily=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 .login-container {
     max-width: 420px;
@@ -118,15 +118,13 @@ _LOGIN_CSS = """
     padding: 0;
 }
 .login-card {
-    background: linear-gradient(145deg, 
-        rgba(30, 41, 59, 0.85) 0%, 
-        rgba(15, 23, 42, 0.7) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 20px;
     padding: 40px 36px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     position: relative;
     overflow: hidden;
 }
@@ -137,7 +135,7 @@ _LOGIN_CSS = """
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+    background: linear-gradient(135deg, #0071E3, #32ADE6);
 }
 .login-logo {
     text-align: center;
@@ -146,10 +144,10 @@ _LOGIN_CSS = """
 }
 .login-title {
     text-align: center;
-    font-family: 'Inter', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
     font-size: 1.5rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #6366f1, #a855f7);
+    background: linear-gradient(135deg, #0071E3, #32ADE6);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -157,14 +155,14 @@ _LOGIN_CSS = """
 }
 .login-subtitle {
     text-align: center;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-size: 0.85rem;
     color: #64748b;
     margin-bottom: 28px;
 }
 .login-footer {
     text-align: center;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Outfit', sans-serif;
     font-size: 0.75rem;
     color: #475569;
     margin-top: 20px;
@@ -198,10 +196,35 @@ def _show_login_form():
     st.markdown("""
     <style>
     .stApp {
-        background: 
-            radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
-            #0a0e1a !important;
+        background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp') no-repeat center center fixed !important;
+        background-size: cover !important;
+    }
+    
+    /* Login card is somewhat transparent so we can see the background */
+    .login-card {
+        background: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+    }
+    
+    /* Make the Streamlit form itself frosted glass too! */
+    [data-testid="stForm"] {
+        background: rgba(255, 255, 255, 0.65) !important;
+        backdrop-filter: blur(16px) !important;
+        -webkit-backdrop-filter: blur(16px) !important;
+        border: none !important;
+        border-radius: 20px !important;
+        border-top-left-radius: 0 !important;
+        border-top-right-radius: 0 !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
+        padding: 32px !important;
+    }
+    
+    /* Center the col2 content closer to the title card */
+    div[data-testid="column"] > div {
+        margin-top: -24px !important; 
     }
     </style>
     """, unsafe_allow_html=True)
@@ -281,7 +304,16 @@ def logout_button():
                 st.session_state.pop("username", None)
                 st.rerun()
 
+def top_nav_logout_button():
+    """Top Navigation Bar icin Cikis Yap butonu."""
+    if not _is_auth_enabled():
+        return
 
+    if st.session_state.get("authenticated"):
+        if st.button("Cikis Yap", key="top_logout_btn", type="secondary"):
+            st.session_state["authenticated"] = False
+            st.session_state.pop("username", None)
+            st.rerun()
 def get_current_user() -> str:
     """Mevcut oturumdaki kullanc adn dner."""
     return st.session_state.get("username", "admin")

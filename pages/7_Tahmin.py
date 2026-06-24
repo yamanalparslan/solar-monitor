@@ -9,7 +9,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
-from styles import inject_glossy_css, section_header, kpi_row, toast
+from styles import render_top_nav, inject_glossy_css, section_header, kpi_row, toast
 from auth import check_auth, logout_button
 
 # --- GES FİZİKSEL MODEL PARAMETRELERİ ---
@@ -33,10 +33,11 @@ def calculate_power_output(temp_amb, ghi):
 
 st.set_page_config(page_title="URETIM TAHMINI", page_icon="☀️", layout="wide")
 inject_glossy_css()
+render_top_nav()
 
 if not check_auth():
     st.stop()
-logout_button()
+
 veritabani.init_db()
 
 from veritabani import FABRIKALAR
@@ -57,8 +58,8 @@ with col_settings:
 with col_info:
     st.markdown("""
         <div class="glossy-card" style="padding:15px; margin-top:28px;">
-            <div style="font-weight:600; color:#38bdf8; margin-bottom:5px;">Model Bilgisi (Sirius 630W + 250kW Evirici)</div>
-            <div style="font-size:0.9rem; color:#94a3b8;">
+            <div style="font-weight:600; color:#0071E3; margin-bottom:5px;">Model Bilgisi (Sirius 630W + 250kW Evirici)</div>
+            <div style="font-family:Outfit,sans-serifm; color:#86868B;">
             <b>Algoritma:</b> Açık Hava Termodinamik & P-N Eklem Fiziği<br>
             Bu model, yapay bir veri uydurmak yerine <b>Open-Meteo API</b> üzerinden tesisin bulunduğu kordinatlara (38.5359, 27.0296) ait saatlik doğrudan ve difüz ışınım (W/m²) verilerini çeker. Datasheet üzerinden hücre ısınması (NOCT) ve sıcaklık kaybı (Gamma) hesaplanarak %98.5 verimli 250kW'lık merkezi evirici limitlerine (Clipping) göre gerçekçi AC güç tahmini oluşturur.
             </div>
@@ -127,7 +128,17 @@ if st.button("Simülasyonu Başlat", type="primary"):
         # 3. Grafik Çizimi
         fig = go.Figure()
         
-        # Güç Çizgisi
+        # Glow effect trace
+        fig.add_trace(go.Scatter(
+            x=df_gelecek['ts'],
+            y=df_gelecek['tahmini_guc_W'] / 1000.0,
+            mode='lines',
+            line=dict(color='rgba(14, 165, 233, 0.25)', width=8, shape='spline', smoothing=1.3),
+            hoverinfo='skip',
+            showlegend=False
+        ))
+        
+        # Main Güç Çizgisi
         fig.add_trace(go.Scatter(
             x=df_gelecek['ts'],
             y=df_gelecek['tahmini_guc_W'] / 1000.0, # Grafikte kW göstermek daha okunaklıdır
@@ -135,7 +146,7 @@ if st.button("Simülasyonu Başlat", type="primary"):
             name='Tahmini Güç (kW)',
             line=dict(color='#0ea5e9', width=3, shape='spline', smoothing=1.3),
             fill='tozeroy',
-            fillcolor='rgba(14, 165, 233, 0.05)'
+            fillcolor='rgba(14, 165, 233, 0.15)'
         ))
         
         # Evirici Limiti Çizgisi (Görsel referans)
@@ -144,22 +155,22 @@ if st.button("Simülasyonu Başlat", type="primary"):
                       annotation_position="bottom right")
         
         fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(10,14,26,0.3)',
+            paper_bgcolor='rgba(255,255,255,0)',
+            plot_bgcolor='rgba(255,255,255,0)',
             height=450,
             margin=dict(l=10, r=10, t=40, b=10),
-            title=dict(text="Gelecek Uretim Tahmini", font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
-            xaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)', title="Zaman"),
-            yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, title="Guc Cikisi (kW)"),
-            font=dict(color='#94a3b8', family='Inter'),
+            title=dict(text="Gelecek Uretim Tahmini", font=dict(size=15, color='#1D1D1F', family='Outfit', weight='bold')),
+            xaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)', title="Zaman"),
+            yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, title="Guc Cikisi (kW)"),
+            font=dict(color='#86868B', family='Outfit'),
             hovermode='x unified',
             hoverlabel=dict(
-                bgcolor='rgba(15, 23, 42, 0.95)',
+                bgcolor='rgba(255,255,255,0.95)',
                 bordercolor='rgba(14, 165, 233, 0.5)',
-                font=dict(family='Inter', size=13, color='#f8fafc'),
+                font=dict(family='Outfit', size=13, color='#1D1D1F'),
                 align='left',
             ),
-            legend=dict(bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8'))
+            legend=dict(bgcolor='rgba(255,255,255,0)', font=dict(color='#86868B'))
         )
 
         st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})

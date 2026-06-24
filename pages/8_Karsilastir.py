@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani, utils
-from styles import inject_glossy_css, section_header, kpi_row, solar_table
+from styles import render_top_nav, inject_glossy_css, section_header, kpi_row, solar_table
 from auth import check_auth, logout_button
 
 st.set_page_config(page_title="KARSILASTIRMA", page_icon="", layout="wide")
@@ -13,7 +13,8 @@ if not check_auth():
     st.stop()
 
 inject_glossy_css()
-logout_button()
+render_top_nav()
+
 
 veritabani.init_db()
 
@@ -64,14 +65,23 @@ if secili:
         if metrik not in df.columns:
             continue
         
+        # Glow effect trace
         fig.add_trace(go.Scatter(
-            x=df["ts"], y=df[metrik],
+            x=df['ts'], y=df[metrik],
+            mode='lines',
+            line=dict(color=colors[i % len(colors)].replace(')', ',0.25)').replace('rgb', 'rgba').replace('#', 'rgba(').replace('10b981', '16,185,129').replace('6366f1', '99,102,241').replace('ec4899', '236,72,153').replace('f59e0b', '245,158,11'), width=7, shape='spline', smoothing=1.3),
+            hoverinfo='skip',
+            showlegend=False
+        ))
+        
+        # Main trace
+        fig.add_trace(go.Scatter(
+            x=df['ts'], y=df[metrik],
             mode='lines',
             name=f'ID {did}',
             line=dict(color=colors[i % len(colors)], width=3, shape='spline', smoothing=1.3)
         ))
 
-        # zet istatistik topla
         ozet_veriler.append({
             "Cihaz": f"ID {did}",
             "Ortalama": round(df[metrik].mean(), 2),
@@ -80,24 +90,24 @@ if secili:
         })
 
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(10,14,26,0.3)',
+        paper_bgcolor='rgba(255,255,255,0)',
+        plot_bgcolor='rgba(255,255,255,0)',
         height=450,
         margin=dict(l=10, r=10, t=45, b=10),
-        title=dict(text=metrik_baslik[metrik], font=dict(size=15, color='#cbd5e1', family='Inter', weight='bold')),
-        xaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=False, showline=True, linecolor='rgba(255,255,255,0.1)'),
-        yaxis=dict(gridcolor='rgba(255,255,255,0.02)', showgrid=True, title=metrik_birim[metrik]),
-        font=dict(color='#94a3b8', family='Inter'),
+        title=dict(text=metrik_baslik[metrik], font=dict(size=15, color='#1D1D1F', family='Outfit', weight='bold')),
+        xaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+        yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, title=metrik_birim[metrik]),
+        font=dict(color='#86868B', family='Outfit'),
         hovermode='x unified',
         hoverlabel=dict(
-            bgcolor='rgba(15, 23, 42, 0.95)',
+            bgcolor='rgba(255,255,255,0.95)',
             bordercolor='rgba(99, 102, 241, 0.35)',
-            font=dict(family='Inter', size=13, color='#f8fafc'),
+            font=dict(family='Outfit', size=13, color='#1D1D1F'),
             align='left',
         ),
         legend=dict(
             orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1,
-            bgcolor='rgba(0,0,0,0)', font=dict(color='#94a3b8')
+            bgcolor='rgba(255,255,255,0)', font=dict(color='#86868B')
         ),
     )
     st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
@@ -122,4 +132,4 @@ if secili:
             headers=["CIHAZ", f"ORTALAMA ({metrik_birim[metrik]})", f"MAKS ({metrik_birim[metrik]})", f"MIN ({metrik_birim[metrik]})"],
         )
 else:
-    st.markdown("""<div class="glossy-card" style="text-align:center;"><div style="font-size:2rem; margin-bottom:8px;"></div><div style="font-size:1rem; color:#94a3b8; font-family:Inter,sans-serif;">Karsilastirmak icin en az bir cihaz secin.</div></div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="glossy-card" style="text-align:center;"><div style="font-size:2rem; margin-bottom:8px;"></div><div style="font-size:1rem; color:#86868B; font-family:Outfit,sans-serif;">Karsilastirmak icin en az bir cihaz secin.</div></div>""", unsafe_allow_html=True)
