@@ -30,15 +30,31 @@ section_header("", "COKLU CIHAZ ANALIZI", "SECILEN CIHAZLARIN PERFORMANSINI YAN 
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
 
-secili = st.multiselect("Karsilastirilacak Cihazlar:", slave_ids, default=slave_ids[:3])
+tum_cihazlar = []
+default_secim = []
+
+for f_id, f_info in FABRIKALAR.items():
+    f_ayarlar = veritabani.tum_ayarlari_oku(f_id)
+    f_slave_ids, _ = utils.parse_id_list(f_ayarlar.get('slave_ids', '1,2,3'))
+    for s_id in f_slave_ids:
+        isim = f"{f_info.get('isim', f_id)} - Cihaz {s_id}"
+        cihaz_obj = {"fab_id": f_id, "slave_id": s_id, "isim": isim}
+        tum_cihazlar.append(cihaz_obj)
+        if f_id == fab_id and s_id in slave_ids[:3]:
+            default_secim.append(cihaz_obj)
+
+secili = st.multiselect(
+    "Karsilastirilacak Cihazlar:", 
+    options=tum_cihazlar, 
+    default=default_secim,
+    format_func=lambda x: x["isim"]
+)
+
 metrik = st.selectbox("Metrik:", ["guc", "voltaj", "akim", "sicaklik"],
     format_func=lambda x: {"guc": "Guc (kW)", "voltaj": " Voltaj (V)", "akim": "Akim (A)", "sicaklik": "Sicaklik (C)"}[x])
 
 metrik_birim = {"guc": "kW", "voltaj": "V", "akim": "A", "sicaklik": "C"}
 metrik_baslik = {"guc": "Guc Karsilastirma", "voltaj": " Voltaj Karlatrma", "akim": "Akim Karsilastirma", "sicaklik": "Sicaklik Karsilastirma"}
-
-# Veritabanından dönen sütunlar (son_verileri_getir)
-DB_COLUMNS = ["ts", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
 
 if secili:
     colors = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#a855f7', '#f97316', '#22d3ee', '#e879f9']
@@ -46,14 +62,17 @@ if secili:
     fig = go.Figure()
     ozet_veriler = []
 
-    for i, did in enumerate(secili):
-        data = veritabani.son_verileri_getir(did, limit=2880, fabrika_id=fab_id)
+    for i, secim in enumerate(secili):
+        f_id = secim["fab_id"]
+        did = secim["slave_id"]
+        
+        # Yeni ve hizli downsampling fonksiyonunu kullaniyoruz
+        data = veritabani.karsilastirma_verisi_getir(did, limit=2880, fabrika_id=f_id)
         if not data:
             continue
         
-        # Stun saysna gre uyumlu DataFrame olutur
-        num_cols = len(data[0]) if data else 0
-        cols = DB_COLUMNS[:num_cols]
+        # karsilastirma_verisi_getir sadece 5 kolon doner: zaman_dk, guc, voltaj, akim, sicaklik
+        cols = ["ts", "guc", "voltaj", "akim", "sicaklik"]
         df = pd.DataFrame(data, columns=cols)
         
         # Sayisallastirma (Categorical Plotly Hatalarini Onlem)
@@ -61,8 +80,9 @@ if secili:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce')
         
-        df["ts"] = pd.to_datetime(df["ts"], format='mixed', errors='coerce')
-        df = df.dropna(subset=['ts']).sort_values(by="ts", ascending=True)
+        df = df[~(df["guc"].fillna(0).eq(0) & df["voltaj"].fillna(0).eq(0) & df["akim"].fillna(0).eq(0))]
+        df["ts"] = pd.to_datetime(df["ts"], errors='coerce')
+        df = df.dropna(subset=["ts"]).sort_values(by="ts", ascending=True)
         if metrik not in df.columns:
             continue
         
@@ -79,12 +99,12 @@ if secili:
         fig.add_trace(go.Scatter(
             x=df['ts'], y=df[metrik],
             mode='lines',
-            name=f'ID {did}',
+            name=secim["isim"],
             line=dict(color=colors[i % len(colors)], width=3, shape='spline', smoothing=1.3)
         ))
 
         ozet_veriler.append({
-            "Cihaz": f"ID {did}",
+            "Cihaz": secim["isim"],
             "Ortalama": round(df[metrik].mean(), 2),
             "Maks": round(df[metrik].max(), 2),
             "Min": round(df[metrik].min(), 2),

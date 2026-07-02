@@ -345,11 +345,37 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     rows = cursor.fetchall()
     conn.close()
     
-    formatted_rows = []
-    for r in rows:
-        formatted_rows.append((str(r[0]), *r[1:]))
-        
-    return formatted_rows[::-1]
+    return rows[::-1]
+
+def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRIKA):
+    try:
+        slave_id = int(slave_id)
+        limit = int(limit)
+    except (ValueError, TypeError):
+        return []
+
+    conn = get_db_connection()
+    if not conn: return []
+    cursor = conn.cursor()
+    # dakikalık bazda gruplama yap (PostgreSQL date_trunc)
+    cursor.execute("""
+        SELECT 
+            date_trunc('minute', zaman) as zaman_dk, 
+            AVG(guc) as guc, 
+            AVG(voltaj) as voltaj, 
+            AVG(akim) as akim, 
+            AVG(sicaklik) as sicaklik
+        FROM olcumler 
+        WHERE fabrika_id = %s AND slave_id = %s
+        GROUP BY zaman_dk
+        ORDER BY zaman_dk DESC 
+        LIMIT %s
+    """, (fabrika_id, slave_id, limit))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    return rows[::-1]
+
 
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()

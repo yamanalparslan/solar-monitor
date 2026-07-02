@@ -59,6 +59,14 @@ html, body, .stApp {
     background: var(--bg-primary) !important;
 }
 
+/* GİZLİ STREAMLIT BİLEŞENLERİ */
+[data-testid="stHeader"] { display: none !important; visibility: hidden !important; background: transparent !important; height: 0px !important; }
+header[data-testid="stHeader"] { display: none !important; visibility: hidden !important; background: transparent !important; height: 0px !important; }
+#MainMenu { visibility: hidden !important; display: none !important; }
+.stDeployButton { display: none !important; }
+header { visibility: hidden !important; display: none !important; background: transparent !important; height: 0px !important; }
+
+
 /*  PAGE FADE-IN-UP ANIMATION  */
 @keyframes fadeInUp {
     from {

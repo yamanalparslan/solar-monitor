@@ -98,8 +98,13 @@ def _fetch_summary_data(fab_id: str):
 
 @st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
 def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
-    """Karsilastirma grafigi icin cihaz verisini onbellek ile getirir."""
+    """Tekil cihaz grafigi icin cihaz verisini onbellek ile getirir."""
     return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
+
+@st.cache_data(ttl=timedelta(seconds=60), show_spinner=False)
+def _fetch_karsilastirma_data(dev_id: int, fab_id: str, limit: int = 2880):
+    """Karsilastirma grafigi icin dakikalik gruplanmis (downsampled) veriyi onbellek ile getirir."""
+    return veritabani.karsilastirma_verisi_getir(dev_id, limit=limit, fabrika_id=fab_id)
 
 # --- YAN MENU ---
 # --- ANA EKRAN ---
@@ -220,12 +225,12 @@ def create_multi_plotly_chart(df, columns, names, colors, title, unit="", ymax=N
 def create_comparison_chart(ids, metric, title, colors, ymax=None):
     fig = go.Figure()
     for i, dev_id in enumerate(ids):
-        data = _fetch_device_data(dev_id, fab_id)
+        data = _fetch_karsilastirma_data(dev_id, fab_id)
         if not data:
             continue
             
-        cols = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
-        df = pd.DataFrame(data, columns=cols[:len(data[0])] if data else cols)
+        cols = ["timestamp", "guc", "voltaj", "akim", "sicaklik"]
+        df = pd.DataFrame(data, columns=cols)
         if "sicaklik" in df.columns:
             df["sicaklik"] = pd.to_numeric(df["sicaklik"], errors='coerce').apply(utils.normalize_temperature_value)
         if "guc" in df.columns: df["guc"] = pd.to_numeric(df["guc"], errors='coerce')
@@ -242,7 +247,7 @@ def create_comparison_chart(ids, metric, title, colors, ymax=None):
         if df.empty:
             continue
         
-        df["timestamp"] = pd.to_datetime(df["timestamp"], format='mixed', errors='coerce')
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors='coerce')
         df = df.dropna(subset=['timestamp'])
         df = df.sort_values(by="timestamp", ascending=True)
         
@@ -366,7 +371,7 @@ def render_summary_section():
         # TABLO: st.dataframe yerine solar_table (hover row highlight)
         tablo_rows = []
         for row in summary_data:
-            zaman_fmt = pd.to_datetime(row[1], format='mixed', errors='coerce')
+            zaman_fmt = pd.to_datetime(row[1], errors='coerce')
             zaman_fmt = zaman_fmt.strftime('%H:%M:%S') if pd.notna(zaman_fmt) else "-"
             isi_val = utils.normalize_temperature_value(float(row[5] or 0))
             tablo_rows.append([
@@ -450,7 +455,7 @@ with tab_tekli:
                 cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
                 df_det = pd.DataFrame(detail_data, columns=cols_det[:len(detail_data[0])] if detail_data else cols_det)
                 
-                df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], format='mixed', errors='coerce')
+                df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], errors='coerce')
                 df_det["guc"] = pd.to_numeric(df_det["guc"], errors='coerce')
                 df_det["voltaj"] = pd.to_numeric(df_det["voltaj"], errors='coerce')
                 
