@@ -22,7 +22,10 @@ import os
 _AUTH_DB_PATH = os.path.join("data", "auth.db")
 
 def _get_db():
-    os.makedirs("data", exist_ok=True)
+    try:
+        os.makedirs("data", exist_ok=True)
+    except OSError:
+        pass
     conn = sqlite3.connect(_AUTH_DB_PATH, timeout=10.0)
     conn.execute("CREATE TABLE IF NOT EXISTS failed_logins (rate_key TEXT PRIMARY KEY, attempts INTEGER, lockout_until REAL)")
     return conn

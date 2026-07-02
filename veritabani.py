@@ -146,6 +146,20 @@ def init_db():
         )
     """)
 
+    # 6. Hata Log Tablosu (Stateful Alarms)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS hata_log (
+            id SERIAL PRIMARY KEY,
+            fabrika_id VARCHAR(50),
+            slave_id INTEGER,
+            register_no INTEGER,
+            hata_kodu BIGINT,
+            baslangic_zamani TIMESTAMP,
+            bitis_zamani TIMESTAMP,
+            durum VARCHAR(20) DEFAULT 'AKTIF'
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -200,6 +214,29 @@ def tum_ayarlari_oku(fabrika_id: str):
             'veri_saklama_gun': '365'
         }
 
+def hata_durumu_guncelle(cursor, fabrika_id, slave_id, register_no, hata_kodu, zaman):
+    cursor.execute("""
+        SELECT id, hata_kodu FROM hata_log
+        WHERE fabrika_id = %s AND slave_id = %s AND register_no = %s AND durum = 'AKTIF'
+    """, (fabrika_id, slave_id, register_no))
+    row = cursor.fetchone()
+    
+    if hata_kodu > 0:
+        if row:
+            active_id, active_kodu = row
+            if active_kodu != hata_kodu:
+                # Kodu değiştiyse eskiyi kapat, yeniyi aç
+                cursor.execute("UPDATE hata_log SET bitis_zamani = %s, durum = 'DUZELDI' WHERE id = %s", (zaman, active_id))
+                cursor.execute("INSERT INTO hata_log (fabrika_id, slave_id, register_no, hata_kodu, baslangic_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'AKTIF')", (fabrika_id, slave_id, register_no, hata_kodu, zaman))
+        else:
+            # Yeni hata
+            cursor.execute("INSERT INTO hata_log (fabrika_id, slave_id, register_no, hata_kodu, baslangic_zamani, durum) VALUES (%s, %s, %s, %s, %s, 'AKTIF')", (fabrika_id, slave_id, register_no, hata_kodu, zaman))
+    else:
+        if row:
+            # Hata düzeldi
+            active_id = row[0]
+            cursor.execute("UPDATE hata_log SET bitis_zamani = %s, durum = 'DUZELDI' WHERE id = %s", (zaman, active_id))
+
 def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
     if not conn: return
@@ -221,6 +258,15 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     hk_122 = data.get('hata_kodu_122', 0)
     
     try:
+        # Hatalari kontrol et ve stateful logla
+        hata_listesi = [
+            (107, hk_107), (109, hk_109), (111, hk_111), (112, hk_112),
+            (114, hk_114), (115, hk_115), (116, hk_116), (117, hk_117),
+            (118, hk_118), (119, hk_119), (120, hk_120), (121, hk_121), (122, hk_122)
+        ]
+        for reg_no, val in hata_listesi:
+            hata_durumu_guncelle(cursor, fabrika_id, slave_id, reg_no, val, simdi)
+        
         cursor.execute("""
             INSERT INTO olcumler (
                 fabrika_id, slave_id, zaman, guc, voltaj, akim, sicaklik, modbus_uretim,
@@ -575,25 +621,23 @@ def gecmis_alarmlari_getir(fabrika_id, limit=100):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT slave_id, zaman, hata_kodu, hata_kodu_109, hata_kodu_111, 
-                   hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, 
-                   hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, 
-                   hata_kodu_121, hata_kodu_122
-            FROM olcumler 
-            WHERE fabrika_id = %s AND (
-                hata_kodu > 0 OR hata_kodu_109 > 0 OR hata_kodu_111 > 0 OR 
-                hata_kodu_112 > 0 OR hata_kodu_114 > 0 OR hata_kodu_115 > 0 OR 
-                hata_kodu_116 > 0 OR hata_kodu_117 > 0 OR hata_kodu_118 > 0 OR 
-                hata_kodu_119 > 0 OR hata_kodu_120 > 0 OR hata_kodu_121 > 0 OR 
-                hata_kodu_122 > 0
-            )
-            ORDER BY zaman DESC LIMIT %s
+            SELECT slave_id, baslangic_zamani, bitis_zamani, register_no, hata_kodu, durum
+            FROM hata_log
+            WHERE fabrika_id = %s
+            ORDER BY baslangic_zamani DESC LIMIT %s
         """, (fabrika_id, limit))
         rows = cursor.fetchall()
         
         formatted_rows = []
         for r in rows:
-            formatted_rows.append((r[0], str(r[1]), *r[2:]))
+            formatted_rows.append((
+                r[0],
+                str(r[1]) if r[1] else "",
+                str(r[2]) if r[2] else "Devam Ediyor",
+                r[3],
+                r[4],
+                r[5]
+            ))
         return formatted_rows
     except Exception as e:
         print(f"[WARN] Gecmis alarm getirme hatasi: {e}")

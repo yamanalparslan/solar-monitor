@@ -195,40 +195,45 @@ with tab_gecmis:
         tablo_verisi = []
         for row in gecmis:
             dev_id = row[0]
-            zaman = row[1]
+            baslangic = row[1]
+            bitis = row[2]
+            reg = row[3]
+            kod = row[4]
+            durum = row[5]
             
+            f_map = {}
+            if reg == 107: f_map = FAULT_MAP_107
+            elif reg == 109: f_map = FAULT_MAP_109
+            elif reg == 111: f_map = FAULT_MAP_111
+            elif reg == 112: f_map = FAULT_MAP_112
+            elif reg == 114: f_map = FAULT_MAP_114
+            elif reg == 115: f_map = FAULT_MAP_115
+            elif reg == 116: f_map = FAULT_MAP_116
+            elif reg == 117: f_map = FAULT_MAP_117
+            elif reg == 118: f_map = FAULT_MAP_118
+            elif reg == 119: f_map = FAULT_MAP_119
+            elif reg == 120: f_map = FAULT_MAP_120
+            elif reg == 121: f_map = FAULT_MAP_121
+            elif reg == 122: f_map = FAULT_MAP_122
+
             tum_hatalar = []
-            h_maps = [
-                (row[2] or 0, FAULT_MAP_107, 107),
-                (row[3] or 0, FAULT_MAP_109, 109),
-                (row[4] or 0, FAULT_MAP_111, 111),
-                (row[5] or 0, FAULT_MAP_112, 112),
-                (row[6] or 0, FAULT_MAP_114, 114),
-                (row[7] or 0, FAULT_MAP_115, 115),
-                (row[8] or 0, FAULT_MAP_116, 116),
-                (row[9] or 0, FAULT_MAP_117, 117),
-                (row[10] or 0, FAULT_MAP_118, 118),
-                (row[11] or 0, FAULT_MAP_119, 119),
-                (row[12] or 0, FAULT_MAP_120, 120),
-                (row[13] or 0, FAULT_MAP_121, 121),
-                (row[14] or 0, FAULT_MAP_122, 122),
-            ]
-            for kod, f_map, reg in h_maps:
-                if kod > 0:
-                    bitler = hata_bit_coz(kod, f_map)
-                    for bit, aciklama, sev in bitler:
-                        if sev == "CRITICAL":
-                            sev_icon = "🔴"
-                        elif sev == "MAJOR":
-                            sev_icon = "🟠"
-                        else:
-                            sev_icon = "🟡"
-                        tum_hatalar.append(f"{sev_icon} R{reg} B{bit}: {aciklama}")
+            if kod > 0:
+                bitler = hata_bit_coz(kod, f_map)
+                for bit, aciklama, sev in bitler:
+                    if sev == "CRITICAL":
+                        sev_icon = "🔴"
+                    elif sev == "MAJOR":
+                        sev_icon = "🟠"
+                    else:
+                        sev_icon = "🟡"
+                    tum_hatalar.append(f"{sev_icon} R{reg} B{bit}: {aciklama}")
             
-            hata_metni = " | ".join(tum_hatalar) if tum_hatalar else "Bilinmeyen Hata"
+            hata_metni = " | ".join(tum_hatalar) if tum_hatalar else f"Bilinmeyen Hata (Kod: {kod})"
             
             tablo_verisi.append({
-                "Zaman": zaman,
+                "Durum": durum,
+                "Baslama Zamani": baslangic,
+                "Bitis Zamani": bitis,
                 "ID": dev_id,
                 "Hata Detaylari": hata_metni
             })
@@ -252,15 +257,25 @@ with tab_gecmis:
                 use_container_width=True
             )
         
-        items_per_page = 10
-        total_pages = max(1, (len(df) - 1) // items_per_page + 1)
-        
-        if total_pages > 1:
-            page_tabs = st.tabs([f"Sayfa {i+1}" for i in range(total_pages)])
-            for i, tab in enumerate(page_tabs):
-                with tab:
-                    start_idx = i * items_per_page
-                    end_idx = start_idx + items_per_page
-                    st.dataframe(df.iloc[start_idx:end_idx], width='stretch', hide_index=True)
-        else:
-            st.dataframe(df, width='stretch', hide_index=True)
+        st.markdown("### Filtreleme")
+        f_col1, f_col2, f_col3 = st.columns(3)
+        with f_col1:
+            durum_secim = st.multiselect("Durum", options=df["Durum"].unique(), default=df["Durum"].unique())
+        with f_col2:
+            id_secim = st.multiselect("Cihaz ID", options=df["ID"].unique(), default=df["ID"].unique())
+        with f_col3:
+            kelime_ara = st.text_input("Hata İçeriğinde Ara", placeholder="Örn: Voltaj...")
+            
+        if durum_secim:
+            df = df[df["Durum"].isin(durum_secim)]
+        if id_secim:
+            df = df[df["ID"].isin(id_secim)]
+        if kelime_ara:
+            df = df[df["Hata Detaylari"].str.contains(kelime_ara, case=False, na=False)]
+            
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            height=500
+        )
