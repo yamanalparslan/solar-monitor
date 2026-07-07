@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import streamlit as st
 import time
 import pandas as pd
@@ -132,10 +133,8 @@ section_header("", "CANLI FILO DURUMU", "TUM CIHAZLARIN ANLIK DURUM OZETI")
 
 # --- Plotly Grafik Yardmclar ---
 def create_plotly_chart(df, column, title, color, unit="", ymax=None, irradiance_df=None, **kwargs):
-    if irradiance_df is not None and not irradiance_df.empty:
-        fig = make_subplots(specs=[[{"secondary_y": True}]])
-    else:
-        fig = go.Figure()
+    # Her zaman subplot altyapısı ile oluştur ki add_trace(..., secondary_y=False) hata vermesin.
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
     
     # Glow effect trace
     fig.add_trace(go.Scatter(
