@@ -40,7 +40,7 @@ def init_db():
     # 1. Ölçümler Tablosu
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS olcumler (
-            id SERIAL PRIMARY KEY,
+            id SERIAL,
             fabrika_id VARCHAR(50) DEFAULT 'mekanik',
             slave_id INTEGER, 
             zaman TIMESTAMP,
@@ -71,6 +71,41 @@ def init_db():
         )
     """)
     
+    # TimescaleDB Setup
+    try:
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
+        cursor.execute("SELECT create_hypertable('olcumler', 'zaman', if_not_exists => TRUE);")
+        
+        cursor.execute("""
+            CREATE MATERIALIZED VIEW IF NOT EXISTS olcumler_saatlik
+            WITH (timescaledb.continuous) AS
+            SELECT 
+                time_bucket('1 hour', zaman) AS zaman_saati,
+                fabrika_id,
+                slave_id,
+                AVG(guc) AS guc,
+                AVG(voltaj) AS voltaj,
+                AVG(akim) AS akim,
+                AVG(sicaklik) AS sicaklik,
+                MAX(modbus_uretim) AS max_uretim
+            FROM olcumler
+            GROUP BY time_bucket('1 hour', zaman), fabrika_id, slave_id;
+        """)
+        
+        try:
+            cursor.execute("SELECT add_continuous_aggregate_policy('olcumler_saatlik', start_offset => INTERVAL '3 days', end_offset => INTERVAL '1 hour', schedule_interval => INTERVAL '1 hour');")
+        except Exception:
+            conn.rollback() # recover from failed transaction
+        
+        try:
+            cursor.execute("SELECT add_retention_policy('olcumler', INTERVAL '30 days');")
+        except Exception:
+            conn.rollback()
+
+    except Exception as e:
+        conn.rollback()
+        print(f"TimescaleDB initialization error: {e}")
+
     # Migration: Add new columns if they don't exist
     try:
         cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS voltaj_ab DOUBLE PRECISION DEFAULT 0;")
@@ -80,18 +115,22 @@ def init_db():
         cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS akim_b DOUBLE PRECISION DEFAULT 0;")
         cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS akim_c DOUBLE PRECISION DEFAULT 0;")
     except Exception as e:
+        conn.rollback()
         print(f"Migration hatasi: {e}")
 
     # Index: zaman
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_zaman 
-        ON olcumler(zaman DESC)
-    """)
-    
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_fabrika_slave_zaman 
-        ON olcumler(fabrika_id, slave_id, zaman DESC)
-    """)
+    try:
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_zaman 
+            ON olcumler(zaman DESC)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fabrika_slave_zaman 
+            ON olcumler(fabrika_id, slave_id, zaman DESC)
+        """)
+    except Exception as e:
+        conn.rollback()
 
     # 2. Ayarlar Tablosu
     cursor.execute("""
@@ -367,10 +406,11 @@ def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRI
             AVG(sicaklik) as sicaklik
         FROM olcumler 
         WHERE fabrika_id = %s AND slave_id = %s
+          AND zaman >= NOW() - %s * INTERVAL '1 minute'
         GROUP BY zaman_dk
         ORDER BY zaman_dk DESC 
         LIMIT %s
-    """, (fabrika_id, slave_id, limit))
+    """, (fabrika_id, slave_id, limit, limit))
     rows = cursor.fetchall()
     conn.close()
     
@@ -490,6 +530,34 @@ def veritabani_istatistikleri(fabrika_id=None):
         return None
     finally:
         conn.close()
+
+def saatlik_ozet_getir(slave_id, baslangic_tarihi, bitis_tarihi, fabrika_id=VARSAYILAN_FABRIKA):
+    """
+    TimescaleDB continuous aggregate tablosundan saatlik bazda sıkıştırılmış verileri getirir.
+    Eski tarihli uzun raporlar için çok hızlıdır.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        query = '''
+            SELECT 
+                zaman_saati as ts, 
+                guc, voltaj, akim, sicaklik, max_uretim as modbus_uretim
+            FROM olcumler_saatlik
+            WHERE slave_id = %s AND fabrika_id = %s
+            AND zaman_saati >= %s AND zaman_saati <= %s
+            ORDER BY zaman_saati ASC
+        '''
+        
+        cursor.execute(query, (slave_id, fabrika_id, baslangic_tarihi, bitis_tarihi))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return rows
+    except Exception as e:
+        print(f"[WARN] Saatlik ozet verisi cekme hatasi: {e}")
+        return []
 
 def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()

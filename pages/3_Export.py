@@ -27,23 +27,41 @@ section_header("", "VERI AKTARIMI", "CSV FORMATINDA VERI INDIRIN")
 
 ayarlar = veritabani.tum_ayarlari_oku(fab_id)
 slave_ids, _ = utils.parse_id_list(ayarlar.get('slave_ids', '1,2,3'))
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     baslangic = st.date_input("Baslangic:", datetime.now() - timedelta(days=7))
 with col2:
     bitis = st.date_input("Bitis:", datetime.now())
 with col3:
     secilen = st.selectbox("Cihaz:", ["Tum"] + ["ID " + str(s) for s in slave_ids])
+with col4:
+    cozunurluk = st.selectbox("Cozunurluk:", ["Saniyelik Ham Veri (Son 30 Gun)", "Saatlik Ozet (Tum Zamanlar)"])
+
 if st.button("Verileri Getir", type="primary"):
     sid = None if secilen == "Tum" else int(secilen.split()[-1])
     tum = []
+    
+    # DateTime nesnelerine çevir
+    b_dt = datetime.combine(baslangic, datetime.min.time())
+    bit_dt = datetime.combine(bitis, datetime.max.time())
+    
     for s in (slave_ids if sid is None else [sid]):
-        for r in veritabani.son_verileri_getir(s, limit=50000, fabrika_id=fab_id):
-            tum.append({"slave_id": s, "zaman": r[0], "guc": r[1], "voltaj": r[2], "akim": r[3], "sicaklik": r[4], "hata_kodu": r[5]})
+        if "Saatlik" in cozunurluk:
+            # Saatlik özet tablosunu (Continuous Aggregate) kullan
+            for r in veritabani.saatlik_ozet_getir(s, b_dt, bit_dt, fab_id):
+                # r format: ts, guc, voltaj, akim, sicaklik, modbus_uretim
+                tum.append({"slave_id": s, "zaman": r[0], "guc": r[1], "voltaj": r[2], "akim": r[3], "sicaklik": r[4], "uretim": r[5]})
+        else:
+            # Ham veriyi kullan
+            for r in veritabani.son_verileri_getir(s, limit=50000, fabrika_id=fab_id):
+                tum.append({"slave_id": s, "zaman": r[0], "guc": r[1], "voltaj": r[2], "akim": r[3], "sicaklik": r[4], "hata_kodu": r[5]})
+    
     if tum:
         df = pd.DataFrame(tum)
         df["zaman"] = pd.to_datetime(df["zaman"])
-        df = df[(df["zaman"].dt.date >= baslangic) & (df["zaman"].dt.date <= bitis)]
+        if "Saatlik" not in cozunurluk:
+            df = df[(df["zaman"] >= b_dt) & (df["zaman"] <= bit_dt)]
+            
         if len(df) > 0:
             st.success(" " + str(len(df)) + " kayit bulundu.")
             # Ilk 200 satiri solar_table ile goster
