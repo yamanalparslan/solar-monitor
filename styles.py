@@ -797,6 +797,14 @@ def render_top_nav():
     .block-container {
         padding-top: 1rem !important;
     }
+    
+    /* Make page links shrink text instead of truncating */
+    div[data-testid="stPageLink"] a p {
+        font-size: clamp(10px, 1vw, 15px) !important;
+        white-space: normal !important;
+        line-height: 1.2 !important;
+        text-overflow: clip !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -804,28 +812,51 @@ def render_top_nav():
     col1, col2, col3 = st.columns([1.5, 8, 1.5], vertical_alignment="center")
     
     with col1:
-        st.markdown("<span class='nav-logo'>SolarMonitor</span>", unsafe_allow_html=True)
-        
+        if st.session_state.get('fabrika_id'):
+            c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
+            with c_logo:
+                st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
+            with c_btn:
+                if st.button("🏭", help="Fabrika Değiştir"):
+                    st.session_state.fabrika_id = None
+                    st.switch_page("1_PANEL.py")
+        else:
+            st.markdown("<span class='nav-logo'>SolarMonitor</span>", unsafe_allow_html=True)
     with col2:
-        pages = {
-            "Panel": "1_PANEL.py",
-            "Günlük Rapor": "pages/1_GUNLUK_RAPOR.py",
-            "Alarmlar": "pages/2_ALARMLAR.py",
-            "Export": "pages/3_EXPORT.py",
-            "Audit Log": "pages/5_AUDIT_LOG.py",
-            "PDF Rapor": "pages/6_PDF_RAPOR.py",
-            "Tahmin": "pages/7_TAHMIN.py",
-            "Karşılaştır": "pages/8_KARSILASTIR.py",
-            "Sistem": "pages/9_SISTEM.py",
-            "Sanal İnverter": "pages/10_SANAL_INVERTER.py"
-        }
-        
-        # Proportional column widths based on label length to prevent truncation
-        widths = [len(title) for title in pages.keys()]
-        cols = st.columns(widths)
-        for idx, (title, path) in enumerate(pages.items()):
-            with cols[idx]:
-                st.page_link(path, label=title)
+        if st.session_state.get('fabrika_id'):
+            # Ana sayfalar
+            main_pages = {
+                "Panel": "1_PANEL.py",
+                "Günlük Rapor": "pages/1_GUNLUK_RAPOR.py",
+                "Alarmlar": "pages/2_ALARMLAR.py",
+                "Karşılaştır": "pages/8_KARSILASTIR.py",
+            }
+            
+            # Açılır menüdeki diğer sayfalar
+            other_pages = {
+                "Export": "pages/3_EXPORT.py",
+                "Audit Log": "pages/5_AUDIT_LOG.py",
+                "PDF Rapor": "pages/6_PDF_RAPOR.py",
+                "Tahmin": "pages/7_TAHMIN.py",
+                "Sistem": "pages/9_SISTEM.py",
+                "Sanal İnverter": "pages/10_SANAL_INVERTER.py"
+            }
+            
+            widths = [max(8, len(title)) for title in main_pages.keys()]
+            widths.append(12) # Dropdown butonu için genişlik
+            widths.append(50) # Boşluk (spacer)
+            cols = st.columns(widths, vertical_alignment="center")
+            
+            for idx, (title, path) in enumerate(main_pages.items()):
+                with cols[idx]:
+                    st.page_link(path, label=title)
+                    
+            with cols[-1]:
+                # Streamlit altyapısında hover ile açılan menü doğrudan desteklenmediğinden 
+                # tıklama ile açılan (ve mobil uyumlu olan) yerel popover kullanıyoruz.
+                with st.popover("Daha Fazla ▾", use_container_width=True):
+                    for title, path in other_pages.items():
+                        st.page_link(path, label=title)
                 
     with col3:
         # We will render the logout button here via auth.py
