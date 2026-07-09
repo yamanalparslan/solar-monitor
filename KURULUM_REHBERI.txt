@@ -1,0 +1,52 @@
+SOLAR MONITOR - KURULUM VE ÇALIŞTIRMA REHBERİ
+
+Bu proje, Docker ve Docker Compose kullanılarak konteyner mimarisi ile çalışacak şekilde tasarlanmıştır. Başka bir bilgisayarda (sunucu, yerel bilgisayar vb.) çalıştırmak için aşağıdaki adımları izlemeniz yeterlidir.
+
+GEREKSİNİMLER
+-----------------------------------------
+1. Docker: Projeyi izole bir ortamda çalıştırmak için gereklidir.
+   (İndirmek için: https://docs.docker.com/get-docker/)
+2. Docker Compose: Çoklu konteyner yapılarını yönetmek için gereklidir (Docker Desktop ile birlikte hazır gelir).
+
+KURULUM ADIMLARI
+-----------------------------------------
+ADIM 1: Proje Dosyalarını Hazırlayın
+Projeyi çalıştıracağınız bilgisayara bu klasörü (solar-monitor-master) kopyalayın.
+
+ADIM 2: Çevre Değişkenlerini (Environment Variables) Ayarlayın
+Proje dizininde bulunan `.env.example` dosyasının bir kopyasını oluşturun ve adını `.env` yapın. 
+Gerekirse içerisindeki şifreleri, port ve veritabanı ayarlarını kendi sisteminize göre güncelleyebilirsiniz. (Eğer dokunmazsanız standart varsayılan şifrelerle çalışacaktır).
+
+ADIM 3: Projeyi Başlatın
+Terminal (Komut İstemcisi / CMD veya PowerShell) açın ve bu proje dizinine gidin:
+> cd (proje_klasor_yolu)
+
+Ardından aşağıdaki komutu çalıştırarak projeyi derleyip arka planda başlatın:
+> docker compose up -d --build
+
+Bu komut:
+- Tüm altyapı için gerekli Docker imajlarını indirecek ve projeyi derleyecektir.
+- Veritabanı (PostgreSQL), Veri Toplayıcı (Collector), API, MQTT Broker ve Streamlit Arayüzünü otomatik olarak ayağa kaldıracaktır.
+
+ADIM 4: Uygulamalara Erişim
+Sistem ayağa kalktıktan yaklaşık 30 saniye sonra tarayıcınızdan aşağıdaki adreslere giderek erişim sağlayabilirsiniz:
+
+- Ana İzleme Paneli (Streamlit): http://localhost:8501
+- REST API: http://localhost:8503
+- Grafana (Kullanılıyorsa): http://localhost:3000
+
+DURDURMA VE YENİDEN BAŞLATMA
+-----------------------------------------
+- Sistemi geçici olarak durdurmak için proje dizininde şu komutu çalıştırın:
+  > docker compose stop
+
+- Sistemi tamamen kapatmak ve konteynerleri silmek için (Verileriniz güvende kalır, silinmez):
+  > docker compose down
+
+- Sistemin arka plan kayıtlarını (loglarını) canlı olarak izlemek için:
+  > docker compose logs -f
+
+NOTLAR VE SORUN GİDERME
+-----------------------------------------
+- "Port is already allocated" hatası alırsanız, bilgisayarınızda 8501, 5432, 1883 veya 3000 portlarını kullanan başka bir uygulama olabilir. `docker-compose.yml` dosyasından sol taraftaki port numaralarını değiştirebilirsiniz.
+- `docker compose` komutu tanınmazsa, eski bir sürüm kullanıyor olabilirsiniz. Komutu `docker-compose` (arada tire ile) şeklinde çalıştırmayı deneyin.

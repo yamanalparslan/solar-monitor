@@ -609,7 +609,7 @@ if "ayarlar_sifre_dogru" not in st.session_state:
 
 with st.expander("⚙️ SİSTEM VE CİHAZ AYARLARI", expanded=st.session_state.ayarlar_sifre_dogru):
     if not st.session_state.ayarlar_sifre_dogru:
-        sifre = st.text_input("Ayarlara erişmek için 4 haneli şifreyi giriniz:", type="password", key="ayarlar_sifre_input")
+        sifre = st.text_input("Ayarlara erişmek için 4 haneli şifreyi giriniz:", type="default", key="ayarlar_sifre_input")
         if sifre == "1444":
             st.session_state.ayarlar_sifre_dogru = True
             st.rerun()
