@@ -161,7 +161,9 @@ def init_db():
             ('target_ip', fab_info['varsayilan_ip'], 'Modbus IP adresi'),
             ('target_port', '502', 'Modbus Port'),
             ('slave_ids', '1,2,3', 'İnverter ID listesi'),
-            ('veri_saklama_gun', '365', 'Veri saklama süresi (gün) - 0: Sınırsız')
+            ('veri_saklama_gun', '365', 'Veri saklama süresi (gün) - 0: Sınırsız'),
+            ('lat', '38.4237', 'Enlem (Latitude)'),
+            ('lon', '27.1428', 'Boylam (Longitude)')
         ]
         for anahtar, deger, aciklama in varsayilan_ayarlar:
             try:
@@ -250,7 +252,7 @@ def tum_ayarlari_oku(fabrika_id: str):
             'volt_addr': '71', 'akim_addr': '72', 'isi_addr': '73',
             'uretim_addr': '36', 'uretim_scale': '1.0',
             'target_ip': fab_ip, 'target_port': '502', 'slave_ids': '1,2,3',
-            'veri_saklama_gun': '365'
+            'veri_saklama_gun': '365', 'lat': '38.4237', 'lon': '27.1428'
         }
 
 def hata_durumu_guncelle(cursor, fabrika_id, slave_id, register_no, hata_kodu, zaman):
@@ -297,6 +299,32 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
     hk_122 = data.get('hata_kodu_122', 0)
     
     try:
+        from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, FAULT_MAP_114, FAULT_MAP_115, FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122
+        
+        def normalize_hata_kodu(kod, fault_map):
+            if kod == 0: return 0
+            normalized = 0
+            seen = {}
+            for bit in range(32):
+                if (kod >> bit) & 1:
+                    desc = fault_map.get(bit, "")
+                    if desc and desc != "Spare":
+                        if desc not in seen:
+                            first_bit = bit
+                            for b, d in fault_map.items():
+                                if d == desc:
+                                    first_bit = b
+                                    break
+                            seen[desc] = first_bit
+                        normalized |= (1 << seen[desc])
+            return normalized
+
+        map_dict = {
+            107: FAULT_MAP_107, 109: FAULT_MAP_109, 111: FAULT_MAP_111, 112: FAULT_MAP_112,
+            114: FAULT_MAP_114, 115: FAULT_MAP_115, 116: FAULT_MAP_116, 117: FAULT_MAP_117,
+            118: FAULT_MAP_118, 119: FAULT_MAP_119, 120: FAULT_MAP_120, 121: FAULT_MAP_121, 122: FAULT_MAP_122
+        }
+
         # Hatalari kontrol et ve stateful logla
         hata_listesi = [
             (107, hk_107), (109, hk_109), (111, hk_111), (112, hk_112),
@@ -304,7 +332,8 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
             (118, hk_118), (119, hk_119), (120, hk_120), (121, hk_121), (122, hk_122)
         ]
         for reg_no, val in hata_listesi:
-            hata_durumu_guncelle(cursor, fabrika_id, slave_id, reg_no, val, simdi)
+            norm_val = normalize_hata_kodu(val, map_dict[reg_no])
+            hata_durumu_guncelle(cursor, fabrika_id, slave_id, reg_no, norm_val, simdi)
         
         cursor.execute("""
             INSERT INTO olcumler (

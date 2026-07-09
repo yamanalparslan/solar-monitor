@@ -372,6 +372,15 @@ async def main_loop():
                 continue
 
             dev_id, ip_address, slave_id, data = result
+            
+            # --- SWAP IDs 1 and 2 ONLY FOR URETIM ---
+            if fab_id == "uretim":
+                if dev_id == 1:
+                    dev_id = 2
+                elif dev_id == 2:
+                    dev_id = 1
+            # ----------------------------------------
+
             if data:
                 veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
                 hata_var = data.get("hata_kodu", 0) != 0 or any(

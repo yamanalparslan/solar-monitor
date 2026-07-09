@@ -290,7 +290,13 @@ def start_collector():
 
                     data = read_device(client, slave_id, config, max_retries=3)
                     if data:
-                        veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
+                        save_id = dev_id
+                        if fab_id == "uretim":
+                            if save_id == 1:
+                                save_id = 2
+                            elif save_id == 2:
+                                save_id = 1
+                        veritabani.veri_ekle(save_id, data, fabrika_id=fab_id)
 
                         hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
                         hata_kodlari[0] = data.get("hata_kodu", 0)

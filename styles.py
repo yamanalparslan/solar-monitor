@@ -799,11 +799,30 @@ def render_top_nav():
     }
     
     /* Make page links shrink text instead of truncating */
-    div[data-testid="stPageLink"] a p {
+    /* Make page links shrink text instead of truncating */
+    div[data-testid="stPageLink"],
+    div[data-testid="stPageLink"] * {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        word-wrap: normal !important;
+    }
+    div[data-testid="stPageLink"] {
+        min-width: max-content !important;
+    }
+    div[data-testid="stPageLink"] a p,
+    div[data-testid="stPageLink"] a span {
         font-size: clamp(10px, 1vw, 15px) !important;
-        white-space: normal !important;
         line-height: 1.2 !important;
-        text-overflow: clip !important;
+    }
+    
+    div[data-testid="stPopover"],
+    div[data-testid="stPopover"] * {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        word-wrap: normal !important;
+    }
+    div[data-testid="stPopover"] {
+        min-width: max-content !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -812,16 +831,18 @@ def render_top_nav():
     col1, col2, col3 = st.columns([1.5, 8, 1.5], vertical_alignment="center")
     
     with col1:
-        if st.session_state.get('fabrika_id'):
-            c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
-            with c_logo:
-                st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
-            with c_btn:
+        c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
+        with c_logo:
+            st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
+        with c_btn:
+            if st.session_state.get('fabrika_id'):
                 if st.button("🏭", help="Fabrika Değiştir"):
                     st.session_state.fabrika_id = None
                     st.switch_page("1_PANEL.py")
-        else:
-            st.markdown("<span class='nav-logo'>SolarMonitor</span>", unsafe_allow_html=True)
+            else:
+                if st.button("🏠", help="Ana Sayfaya Dön"):
+                    st.session_state.fabrika_id = None
+                    st.switch_page("1_PANEL.py")
     with col2:
         if st.session_state.get('fabrika_id'):
             # Ana sayfalar
@@ -842,19 +863,19 @@ def render_top_nav():
                 "Sanal İnverter": "pages/10_SANAL_INVERTER.py"
             }
             
-            widths = [max(8, len(title)) for title in main_pages.keys()]
-            widths.append(12) # Dropdown butonu için genişlik
-            widths.append(50) # Boşluk (spacer)
+            widths = [len(title) * 2 + 5 for title in main_pages.keys()]
+            widths.append(35) # Dropdown butonu için genişlik
+            widths.append(5) # Boşluk (spacer)
             cols = st.columns(widths, vertical_alignment="center")
             
             for idx, (title, path) in enumerate(main_pages.items()):
                 with cols[idx]:
                     st.page_link(path, label=title)
                     
-            with cols[-1]:
+            with cols[-2]:
                 # Streamlit altyapısında hover ile açılan menü doğrudan desteklenmediğinden 
                 # tıklama ile açılan (ve mobil uyumlu olan) yerel popover kullanıyoruz.
-                with st.popover("Daha Fazla ▾", use_container_width=True):
+                with st.popover("Daha - Fazla ▾", use_container_width=True):
                     for title, path in other_pages.items():
                         st.page_link(path, label=title)
                 

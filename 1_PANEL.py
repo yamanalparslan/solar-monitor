@@ -112,8 +112,63 @@ try:
     lat_val = float(veritabani.ayar_oku('lat', '38.4237', fab_id))
     lon_val = float(veritabani.ayar_oku('lon', '27.1428', fab_id))
     current_weather = weather.get_current_weather(lat_val, lon_val)
+    
+    # Son alarmı al
+    latest_alarms = veritabani.gecmis_alarmlari_getir(fab_id, limit=1)
+    alarm_html = ""
+    if latest_alarms:
+        import models
+        alrm = latest_alarms[0]
+        a_slave = alrm[0]
+        a_bas = alrm[1]
+        a_reg = alrm[3]
+        a_kod = alrm[4]
+        a_durum = alrm[5] # 'AKTIF' or 'DUZELDI'
+        
+        fault_map = getattr(models, f"FAULT_MAP_{a_reg}", {})
+        faults = models.get_active_faults_with_severity(a_kod, fault_map)
+        hata_aciklama = faults[0][1] if faults else "Bilinmeyen Hata"
+        
+        try:
+            dt = datetime.strptime(str(a_bas).split('.')[0], "%Y-%m-%d %H:%M:%S")
+            zaman_str = dt.strftime("%d.%m %H:%M")
+        except:
+            zaman_str = str(a_bas)[:16]
+            
+        if a_durum == "AKTIF":
+            bg_color = "rgba(254,226,226,0.9)"
+            border_color = "rgba(239,68,68,0.2)"
+            title_color = "#991b1b"
+            text_color = "#7f1d1d"
+            time_color = "#b91c1c"
+            durum_renk = "#ef4444"
+            durum_ikon = "🚨"
+        else:
+            bg_color = "rgba(209,250,229,0.9)"
+            border_color = "rgba(16,185,129,0.2)"
+            title_color = "#065f46"
+            text_color = "#064e3b"
+            time_color = "#047857"
+            durum_renk = "#10b981"
+            durum_ikon = "✅"
+            
+        alarm_html = f"""
+            <div style="background: {bg_color}; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 15px 25px; border-radius: 16px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 20px; border: 1px solid {border_color}; box-shadow: 0 4px 15px {border_color.replace('0.2', '0.1')};">
+                <div style="font-size: 2.5rem; line-height: 1;">{durum_ikon}</div>
+                <div>
+                    <div style="font-size: 0.75rem; color: {title_color}; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 4px;">SON ALARM DURUMU</div>
+                    <div style="font-size: 1.1rem; color: {text_color}; font-weight: 500;">
+                        <b>ID: {a_slave}</b> - {hata_aciklama} &nbsp;&nbsp;|&nbsp;&nbsp;
+                        <span style="color:{time_color};">Zaman: {zaman_str}</span> &nbsp;&nbsp;|&nbsp;&nbsp;
+                        <span style="color:{durum_renk}; font-weight: 700;">Durum: {a_durum}</span>
+                    </div>
+                </div>
+            </div>
+        """
+
+    weather_html = ""
     if current_weather:
-        st.markdown(f"""
+        weather_html = f"""
             <div style="background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 15px 25px; border-radius: 16px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 20px; border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
                 <div style="font-size: 2.5rem; line-height: 1;">{current_weather['icon']}</div>
                 <div>
@@ -125,9 +180,17 @@ try:
                     </div>
                 </div>
             </div>
+        """
+        
+    if weather_html or alarm_html:
+        st.markdown(f"""
+            <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+                {weather_html}
+                {alarm_html}
+            </div>
         """, unsafe_allow_html=True)
 except Exception as e:
-    print(f"[WEATHER WIDGET ERROR] {e}")
+    print(f"[WIDGET ERROR] {e}")
 
 section_header("", "CANLI FILO DURUMU", "TUM CIHAZLARIN ANLIK DURUM OZETI")
 

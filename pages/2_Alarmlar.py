@@ -27,12 +27,15 @@ st.title("DONANIM ARIZALARI VE ALARMLAR")
 
 def hata_bit_coz(kod, fault_map):
     hatalar = []
+    gorulen_aciklamalar = set()
     for bit in range(32):
         if (kod >> bit) & 1:
             aciklama = fault_map.get(bit, "")
             if aciklama and aciklama.lower() != "spare":
-                sev = determine_severity(aciklama)
-                hatalar.append((bit, aciklama, sev))
+                if aciklama not in gorulen_aciklamalar:
+                    sev = determine_severity(aciklama)
+                    hatalar.append((bit, aciklama, sev))
+                    gorulen_aciklamalar.add(aciklama)
     return hatalar
 
 tab_aktif, tab_gecmis = st.tabs(["🔴 AKTIF ALARMLAR", "📜 ALARM GECMISI"])
