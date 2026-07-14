@@ -619,7 +619,7 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     bitis = f"{tarih} 23:59:59"
     try:
         if slave_id:
-            cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(modbus_uretim) FROM olcumler
+            cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) FROM olcumler
                 WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s AND slave_id = %s''',
                 (fabrika_id, baslangic, bitis, slave_id))
             sonuc = cursor.fetchone()
@@ -628,7 +628,7 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
             modbus_uretim = sonuc[2] or 0
         else:
             cursor.execute('''SELECT AVG(guc), SUM(olcum_sayisi), SUM(max_uretim) FROM (
-                SELECT AVG(guc) as guc, COUNT(*) as olcum_sayisi, MAX(modbus_uretim) as max_uretim
+                SELECT AVG(guc) as guc, COUNT(*) as olcum_sayisi, MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as max_uretim
                 FROM olcumler
                 WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s
                 GROUP BY slave_id
