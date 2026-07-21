@@ -67,7 +67,9 @@ allowed_origin = os.getenv("CRM_ALLOWED_ORIGIN", "*")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[allowed_origin] if allowed_origin != "*" else ["*"],
-    allow_credentials=True,
+    # API anahtari header ile tasindigi icin cookie/credential gerekmiyor;
+    # wildcard origin + credentials kombinasyonu spec geregi zaten gecersiz.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -259,7 +261,7 @@ def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge
     response = []
     for row in veriler:
         response.append(DeviceData(
-            zaman=row[0],
+            zaman=str(row[0]),
             guc=float(row[1] or 0),
             voltaj=float(row[2] or 0),
             akim=float(row[3] or 0),
@@ -290,6 +292,7 @@ def get_device_history(
     slave_id: int,
     baslangic: date = Query(..., description="Başlangıç tarihi (YYYY-MM-DD)"),
     bitis: date = Query(..., description="Bitiş tarihi (YYYY-MM-DD)"),
+    fabrika: str = Query("mekanik", description="Fabrika ID"),
     _=Depends(verify_api_key),
 ):
     """Belirtilen tarih aralığında ortalama/min/max değerleri döner.
@@ -297,10 +300,10 @@ def get_device_history(
     CRM'de rapor ve grafik oluşturmak için bu endpoint'i kullanın.
 
     Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/devices/1/history?baslangic=2026-04-01&bitis=2026-04-28
+        GET http://SUNUCU_IP:8503/api/v1/devices/1/history?baslangic=2026-04-01&bitis=2026-04-28&fabrika=mekanik
         Header: X-API-Key: xxxxx
     """
-    sonuc = veritabani.tarih_araliginda_ortalamalar(str(baslangic), str(bitis), slave_id)
+    sonuc = veritabani.tarih_araliginda_ortalamalar(str(baslangic), str(bitis), slave_id, fabrika_id=fabrika)
     if not sonuc or sonuc.get("toplam_olcum", 0) == 0:
         raise HTTPException(status_code=404, detail="Bu tarih aralığında veri bulunamadı.")
 
@@ -364,6 +367,7 @@ def get_production_range(
     baslangic: date = Query(..., description="Başlangıç tarihi (YYYY-MM-DD)"),
     bitis: date = Query(..., description="Bitiş tarihi (YYYY-MM-DD)"),
     slave_id: Optional[int] = Query(None, description="İnverter ID (boş = tümü)"),
+    fabrika: str = Query("mekanik", description="Fabrika ID"),
     _=Depends(verify_api_key),
 ):
     """Tarih aralığında toplam üretim istatistikleri.
@@ -371,10 +375,10 @@ def get_production_range(
     CRM'de aylık/haftalık rapor için bu endpoint'i kullanın.
 
     Örnek CRM çağrısı:
-        GET http://SUNUCU_IP:8503/api/v1/production/range?baslangic=2026-04-01&bitis=2026-04-30
+        GET http://SUNUCU_IP:8503/api/v1/production/range?baslangic=2026-04-01&bitis=2026-04-30&fabrika=mekanik
         Header: X-API-Key: xxxxx
     """
-    sonuc = veritabani.tarih_araliginda_ortalamalar(str(baslangic), str(bitis), slave_id)
+    sonuc = veritabani.tarih_araliginda_ortalamalar(str(baslangic), str(bitis), slave_id, fabrika_id=fabrika)
     if not sonuc or sonuc.get("toplam_olcum", 0) == 0:
         raise HTTPException(status_code=404, detail="Bu tarih aralığında veri bulunamadı.")
 
@@ -408,6 +412,8 @@ def get_active_alarms(request: Request, fabrika: str = Query("mekanik", descript
         hata_isimleri = [
             (6, "hata_107"), (7, "hata_109"), (8, "hata_111"),
             (9, "hata_112"), (10, "hata_114"), (11, "hata_115"), (12, "hata_116"),
+            (13, "hata_117"), (14, "hata_118"), (15, "hata_119"),
+            (16, "hata_120"), (17, "hata_121"), (18, "hata_122"),
         ]
         for idx, isim in hata_isimleri:
             if len(row) > idx and row[idx] and row[idx] != 0:

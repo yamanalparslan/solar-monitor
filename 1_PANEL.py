@@ -604,25 +604,14 @@ def render_status_bar():
 render_status_bar()
 st.markdown('<div style="margin-top: 50px;"></div>', unsafe_allow_html=True)
 
-if "ayarlar_sifre_dogru" not in st.session_state:
-    st.session_state.ayarlar_sifre_dogru = False
-
-with st.expander("⚙️ SİSTEM VE CİHAZ AYARLARI", expanded=st.session_state.ayarlar_sifre_dogru):
-    if not st.session_state.ayarlar_sifre_dogru:
-        sifre = st.text_input("Ayarlara erişmek için 4 haneli şifreyi giriniz:", type="default", key="ayarlar_sifre_input")
-        if sifre == "1444":
-            st.session_state.ayarlar_sifre_dogru = True
-            st.rerun()
-        elif sifre:
-            st.error("Hatalı Şifre!")
-        st.stop()
-
-    if st.button("🔒 Kapat ve Kilitle", key="sifre_kilitle"):
-        st.session_state.ayarlar_sifre_dogru = False
-        st.rerun()
-
+with st.expander("⚙️ SİSTEM VE CİHAZ AYARLARI", expanded=False):
     current_user = get_current_user()
     user_role = get_user_role(current_user)
+
+    # Ayarlar bolumu rol tabanli korunur (eski sabit '1444' sifresi kaldirildi).
+    if user_role != "admin":
+        st.warning("Bu bölüme yalnızca 'admin' rolündeki kullanıcılar erişebilir. (Roller .env dosyasındaki USER_ROLES ile yönetilir.)")
+        st.stop()
 
     st.divider()
     st.header("PULSAR AYARLARI")

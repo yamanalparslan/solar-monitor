@@ -21,11 +21,10 @@ x-common: &common
   volumes:
     - ./data:/app/data
     - ./backups:/app/backups
-    - pgdata:/var/lib/postgresql/data
     # Üretim güvenliği: Kaynak kodun tamamı host'tan bağlanmaz. Image üzerinden çalışır.
+    # NOT: pgdata volume'u yalnizca solar-postgres servisine mount edilir.
   environment:
     - PYTHONUNBUFFERED=1
-    - DB_NAME=/app/data/solar_log.db
 
 services:
   # ─── PostgreSQL / TimescaleDB ───
@@ -33,9 +32,15 @@ services:
     image: timescale/timescaledb:latest-pg15
     container_name: solar_postgres
     restart: unless-stopped
+    # zaman kolonu TIMESTAMP WITHOUT TIME ZONE ve uygulama yerel saat (Istanbul)
+    # yaziyor. PG varsayilan UTC'de calisinca NOW() ile karsilastiran her sorgu
+    # 3 saat kayiyordu. Sunucu saatini uygulamayla hizaliyoruz.
+    command: [ "postgres", "-c", "timezone=Europe/Istanbul" ]
     ports:
-      - "5432:5432"
+      # Guvenlik: DB portu yalnizca localhost'a acilir; konteynerler ic agdan erisir.
+      - "127.0.0.1:5432:5432"
     environment:
+      - TZ=Europe/Istanbul
       - POSTGRES_USER=${POSTGRES_USER:-solar_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-solar_pass_2026}
       - POSTGRES_DB=${POSTGRES_DB:-solar_db}
@@ -60,6 +65,15 @@ services:
     depends_on:
       solar-postgres:
         condition: service_healthy
+    # Veri tazeligi kontrolu: collector ayakta gorunup veri yazmiyorsa
+    # unhealthy olur ve asagidaki restart politikasi devreye girer.
+    # (Image'dan miras kalan Streamlit healthcheck'i bu servis icin gecersizdi.)
+    healthcheck:
+      test: [ "CMD", "python", "healthcheck.py" ]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
 
   # ─── Ana Dashboard ───
   solar-monitor:
@@ -88,13 +102,19 @@ services:
     entrypoint: [ "python", "api.py" ]
     environment:
       - PYTHONUNBUFFERED=1
-      - DB_NAME=/app/data/solar_log.db
       - API_PORT=8503
     depends_on:
       solar-collector:
         condition: service_started
       solar-postgres:
         condition: service_healthy
+    # Kok endpoint API anahtari gerektirmez; servisin ayakta oldugunu dogrular.
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8503/')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ─── Healthcheck Endpoint ───
   solar-healthcheck:
@@ -103,11 +123,18 @@ services:
     restart: unless-stopped
     ports:
       - "8502:8502"
-    entrypoint: [ "python", "healthcheck.py" ]
+    # --serve: kalici HTTP endpoint (/health). Onceden tek seferlik betik
+    # calistigi icin exit 0 verip restart dongusune giriyordu.
+    entrypoint: [ "python", "healthcheck.py", "--serve" ]
     environment:
       - PYTHONUNBUFFERED=1
-      - DB_NAME=/app/data/solar_log.db
       - HEALTH_PORT=8502
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8502/health')" ]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 120s
 
   # ─── Prometheus Exporter ───
   solar-prometheus:
@@ -118,8 +145,13 @@ services:
     entrypoint: [ "python", "prometheus_exporter.py" ]
     environment:
       - PYTHONUNBUFFERED=1
-      - DB_NAME=/app/data/solar_log.db
       - PROMETHEUS_PORT=9100
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/metrics')" ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ─── Grafana Dashboard ───
   solar-grafana:
@@ -161,6 +193,32 @@ services:
     depends_on:
       - solar-mosquitto
     entrypoint: [ "python", "mqtt_listener.py" ]
+    # Image'dan miras kalan Streamlit healthcheck'i bu servis icin anlamsiz
+    # (8501 portunu dinlemiyor) — kalici 'unhealthy' gorunmesine yol aciyordu.
+    healthcheck:
+      disable: true
+
+  # ─── Otomatik Veritabani Yedekleme ───
+  solar-backup:
+    image: timescale/timescaledb:latest-pg15
+    container_name: solar_backup
+    restart: unless-stopped
+    # pg_dump sunucuyla ayni surumde olsun diye ayni TimescaleDB imaji kullanilir.
+    entrypoint: [ "/bin/sh", "/backup.sh" ]
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    environment:
+      - POSTGRES_HOST=solar-postgres
+      - POSTGRES_USER=${POSTGRES_USER:-solar_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-solar_pass_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-solar_db}
+      - BACKUP_TIME=${BACKUP_TIME:-02:30}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      - TZ=Europe/Istanbul
+    depends_on:
+      solar-postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:

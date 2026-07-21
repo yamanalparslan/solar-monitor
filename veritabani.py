@@ -35,6 +35,9 @@ VARSAYILAN_FABRIKA = "mekanik"
 def init_db():
     print("[DB] PostgreSQL Veritabanı Başlatılıyor...")
     conn = get_db_connection()
+    if not conn:
+        print("[DB_HATA] init_db: baglanti kurulamadi, kurulum atlandi.")
+        return
     cursor = conn.cursor()
     
     # 1. Ölçümler Tablosu
@@ -71,41 +74,6 @@ def init_db():
         )
     """)
     
-    # TimescaleDB Setup
-    try:
-        cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
-        cursor.execute("SELECT create_hypertable('olcumler', 'zaman', if_not_exists => TRUE);")
-        
-        cursor.execute("""
-            CREATE MATERIALIZED VIEW IF NOT EXISTS olcumler_saatlik
-            WITH (timescaledb.continuous) AS
-            SELECT 
-                time_bucket('1 hour', zaman) AS zaman_saati,
-                fabrika_id,
-                slave_id,
-                AVG(guc) AS guc,
-                AVG(voltaj) AS voltaj,
-                AVG(akim) AS akim,
-                AVG(sicaklik) AS sicaklik,
-                MAX(modbus_uretim) AS max_uretim
-            FROM olcumler
-            GROUP BY time_bucket('1 hour', zaman), fabrika_id, slave_id;
-        """)
-        
-        try:
-            cursor.execute("SELECT add_continuous_aggregate_policy('olcumler_saatlik', start_offset => INTERVAL '3 days', end_offset => INTERVAL '1 hour', schedule_interval => INTERVAL '1 hour');")
-        except Exception:
-            conn.rollback() # recover from failed transaction
-        
-        try:
-            cursor.execute("SELECT add_retention_policy('olcumler', INTERVAL '30 days');")
-        except Exception:
-            conn.rollback()
-
-    except Exception as e:
-        conn.rollback()
-        print(f"TimescaleDB initialization error: {e}")
-
     # Migration: Add new columns if they don't exist
     try:
         cursor.execute("ALTER TABLE olcumler ADD COLUMN IF NOT EXISTS voltaj_ab DOUBLE PRECISION DEFAULT 0;")
@@ -202,7 +170,108 @@ def init_db():
     """)
 
     conn.commit()
+
+    # TimescaleDB kurulumu — continuous aggregate DDL'i transaction icinde
+    # calisamadigi icin tablolar commit edildikten sonra autocommit ile yapilir.
+    _timescale_kurulumu(conn)
+
     conn.close()
+
+
+def _timescale_kurulumu(conn):
+    """Hypertable, saatlik continuous aggregate ve retention policy kurulumu.
+
+    CREATE MATERIALIZED VIEW ... WITH (timescaledb.continuous) transaction
+    icinde calistirilamaz; bu yuzden bu blok autocommit modunda yurutulur.
+    """
+    conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb;")
+        cursor.execute("SELECT create_hypertable('olcumler', 'zaman', if_not_exists => TRUE);")
+    except Exception as e:
+        print(f"[DB] TimescaleDB hypertable kurulamadi (uzanti eksik olabilir): {e}")
+        conn.autocommit = False
+        return
+
+    try:
+        cursor.execute("""
+            CREATE MATERIALIZED VIEW IF NOT EXISTS olcumler_saatlik
+            WITH (timescaledb.continuous) AS
+            SELECT
+                time_bucket('1 hour', zaman) AS zaman_saati,
+                fabrika_id,
+                slave_id,
+                AVG(guc) AS guc,
+                AVG(voltaj) AS voltaj,
+                AVG(akim) AS akim,
+                AVG(sicaklik) AS sicaklik,
+                MAX(modbus_uretim) AS max_uretim
+            FROM olcumler
+            GROUP BY time_bucket('1 hour', zaman), fabrika_id, slave_id
+            WITH NO DATA;
+        """)
+    except Exception as e:
+        print(f"[DB] olcumler_saatlik view olusturulamadi: {e}")
+
+    try:
+        cursor.execute("""
+            SELECT add_continuous_aggregate_policy('olcumler_saatlik',
+                start_offset => INTERVAL '3 days',
+                end_offset => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 hour',
+                if_not_exists => TRUE);
+        """)
+    except Exception as e:
+        print(f"[DB] Continuous aggregate policy eklenemedi: {e}")
+
+    retention_policy_senkronize(conn)
+    conn.autocommit = False
+
+
+def retention_policy_senkronize(conn=None):
+    """TimescaleDB retention policy'sini ayarlardaki veri_saklama_gun ile eslestirir.
+
+    Retention policy tablo genelinde tek oldugu icin tum fabrikalarin en uzun
+    saklama suresi esas alinir; herhangi bir fabrika 0 (sinirsiz) istiyorsa
+    policy tamamen kaldirilir. Boylece hicbir fabrikanin verisi ayarlarda
+    yazandan daha erken silinmez.
+    """
+    kendi_baglantisi = conn is None
+    if kendi_baglantisi:
+        conn = get_db_connection()
+        if not conn:
+            return
+        conn.autocommit = True
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT deger FROM ayarlar WHERE anahtar = 'veri_saklama_gun'")
+        gunler = []
+        for (deger,) in cursor.fetchall():
+            try:
+                gunler.append(int(deger))
+            except (TypeError, ValueError):
+                pass
+
+        if not gunler:
+            gun = 365
+        elif 0 in gunler:
+            gun = 0
+        else:
+            gun = max(gunler)
+
+        cursor.execute("SELECT remove_retention_policy('olcumler', if_exists => TRUE);")
+        if gun > 0:
+            cursor.execute("SELECT add_retention_policy('olcumler', make_interval(days => %s));", (gun,))
+            print(f"[DB] Retention policy: {gun} gun olarak ayarlandi.")
+        else:
+            print("[DB] Retention policy kaldirildi (sinirsiz saklama).")
+    except Exception as e:
+        print(f"[DB] Retention policy senkronizasyon hatasi: {e}")
+    finally:
+        if kendi_baglantisi:
+            conn.close()
+
 
 def ayar_oku(anahtar, varsayilan=None, fabrika_id=VARSAYILAN_FABRIKA):
     try:
@@ -448,6 +517,7 @@ def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRI
 
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
+    if not conn: return []
     cursor = conn.cursor()
     cursor.execute("""
         SELECT DISTINCT ON (slave_id) 
@@ -471,6 +541,7 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
 
 def db_temizle(fabrika_id=None):
     conn = get_db_connection()
+    if not conn: return False
     cursor = conn.cursor()
     try:
         if fabrika_id:
@@ -487,6 +558,7 @@ def db_temizle(fabrika_id=None):
 
 def eski_verileri_temizle(gun_sayisi=None, fabrika_id=None):
     conn = get_db_connection()
+    if not conn: return 0
     cursor = conn.cursor()
     
     try:
@@ -516,6 +588,7 @@ def eski_verileri_temizle(gun_sayisi=None, fabrika_id=None):
 
 def veritabani_istatistikleri(fabrika_id=None):
     conn = get_db_connection()
+    if not conn: return None
     cursor = conn.cursor()
     
     try:
@@ -590,6 +663,7 @@ def saatlik_ozet_getir(slave_id, baslangic_tarihi, bitis_tarihi, fabrika_id=VARS
 
 def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
+    if not conn: return None
     cursor = conn.cursor()
     baslangic_str = f"{baslangic} 00:00:00"
     bitis_str = f"{bitis} 23:59:59"
@@ -614,11 +688,14 @@ def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VAR
 
 def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
+    if not conn: return None
     cursor = conn.cursor()
     baslangic = f"{tarih} 00:00:00"
     bitis = f"{tarih} 23:59:59"
     try:
         if slave_id:
+            # guc > 0 kosulu: cihaz kapaliyken register'dan gelen sahte/artik
+            # uretim degerlerinin gunluk toplami sisirmesini engeller.
             cursor.execute('''SELECT AVG(guc), COUNT(*), MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) FROM olcumler
                 WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s AND slave_id = %s''',
                 (fabrika_id, baslangic, bitis, slave_id))
@@ -664,6 +741,7 @@ def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
 
 def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
+    if not conn: return None
     cursor = conn.cursor()
     baslangic_str = f"{baslangic} 00:00:00"
     bitis_str = f"{bitis} 23:59:59"
