@@ -54,6 +54,19 @@ for device in cfg["target_devices"]:
 
 # --- OSOS VERİ YÜKLEME ---
 with st.expander(f"OSOS Verisi Yükle - {fab_info['ad']} (CSV/Excel)"):
+    kayit_sayisi = veritabani.osos_kayit_sayisi_getir(fab_id)
+    if kayit_sayisi > 0:
+        col_info, col_del = st.columns([3, 1])
+        with col_info:
+            st.info(f"Sistemde bu fabrika için {kayit_sayisi} günlük OSOS verisi bulunuyor.")
+        with col_del:
+            if st.button("Verileri Sil", type="primary", use_container_width=True, key=f"del_osos_{fab_id}"):
+                if veritabani.osos_verileri_sil(fab_id):
+                    st.success("Silindi!")
+                    st.rerun()
+                else:
+                    st.error("Hata!")
+                    
     uploaded_file = st.file_uploader("OSOS verilerinizi yükleyin", type=["csv", "xlsx"], key=f"osos_uploader_{fab_id}")
     if uploaded_file is not None:
         try:

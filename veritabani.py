@@ -932,6 +932,201 @@ def aylik_osos_getir(fabrika_id, yil):
             SELECT EXTRACT(MONTH FROM tarih) as ay, SUM(aktif_cekis), SUM(aktif_veris)
             FROM osos_verileri
             WHERE fabrika_id = %s AND EXTRACT(YEAR FROM tarih) = %s
+            uretim_kwh = uretim_wh / 1000
+
+        return {'uretim_wh': round(uretim_wh, 2), 'uretim_kwh': round(uretim_kwh, 3),
+                'modbus_uretim': round(modbus_uretim, 3),
+                'ort_guc': round(float(ort_guc), 2), 'calisma_suresi_saat': round(toplam_saat, 2)}
+    except Exception as e:
+        print(f"[WARN] Üretim hesaplama hatası: {e}")
+        return None
+    finally:
+        conn.close()
+
+def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor()
+    baslangic_str = f"{baslangic} 00:00:00"
+    bitis_str = f"{bitis} 23:59:59"
+    hata_sql = """SELECT COUNT(*),
+        SUM(CASE WHEN hata_kodu > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_109 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_111 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_112 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_114 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_115 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_116 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_117 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_118 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_119 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_120 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_121 > 0 THEN 1 ELSE 0 END),
+        SUM(CASE WHEN hata_kodu_122 > 0 THEN 1 ELSE 0 END)
+        FROM olcumler WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s"""
+    try:
+        if slave_id:
+            cursor.execute(hata_sql + " AND slave_id = %s", (fabrika_id, baslangic_str, bitis_str, slave_id))
+        else:
+            cursor.execute(hata_sql, (fabrika_id, baslangic_str, bitis_str))
+        sonuc = cursor.fetchone()
+        return {
+            'toplam_olcum': sonuc[0] or 0, 'hata_107_sayisi': sonuc[1] or 0,
+            'hata_109_sayisi': sonuc[2] or 0, 'hata_111_sayisi': sonuc[3] or 0,
+            'hata_112_sayisi': sonuc[4] or 0, 'hata_114_sayisi': sonuc[5] or 0,
+            'hata_115_sayisi': sonuc[6] or 0, 'hata_116_sayisi': sonuc[7] or 0,
+            'hata_117_sayisi': sonuc[8] or 0, 'hata_118_sayisi': sonuc[9] or 0,
+            'hata_119_sayisi': sonuc[10] or 0, 'hata_120_sayisi': sonuc[11] or 0,
+            'hata_121_sayisi': sonuc[12] or 0, 'hata_122_sayisi': sonuc[13] or 0
+        }
+    except Exception as e:
+        print(f"[WARN] Hata sayısı getirme hatası: {e}")
+        return None
+    finally:
+        conn.close()
+
+def audit_log_kaydet(kullanici, islem, detay="", fabrika_id=VARSAYILAN_FABRIKA):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO audit_log (kullanici, islem, detay, fabrika_id, zaman)
+            VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+        """, (kullanici, islem, detay, fabrika_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[WARN] Audit log hatası: {e}")
+        return False
+
+def audit_log_getir(limit=100, fabrika_id=VARSAYILAN_FABRIKA):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, kullanici, islem, detay, zaman, fabrika_id
+            FROM audit_log
+            WHERE fabrika_id = %s
+            ORDER BY zaman DESC LIMIT %s
+        """, (fabrika_id, limit))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        formatted_rows = []
+        for r in rows:
+            formatted_rows.append((r[0], r[1], r[2], r[3], str(r[4]), r[5]))
+        return formatted_rows
+    except Exception as e:
+        print(f"[WARN] Audit log getirme hatası: {e}")
+        return []
+
+def gecmis_alarmlari_getir(fabrika_id, limit=100):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT slave_id, baslangic_zamani, bitis_zamani, register_no, hata_kodu, durum
+            FROM hata_log
+            WHERE fabrika_id = %s
+            ORDER BY baslangic_zamani DESC LIMIT %s
+        """, (fabrika_id, limit))
+        rows = cursor.fetchall()
+        
+        formatted_rows = []
+        for r in rows:
+            formatted_rows.append((
+                r[0],
+                str(r[1]) if r[1] else "",
+                str(r[2]) if r[2] else "Devam Ediyor",
+                r[3],
+                r[4],
+                r[5]
+            ))
+        return formatted_rows
+    except Exception as e:
+        print(f"[WARN] Gecmis alarm getirme hatasi: {e}")
+        return []
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+def osos_veri_ekle(fabrika_id, tarih_str, aktif_cekis, aktif_veris):
+    conn = get_db_connection()
+    if not conn: return False
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO osos_verileri (fabrika_id, tarih, aktif_cekis, aktif_veris)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (fabrika_id, tarih) DO UPDATE SET
+                aktif_cekis = EXCLUDED.aktif_cekis,
+                aktif_veris = EXCLUDED.aktif_veris
+        """, (fabrika_id, tarih_str, aktif_cekis, aktif_veris))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"OSOS veri ekleme hatasi: {e}")
+        return False
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+def osos_veri_getir(fabrika_id, tarih_str):
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT aktif_cekis, aktif_veris 
+            FROM osos_verileri 
+            WHERE fabrika_id = %s AND tarih = %s
+        """, (fabrika_id, tarih_str))
+        row = cursor.fetchone()
+        if row:
+            return {'aktif_cekis': row[0], 'aktif_veris': row[1]}
+        return None
+    except Exception as e:
+        print(f"OSOS veri okuma hatasi: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+def aylik_uretim_getir(fabrika_id, yil):
+    conn = get_db_connection()
+    if not conn: return {}
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT EXTRACT(MONTH FROM zaman) as ay, SUM(max_uretim)
+            FROM (
+                SELECT date(zaman) as gun, EXTRACT(MONTH FROM zaman) as ay, MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as max_uretim
+                FROM olcumler
+                WHERE fabrika_id = %s AND EXTRACT(YEAR FROM zaman) = %s
+                GROUP BY slave_id, date(zaman), EXTRACT(MONTH FROM zaman)
+            ) as alt_sorgu
+            GROUP BY ay
+            ORDER BY ay
+        ''', (fabrika_id, yil))
+        sonuc = cursor.fetchall()
+        return {int(row[0]): float(row[1]) for row in sonuc}
+    except Exception as e:
+        print(f"Aylık üretim getirme hatası: {e}")
+        return {}
+    finally:
+        cursor.close()
+        conn.close()
+
+def aylik_osos_getir(fabrika_id, yil):
+    conn = get_db_connection()
+    if not conn: return {}
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT EXTRACT(MONTH FROM tarih) as ay, SUM(aktif_cekis), SUM(aktif_veris)
+            FROM osos_verileri
+            WHERE fabrika_id = %s AND EXTRACT(YEAR FROM tarih) = %s
             GROUP BY EXTRACT(MONTH FROM tarih)
             ORDER BY ay
         ''', (fabrika_id, yil))
@@ -943,3 +1138,33 @@ def aylik_osos_getir(fabrika_id, yil):
     finally:
         cursor.close()
         conn.close()
+
+def osos_kayit_sayisi_getir(fabrika_id):
+    conn = get_db_connection()
+    if not conn: return 0
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM osos_verileri WHERE fabrika_id = %s", (fabrika_id,))
+        row = cursor.fetchone()
+        return row[0] if row else 0
+    except Exception as e:
+        print(f"OSOS kayit sayisi hatasi: {e}")
+        return 0
+    finally:
+        if 'cursor' in locals() and cursor: cursor.close()
+        if 'conn' in locals() and conn: conn.close()
+
+def osos_verileri_sil(fabrika_id):
+    conn = get_db_connection()
+    if not conn: return False
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM osos_verileri WHERE fabrika_id = %s", (fabrika_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"OSOS silme hatasi: {e}")
+        return False
+    finally:
+        if 'cursor' in locals() and cursor: cursor.close()
+        if 'conn' in locals() and conn: conn.close()
