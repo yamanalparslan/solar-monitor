@@ -42,6 +42,15 @@ def init_db():
     
     # 1. Ölçümler Tablosu
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS osos_verileri (
+            fabrika_id VARCHAR(50),
+            tarih DATE,
+            aktif_cekis DOUBLE PRECISION DEFAULT 0,
+            aktif_veris DOUBLE PRECISION DEFAULT 0,
+            PRIMARY KEY (fabrika_id, tarih)
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS olcumler (
             id SERIAL,
             fabrika_id VARCHAR(50) DEFAULT 'mekanik',
@@ -846,3 +855,91 @@ def gecmis_alarmlari_getir(fabrika_id, limit=100):
     finally:
         if 'conn' in locals() and conn:
             conn.close()
+
+def osos_veri_ekle(fabrika_id, tarih_str, aktif_cekis, aktif_veris):
+    conn = get_db_connection()
+    if not conn: return False
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO osos_verileri (fabrika_id, tarih, aktif_cekis, aktif_veris)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (fabrika_id, tarih) DO UPDATE SET
+                aktif_cekis = EXCLUDED.aktif_cekis,
+                aktif_veris = EXCLUDED.aktif_veris
+        """, (fabrika_id, tarih_str, aktif_cekis, aktif_veris))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"OSOS veri ekleme hatasi: {e}")
+        return False
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+def osos_veri_getir(fabrika_id, tarih_str):
+    conn = get_db_connection()
+    if not conn: return None
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT aktif_cekis, aktif_veris 
+            FROM osos_verileri 
+            WHERE fabrika_id = %s AND tarih = %s
+        """, (fabrika_id, tarih_str))
+        row = cursor.fetchone()
+        if row:
+            return {'aktif_cekis': row[0], 'aktif_veris': row[1]}
+        return None
+    except Exception as e:
+        print(f"OSOS veri okuma hatasi: {e}")
+        return None
+    finally:
+        if 'conn' in locals() and conn:
+            conn.close()
+
+def aylik_uretim_getir(fabrika_id, yil):
+    conn = get_db_connection()
+    if not conn: return {}
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT EXTRACT(MONTH FROM zaman) as ay, SUM(max_uretim)
+            FROM (
+                SELECT date(zaman) as gun, EXTRACT(MONTH FROM zaman) as ay, MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as max_uretim
+                FROM olcumler
+                WHERE fabrika_id = %s AND EXTRACT(YEAR FROM zaman) = %s
+                GROUP BY slave_id, date(zaman), EXTRACT(MONTH FROM zaman)
+            ) as alt_sorgu
+            GROUP BY ay
+            ORDER BY ay
+        ''', (fabrika_id, yil))
+        sonuc = cursor.fetchall()
+        return {int(row[0]): float(row[1]) for row in sonuc}
+    except Exception as e:
+        print(f"Aylık üretim getirme hatası: {e}")
+        return {}
+    finally:
+        cursor.close()
+        conn.close()
+
+def aylik_osos_getir(fabrika_id, yil):
+    conn = get_db_connection()
+    if not conn: return {}
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT EXTRACT(MONTH FROM tarih) as ay, SUM(aktif_cekis), SUM(aktif_veris)
+            FROM osos_verileri
+            WHERE fabrika_id = %s AND EXTRACT(YEAR FROM tarih) = %s
+            GROUP BY EXTRACT(MONTH FROM tarih)
+            ORDER BY ay
+        ''', (fabrika_id, yil))
+        sonuc = cursor.fetchall()
+        return {int(row[0]): {'aktif_cekis': float(row[1]), 'aktif_veris': float(row[2])} for row in sonuc}
+    except Exception as e:
+        print(f"Aylık OSOS getirme hatası: {e}")
+        return {}
+    finally:
+        cursor.close()
+        conn.close()

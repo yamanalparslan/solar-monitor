@@ -52,6 +52,56 @@ for device in cfg["target_devices"]:
     for s_id in device["slave_ids"]:
         slave_ids.append(s_id)
 
+# --- OSOS VERİ YÜKLEME ---
+with st.expander(f"OSOS Verisi Yükle - {cfg['name']} (CSV/Excel)"):
+    uploaded_file = st.file_uploader("OSOS verilerinizi yükleyin", type=["csv", "xlsx"], key=f"osos_uploader_{fab_id}")
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                df_osos = pd.read_csv(uploaded_file, sep=None, engine='python')
+            else:
+                df_osos = pd.read_excel(uploaded_file)
+            
+            # Gerekli sütunları kontrol et
+            if all(col in df_osos.columns for col in ["Tarih", "Aktif Çekiş", "Aktif Veriş"]):
+                # Türkçe ayları İngilizceye çevir veya doğrudan datetime parse et
+                aylar = {
+                    "Ocak": "01", "Şubat": "02", "Mart": "03", "Nisan": "04", "Mayıs": "05", "Haziran": "06",
+                    "Temmuz": "07", "Ağustos": "08", "Eylül": "09", "Ekim": "10", "Kasım": "11", "Aralık": "12",
+                    "Subat": "02", "Mayis": "05", "Agustos": "08", "Eylul": "09", "Kasim": "11", "Aralik": "12"
+                }
+                
+                basarili = 0
+                for index, row in df_osos.iterrows():
+                    tarih_str = str(row["Tarih"])
+                    for tr_ay, num_ay in aylar.items():
+                        tarih_str = tarih_str.replace(tr_ay, num_ay)
+                    
+                    try:
+                        # Örn format: "16/07/2026 00:00" -> %d/%m/%Y %H:%M
+                        dt = pd.to_datetime(tarih_str, format="%d/%m/%Y %H:%M", errors='coerce')
+                        if pd.isna(dt):
+                            # Fallback parse
+                            dt = pd.to_datetime(tarih_str, errors='coerce')
+                            
+                        if not pd.isna(dt):
+                            cekis = float(str(row["Aktif Çekiş"]).replace(',', '.'))
+                            veris = float(str(row["Aktif Veriş"]).replace(',', '.'))
+                            if veritabani.osos_veri_ekle(fab_id, dt.strftime('%Y-%m-%d'), cekis, veris):
+                                basarili += 1
+                    except Exception as e:
+                        continue
+                
+                if basarili > 0:
+                    st.success(f"{basarili} adet günlük OSOS verisi başarıyla kaydedildi!")
+                else:
+                    st.warning("Veriler okundu ancak uygun tarih formatı bulunamadığı için kaydedilemedi.")
+            else:
+                st.error("Yüklenen dosyada 'Tarih', 'Aktif Çekiş' veya 'Aktif Veriş' sütunu bulunamadı!")
+        except Exception as e:
+            st.error(f"Dosya okuma hatası: {e}")
+
+
 @st.fragment(run_every=f"{int(st.session_state.refresh_interval)}s")
 def goster_rapor():
     # --- TARH SEM ---
@@ -59,7 +109,7 @@ def goster_rapor():
     with col_date:
         secilen_tarih = st.date_input("Rapor Tarihi:", datetime.now())
     with col_range:
-        grafik_gun = st.selectbox("Grafik Aralığı:", [7, 14, 30], format_func=lambda x: f"Son {x} Gün")
+        grafik_secim = st.selectbox("Grafik Aralığı:", [7, 14, 30, "Aylık"], format_func=lambda x: "Aylık (Bu Yıl)" if x == "Aylık" else f"Son {x} Gün")
     with col_time:
         st.caption(f"Son Güncelleme: {datetime.now().strftime('%H:%M:%S')}")
     with col_btn:
@@ -111,41 +161,131 @@ def goster_rapor():
         total_kwh = df_rapor["Uretim (kWh)"].sum()
         total_errors = df_rapor["Toplam Hata"].sum()
 
-        kpi_row([
-            {"value": f"{total_kwh:.1f} kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
-            {"value": str(len(df_rapor)), "label": "AKTIF CIHAZ", "color": "#10b981"},
-            {"value": str(int(total_errors)), "label": "TOPLAM HATA", "color": "#ef4444"},
-        ])
+        osos_verisi = veritabani.osos_veri_getir(fab_id, tarih_str)
+        
+        if osos_verisi:
+            aktif_cekis = osos_verisi['aktif_cekis']
+            aktif_veris = osos_verisi['aktif_veris']
+            gunluk_satilan = aktif_veris
+            oz_tuketim = max(0.0, total_kwh - aktif_veris)
+            gunluk_toplam_kullanilan = aktif_cekis + oz_tuketim
+            
+            kpi_row([
+                {"value": f"{total_kwh:.1f} kWh", "label": "İNV ÜRETİM", "color": "#f59e0b"},
+                {"value": f"{oz_tuketim:.1f} kWh", "label": "ÖZ TÜKETİM", "color": "#3b82f6"},
+                {"value": f"{gunluk_toplam_kullanilan:.1f} kWh", "label": "TOPLAM KULLANIM", "color": "#ef4444"},
+                {"value": f"{gunluk_satilan:.1f} kWh", "label": "ŞEBEKEYE SATILAN", "color": "#10b981"},
+            ])
+        else:
+            kpi_row([
+                {"value": f"{total_kwh:.1f} kWh", "label": "TOPLAM URETIM", "color": "#f59e0b"},
+                {"value": str(len(df_rapor)), "label": "AKTIF CIHAZ", "color": "#10b981"},
+                {"value": str(int(total_errors)), "label": "TOPLAM HATA", "color": "#ef4444"},
+            ])
+            st.caption("OSOS verisi yüklenmediği için tüketim ve şebeke analizi gösterilemiyor.")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # --- GÜNLÜK ÜRETİM TRENDİ GRAFİĞİ ---
+        # --- GÜNLÜK ÜRETİM VE OSOS TRENDİ GRAFİKLERİ ---
         trend_data = []
-        for i in range(grafik_gun - 1, -1, -1):
-            gun_tarih = (secilen_tarih - timedelta(days=i)).strftime('%Y-%m-%d')
-            uretim = veritabani.gunluk_uretim_hesapla(gun_tarih, slave_id=None, fabrika_id=fab_id)
-            if uretim:
-                kwh = uretim.get('modbus_uretim', 0) if uretim.get('modbus_uretim', 0) > 0 else uretim.get('uretim_kwh', 0)
-                trend_data.append({"Tarih": gun_tarih, "Üretim": round(kwh, 2)})
-            else:
-                trend_data.append({"Tarih": gun_tarih, "Üretim": 0})
+        osos_trend = []
+        
+        if grafik_secim == "Aylık":
+            yil = secilen_tarih.year
+            aylik_uretim = veritabani.aylik_uretim_getir(fab_id, yil)
+            aylik_osos = veritabani.aylik_osos_getir(fab_id, yil)
+            
+            ay_isimleri = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+            
+            for ay in range(1, 13):
+                ay_adi = ay_isimleri[ay - 1]
+                u_kwh = aylik_uretim.get(ay, 0)
+                trend_data.append({"Tarih": ay_adi, "Üretim": round(u_kwh, 2)})
+                
+                osos = aylik_osos.get(ay)
+                if osos:
+                    aktif_cekis = osos['aktif_cekis']
+                    aktif_veris = osos['aktif_veris']
+                    oz_tuketim = max(0.0, u_kwh - aktif_veris)
+                    toplam_kullanim = aktif_cekis + oz_tuketim
+                    osos_trend.append({
+                        "Tarih": ay_adi,
+                        "Satılan": aktif_veris,
+                        "Toplam Kullanım": toplam_kullanim,
+                        "Öz Tüketim": oz_tuketim
+                    })
+        else:
+            for i in range(grafik_secim - 1, -1, -1):
+                gun_tarih = (secilen_tarih - timedelta(days=i)).strftime('%Y-%m-%d')
+                uretim = veritabani.gunluk_uretim_hesapla(gun_tarih, slave_id=None, fabrika_id=fab_id)
+                u_kwh = 0
+                if uretim:
+                    u_kwh = uretim.get('modbus_uretim', 0) if uretim.get('modbus_uretim', 0) > 0 else uretim.get('uretim_kwh', 0)
+                trend_data.append({"Tarih": gun_tarih, "Üretim": round(u_kwh, 2)})
+                
+                osos = veritabani.osos_veri_getir(fab_id, gun_tarih)
+                if osos:
+                    aktif_cekis = osos['aktif_cekis']
+                    aktif_veris = osos['aktif_veris']
+                    oz_tuketim = max(0.0, u_kwh - aktif_veris)
+                    toplam_kullanim = aktif_cekis + oz_tuketim
+                    osos_trend.append({
+                        "Tarih": gun_tarih,
+                        "Satılan": aktif_veris,
+                        "Toplam Kullanım": toplam_kullanim,
+                        "Öz Tüketim": oz_tuketim
+                    })
                 
         df_trend = pd.DataFrame(trend_data)
+        df_osos_trend = pd.DataFrame(osos_trend)
         
+        # Draw OSOS Trend Chart
+        if not df_osos_trend.empty:
+            fig_osos = go.Figure()
+            fig_osos.add_trace(go.Bar(
+                x=df_osos_trend["Tarih"], y=df_osos_trend["Öz Tüketim"],
+                name="Öz Tüketim", marker_color="#3b82f6"
+            ))
+            fig_osos.add_trace(go.Bar(
+                x=df_osos_trend["Tarih"], y=df_osos_trend["Satılan"],
+                name="Şebekeye Satılan", marker_color="#10b981"
+            ))
+            fig_osos.add_trace(go.Bar(
+                x=df_osos_trend["Tarih"], y=df_osos_trend["Toplam Kullanım"],
+                name="Toplam Kullanım", marker_color="#ef4444"
+            ))
+            baslik_zaman = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
+            fig_osos.update_layout(
+                barmode='group',
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=35, b=0),
+                height=320,
+                title=dict(text=f"{baslik_zaman} Enerji Tüketim ve Satış Özeti (kWh)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
+                xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                font=dict(color='#86868B', family='Outfit'),
+                hovermode='x unified'
+            )
+            st.plotly_chart(fig_osos, use_container_width=True, config={"displayModeBar": False})
+            st.markdown("<br>", unsafe_allow_html=True)
+
         if not df_trend.empty:
             fig = go.Figure()
             fig.add_trace(go.Bar(
                 x=df_trend["Tarih"], y=df_trend["Üretim"],
-                name='Günlük Üretim',
+                name='İnverter Üretimi',
                 marker=dict(color='rgba(245, 158, 11, 0.75)', line=dict(color='#f59e0b', width=2)),
                 hovertemplate='%{x}<br>Üretim: %{y:.1f} kWh<extra></extra>'
             ))
+            baslik_uretim = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
             fig.update_layout(
                 paper_bgcolor='rgba(255,255,255,0)',
                 plot_bgcolor='rgba(255,255,255,0)',
                 margin=dict(l=0, r=0, t=35, b=0),
                 height=280,
-                title=dict(text=f"Tesisin Son {grafik_gun} Günlük Üretim Trendi", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                title=dict(text=f"Tesisin {baslik_uretim} Üretim Trendi", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
                 xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
                 yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
                 font=dict(color='#86868B', family='Outfit'),
@@ -157,7 +297,7 @@ def goster_rapor():
                     align='left',
                 ),
             )
-            st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.markdown("<br>", unsafe_allow_html=True)
 
             # --- O GUNUN GUC PROFILI ---
