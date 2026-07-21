@@ -87,16 +87,30 @@ def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), ap
 
     .env'de CRM_API_KEY=gizli_anahtar olarak ayarlayın.
     """
+    provided_key = x_api_key or api_key
+    if not provided_key:
+        raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
+
+    # 1. Check generated api_config.json
+    config_path = os.path.join(os.path.dirname(__file__), 'data', 'api_config.json')
+    if os.path.exists(config_path):
+        import json
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config_data = json.load(f)
+            if config_data.get("api_key") == provided_key:
+                return config_data.get("allowed_fields", [])
+        except Exception as e:
+            pass
+
     expected_key = os.getenv("CRM_API_KEY", "")
 
     # Fail-Secure: Eğer key ayarlanmamışsa veya varsayılan (güvensiz) değerlerdeyse erişimi tamamen reddet
-    if not expected_key or expected_key in ("xxxxx", "PLACEHOLDER", "DEFAULT"):
-        raise HTTPException(status_code=500, detail="Güvenlik Uyarısı: Sunucuda CRM_API_KEY yapılandırılmamış. API erişimi kapalı.")
+    if expected_key and expected_key not in ("xxxxx", "PLACEHOLDER", "DEFAULT"):
+        if provided_key == expected_key:
+            return None # None means all fields are allowed
 
-    provided_key = x_api_key or api_key
-    if not provided_key or provided_key != expected_key:
-        raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
-    return True
+    raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
 
 
 # ─────────────────────────────────────────────
@@ -215,9 +229,9 @@ def get_system_status(request: Request, fabrika: str = Query("mekanik", descript
 
 # ── 2. Tüm Cihazların Anlık Durumu ──
 
-@app.get("/api/v1/devices", response_model=List[DeviceSummary], tags=["Cihaz"])
+@app.get("/api/v1/devices", tags=["Cihaz"])
 @limiter.limit("120/minute")
-def get_all_devices(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), _=Depends(verify_api_key)):
+def get_all_devices(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), allowed_fields: Optional[list] = Depends(verify_api_key)):
     """Tüm inverterlerin anlık durumunu döner."""
     rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
     if not rows:
@@ -235,24 +249,30 @@ def get_all_devices(request: Request, fabrika: str = Query("mekanik", descriptio
         else:
             durum = "BEKLEMEDE"
 
-        devices.append(DeviceSummary(
-            slave_id=row[0],
-            son_zaman=row[1],
-            guc=guc,
-            voltaj=round(float(row[3]), 1) if row[3] else 0,
-            akim=round(float(row[4]), 2) if row[4] else 0,
-            sicaklik=round(float(row[5]), 1) if row[5] else 0,
-            hata_kodu=hata,
-            durum=durum,
-        ))
+        device_dict = {
+            "slave_id": row[0],
+            "son_zaman": row[1],
+            "zaman": row[1],
+            "guc": guc,
+            "voltaj": round(float(row[3]), 1) if row[3] else 0,
+            "akim": round(float(row[4]), 2) if row[4] else 0,
+            "sicaklik": round(float(row[5]), 1) if row[5] else 0,
+            "hata_kodu": hata,
+            "durum": durum,
+        }
+        
+        if allowed_fields is not None:
+            device_dict = {k: v for k, v in device_dict.items() if k in allowed_fields or k in ("slave_id", "zaman", "son_zaman")}
+            
+        devices.append(device_dict)
     return devices
 
 
 # ── 3. Tekil Cihaz Son Veriler ──
 
-@app.get("/api/v1/devices/{slave_id}/latest", response_model=List[DeviceData], tags=["Cihaz"])
+@app.get("/api/v1/devices/{slave_id}/latest", tags=["Cihaz"])
 @limiter.limit("120/minute")
-def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge=1, le=1000), fabrika: str = Query("mekanik"), _=Depends(verify_api_key)):
+def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge=1, le=1000), fabrika: str = Query("mekanik"), allowed_fields: Optional[list] = Depends(verify_api_key)):
     """Belirtilen inverter için son N ölçüm verisini döner."""
     veriler = veritabani.son_verileri_getir(slave_id, limit=limit, fabrika_id=fabrika)
     if not veriler:
@@ -260,26 +280,30 @@ def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge
 
     response = []
     for row in veriler:
-        response.append(DeviceData(
-            zaman=str(row[0]),
-            guc=float(row[1] or 0),
-            voltaj=float(row[2] or 0),
-            akim=float(row[3] or 0),
-            sicaklik=float(row[4] or 0),
-            hata_kodu=int(row[5] or 0),
-            hata_kodu_109=int(row[6] or 0) if len(row) > 6 else 0,
-            hata_kodu_111=int(row[7] or 0) if len(row) > 7 else 0,
-            hata_kodu_112=int(row[8] or 0) if len(row) > 8 else 0,
-            hata_kodu_114=int(row[9] or 0) if len(row) > 9 else 0,
-            hata_kodu_115=int(row[10] or 0) if len(row) > 10 else 0,
-            hata_kodu_116=int(row[11] or 0) if len(row) > 11 else 0,
-            hata_kodu_117=int(row[12] or 0) if len(row) > 12 else 0,
-            hata_kodu_118=int(row[13] or 0) if len(row) > 13 else 0,
-            hata_kodu_119=int(row[14] or 0) if len(row) > 14 else 0,
-            hata_kodu_120=int(row[15] or 0) if len(row) > 15 else 0,
-            hata_kodu_121=int(row[16] or 0) if len(row) > 16 else 0,
-            hata_kodu_122=int(row[17] or 0) if len(row) > 17 else 0,
-        ))
+        device_dict = {
+            "zaman": str(row[0]),
+            "guc": float(row[1] or 0),
+            "voltaj": float(row[2] or 0),
+            "akim": float(row[3] or 0),
+            "sicaklik": float(row[4] or 0),
+            "hata_kodu": int(row[5] or 0),
+            "hata_kodu_109": int(row[6] or 0) if len(row) > 6 else 0,
+            "hata_kodu_111": int(row[7] or 0) if len(row) > 7 else 0,
+            "hata_kodu_112": int(row[8] or 0) if len(row) > 8 else 0,
+            "hata_kodu_114": int(row[9] or 0) if len(row) > 9 else 0,
+            "hata_kodu_115": int(row[10] or 0) if len(row) > 10 else 0,
+            "hata_kodu_116": int(row[11] or 0) if len(row) > 11 else 0,
+            "hata_kodu_117": int(row[12] or 0) if len(row) > 12 else 0,
+            "hata_kodu_118": int(row[13] or 0) if len(row) > 13 else 0,
+            "hata_kodu_119": int(row[14] or 0) if len(row) > 14 else 0,
+            "hata_kodu_120": int(row[15] or 0) if len(row) > 15 else 0,
+            "hata_kodu_121": int(row[16] or 0) if len(row) > 16 else 0,
+            "hata_kodu_122": int(row[17] or 0) if len(row) > 17 else 0,
+        }
+        if allowed_fields is not None:
+            device_dict = {k: v for k, v in device_dict.items() if k in allowed_fields or k in ("slave_id", "zaman", "son_zaman")}
+            
+        response.append(device_dict)
     return response
 
 
