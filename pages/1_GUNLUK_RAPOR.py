@@ -91,11 +91,11 @@ with st.expander(f"OSOS Verisi Yükle - {fab_info['ad']} (CSV/Excel)"):
                         tarih_str = tarih_str.replace(tr_ay, num_ay)
                     
                     try:
-                        # Örn format: "16/07/2026 00:00" -> %d/%m/%Y %H:%M
+                        # İlk olarak tam formatı dene
                         dt = pd.to_datetime(tarih_str, format="%d/%m/%Y %H:%M", errors='coerce')
                         if pd.isna(dt):
-                            # Fallback parse
-                            dt = pd.to_datetime(tarih_str, errors='coerce')
+                            # Fallback olarak dayfirst=True ile serbest parse et (DD/MM/YYYY)
+                            dt = pd.to_datetime(tarih_str, errors='coerce', dayfirst=True)
                             
                         if not pd.isna(dt):
                             cekis = float(str(row["Aktif Çekiş"]).replace(',', '.'))
