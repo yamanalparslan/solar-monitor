@@ -185,7 +185,7 @@ def goster_rapor():
             
             kpi_row([
                 {"value": f"{total_kwh:.1f} kWh", "label": "İNV ÜRETİM", "color": "#f59e0b"},
-                {"value": f"{oz_tuketim:.1f} kWh", "label": "ÖZ TÜKETİM", "color": "#3b82f6"},
+                {"value": f"{aktif_cekis:.1f} kWh", "label": "ŞEBEKEDEN ÇEKİLEN", "color": "#3b82f6"},
                 {"value": f"{gunluk_toplam_kullanilan:.1f} kWh", "label": "TOPLAM KULLANIM", "color": "#ef4444"},
                 {"value": f"{gunluk_satilan:.1f} kWh", "label": "ŞEBEKEYE SATILAN", "color": "#10b981"},
             ])
