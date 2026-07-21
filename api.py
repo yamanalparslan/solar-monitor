@@ -98,8 +98,14 @@ def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), ap
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
-            if config_data.get("api_key") == provided_key:
+            
+            # Eski format destegi
+            if "api_key" in config_data and config_data.get("api_key") == provided_key:
                 return config_data.get("allowed_fields", [])
+            
+            # Yeni format destegi
+            if provided_key in config_data:
+                return config_data[provided_key].get("allowed_fields", [])
         except Exception as e:
             pass
 
