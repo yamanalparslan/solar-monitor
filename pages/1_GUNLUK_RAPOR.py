@@ -53,7 +53,7 @@ for device in cfg["target_devices"]:
         slave_ids.append(s_id)
 
 # --- OSOS VERİ YÜKLEME ---
-with st.expander(f"OSOS Verisi Yükle - {cfg['name']} (CSV/Excel)"):
+with st.expander(f"OSOS Verisi Yükle - {fab_info['ad']} (CSV/Excel)"):
     uploaded_file = st.file_uploader("OSOS verilerinizi yükleyin", type=["csv", "xlsx"], key=f"osos_uploader_{fab_id}")
     if uploaded_file is not None:
         try:
