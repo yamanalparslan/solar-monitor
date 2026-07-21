@@ -904,7 +904,7 @@ def aylik_uretim_getir(fabrika_id, yil):
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            SELECT EXTRACT(MONTH FROM zaman) as ay, SUM(max_uretim)
+            SELECT ay, SUM(max_uretim) / 1000.0
             FROM (
                 SELECT date(zaman) as gun, EXTRACT(MONTH FROM zaman) as ay, MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as max_uretim
                 FROM olcumler
@@ -915,7 +915,7 @@ def aylik_uretim_getir(fabrika_id, yil):
             ORDER BY ay
         ''', (fabrika_id, yil))
         sonuc = cursor.fetchall()
-        return {int(row[0]): float(row[1]) for row in sonuc}
+        return {int(row[0]): float(row[1] or 0.0) for row in sonuc}
     except Exception as e:
         print(f"Aylık üretim getirme hatası: {e}")
         return {}
