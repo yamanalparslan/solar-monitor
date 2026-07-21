@@ -214,6 +214,13 @@ def goster_rapor():
                         "Toplam Kullanım": toplam_kullanim,
                         "Öz Tüketim": oz_tuketim
                     })
+                else:
+                    osos_trend.append({
+                        "Tarih": ay_adi,
+                        "Satılan": 0,
+                        "Toplam Kullanım": 0,
+                        "Öz Tüketim": 0
+                    })
         else:
             for i in range(grafik_secim - 1, -1, -1):
                 gun_tarih = (secilen_tarih - timedelta(days=i)).strftime('%Y-%m-%d')
@@ -234,6 +241,13 @@ def goster_rapor():
                         "Satılan": aktif_veris,
                         "Toplam Kullanım": toplam_kullanim,
                         "Öz Tüketim": oz_tuketim
+                    })
+                else:
+                    osos_trend.append({
+                        "Tarih": gun_tarih,
+                        "Satılan": 0,
+                        "Toplam Kullanım": 0,
+                        "Öz Tüketim": 0
                     })
                 
         df_trend = pd.DataFrame(trend_data)
