@@ -327,6 +327,39 @@ def goster_rapor():
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.markdown("<br>", unsafe_allow_html=True)
 
+            # --- KAZANÇ TRENDİ ---
+            if not df_osos_trend.empty:
+                df_kazanc = df_osos_trend.copy()
+                df_kazanc["Kazanç (TL)"] = df_kazanc["Satılan"] * 2.9097037
+                
+                fig_kazanc = go.Figure()
+                fig_kazanc.add_trace(go.Bar(
+                    x=df_kazanc["Tarih"], y=df_kazanc["Kazanç (TL)"],
+                    name='Günlük Kazanç',
+                    marker=dict(color='rgba(16, 185, 129, 0.75)', line=dict(color='#10b981', width=2)),
+                    hovertemplate='%{x}<br>Kazanç: %{y:.2f} TL<extra></extra>'
+                ))
+                
+                fig_kazanc.update_layout(
+                    paper_bgcolor='rgba(255,255,255,0)',
+                    plot_bgcolor='rgba(255,255,255,0)',
+                    margin=dict(l=0, r=0, t=35, b=0),
+                    height=280,
+                    title=dict(text=f"Tesisin {baslik_uretim} Satış Kazancı Trendi (TL)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                    xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+                    yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="TL", tickformat=".2f"),
+                    font=dict(color='#86868B', family='Outfit'),
+                    hovermode='x unified',
+                    hoverlabel=dict(
+                        bgcolor='rgba(255,255,255,0.95)',
+                        bordercolor='rgba(16, 185, 129, 0.5)',
+                        font=dict(family='Outfit', size=13, color='#1D1D1F'),
+                        align='left',
+                    ),
+                )
+                st.plotly_chart(fig_kazanc, use_container_width=True, config={"displayModeBar": False})
+                st.markdown("<br>", unsafe_allow_html=True)
+
             # --- O GUNUN GUC PROFILI ---
             profil_tarih = secilen_tarih.strftime('%Y-%m-%d')
             conn = veritabani.get_db_connection()
