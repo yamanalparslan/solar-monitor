@@ -225,14 +225,16 @@ def goster_rapor():
                         "Tarih": ay_adi,
                         "Satılan": aktif_veris,
                         "Toplam Kullanım": toplam_kullanim,
-                        "Öz Tüketim": oz_tuketim
+                        "Öz Tüketim": oz_tuketim,
+                        "Şebekeden Çekilen": aktif_cekis
                     })
                 else:
                     osos_trend.append({
                         "Tarih": ay_adi,
                         "Satılan": 0,
                         "Toplam Kullanım": 0,
-                        "Öz Tüketim": 0
+                        "Öz Tüketim": 0,
+                        "Şebekeden Çekilen": 0
                     })
         else:
             for i in range(grafik_secim - 1, -1, -1):
@@ -253,14 +255,16 @@ def goster_rapor():
                         "Tarih": gun_tarih,
                         "Satılan": aktif_veris,
                         "Toplam Kullanım": toplam_kullanim,
-                        "Öz Tüketim": oz_tuketim
+                        "Öz Tüketim": oz_tuketim,
+                        "Şebekeden Çekilen": aktif_cekis
                     })
                 else:
                     osos_trend.append({
                         "Tarih": gun_tarih,
                         "Satılan": 0,
                         "Toplam Kullanım": 0,
-                        "Öz Tüketim": 0
+                        "Öz Tüketim": 0,
+                        "Şebekeden Çekilen": 0
                     })
                 
         df_trend = pd.DataFrame(trend_data)
@@ -270,8 +274,8 @@ def goster_rapor():
         if not df_osos_trend.empty:
             fig_osos = go.Figure()
             fig_osos.add_trace(go.Bar(
-                x=df_osos_trend["Tarih"], y=df_osos_trend["Öz Tüketim"],
-                name="Öz Tüketim", marker_color="#3b82f6"
+                x=df_osos_trend["Tarih"], y=df_osos_trend["Şebekeden Çekilen"],
+                name="Şebekeden Çekilen", marker_color="#3b82f6"
             ))
             fig_osos.add_trace(go.Bar(
                 x=df_osos_trend["Tarih"], y=df_osos_trend["Satılan"],
