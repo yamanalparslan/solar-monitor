@@ -534,7 +534,8 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
                hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112,
                hata_kodu_114, hata_kodu_115, hata_kodu_116,
                hata_kodu_117, hata_kodu_118, hata_kodu_119,
-               hata_kodu_120, hata_kodu_121, hata_kodu_122
+               hata_kodu_120, hata_kodu_121, hata_kodu_122,
+               modbus_uretim
         FROM olcumler
         WHERE fabrika_id = %s
         ORDER BY slave_id ASC, zaman DESC
@@ -904,7 +905,7 @@ def aylik_uretim_getir(fabrika_id, yil):
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            SELECT ay, SUM(max_uretim) / 1000.0
+            SELECT ay, SUM(max_uretim)
             FROM (
                 SELECT date(zaman) as gun, EXTRACT(MONTH FROM zaman) as ay, MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as max_uretim
                 FROM olcumler

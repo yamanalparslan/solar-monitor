@@ -237,40 +237,53 @@ def get_system_status(request: Request, fabrika: str = Query("mekanik", descript
 
 @app.get("/api/v1/devices", tags=["Cihaz"])
 @limiter.limit("120/minute")
-def get_all_devices(request: Request, fabrika: str = Query("mekanik", description="Fabrika ID"), allowed_fields: Optional[list] = Depends(verify_api_key)):
+def get_all_devices(request: Request, fabrika: Optional[str] = Query(None, description="Fabrika ID (tümü için boş bırakın)"), allowed_fields: Optional[list] = Depends(verify_api_key)):
     """Tüm inverterlerin anlık durumunu döner."""
-    rows = veritabani.tum_cihazlarin_son_durumu(fabrika)
-    if not rows:
-        return []
-
+    from veritabani import FABRIKALAR
+    
     devices = []
-    for row in rows:
-        guc = float(row[2]) if row[2] else 0
-        hata = (row[6] if len(row) > 6 and row[6] else 0)
-
-        if hata:
-            durum = "ARIZA"
-        elif guc > 0:
-            durum = "AKTIF"
-        else:
-            durum = "BEKLEMEDE"
-
-        device_dict = {
-            "slave_id": row[0],
-            "son_zaman": row[1],
-            "zaman": row[1],
-            "guc": guc,
-            "voltaj": round(float(row[3]), 1) if row[3] else 0,
-            "akim": round(float(row[4]), 2) if row[4] else 0,
-            "sicaklik": round(float(row[5]), 1) if row[5] else 0,
-            "hata_kodu": hata,
-            "durum": durum,
-        }
+    
+    if fabrika and fabrika != "all":
+        target_fabrika_ids = [fabrika]
+    else:
+        target_fabrika_ids = list(FABRIKALAR.keys())
         
-        if allowed_fields is not None:
-            device_dict = {k: v for k, v in device_dict.items() if k in allowed_fields or k in ("slave_id", "zaman", "son_zaman")}
+    for f_id in target_fabrika_ids:
+        rows = veritabani.tum_cihazlarin_son_durumu(f_id)
+        if not rows:
+            continue
             
-        devices.append(device_dict)
+        for row in rows:
+            guc = float(row[2]) if row[2] else 0
+            hata = (row[6] if len(row) > 6 and row[6] else 0)
+            gunluk_uretim = float(row[19]) if len(row) > 19 and row[19] else 0.0
+
+            if hata:
+                durum = "ARIZA"
+            elif guc > 0:
+                durum = "AKTIF"
+            else:
+                durum = "BEKLEMEDE"
+
+            device_dict = {
+                "fabrika_id": f_id,
+                "slave_id": row[0],
+                "son_zaman": row[1],
+                "zaman": row[1],
+                "guc": guc,
+                "voltaj": round(float(row[3]), 1) if row[3] else 0,
+                "akim": round(float(row[4]), 2) if row[4] else 0,
+                "sicaklik": round(float(row[5]), 1) if row[5] else 0,
+                "gunluk_uretim_kwh": gunluk_uretim,
+                "hata_kodu": hata,
+                "durum": durum,
+            }
+            
+            if allowed_fields is not None:
+                device_dict = {k: v for k, v in device_dict.items() if k in allowed_fields or k in ("slave_id", "zaman", "son_zaman", "fabrika_id", "gunluk_uretim_kwh")}
+                
+            devices.append(device_dict)
+            
     return devices
 
 
