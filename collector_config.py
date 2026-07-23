@@ -103,7 +103,7 @@ def load_config(fabrika_id: str = "mekanik") -> dict:
         "uretim_addr":        int(ayarlar.get("uretim_addr")   or os.getenv("URETIM_ADDR",  36)),
         "uretim_scale":       float(ayarlar.get("uretim_scale") or os.getenv("URETIM_SCALE", 1.0)),
         "veri_saklama_gun":   int(ayarlar.get("veri_saklama_gun", 365)),
-        "alarm_registers":    ALARM_REGISTERS,
+        "alarm_registers":    ALARM_REGISTERS if fabrika_id == "mekanik" else [],
     }
 
 

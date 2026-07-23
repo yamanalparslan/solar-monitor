@@ -114,7 +114,7 @@ async def read_device_async(
             # ── 1. ADIM: TEMEL METRIKLERI PARCALI BLOK OLARAK OKU ──
             try:
                 # Blok 1: Akim ve Voltaj (25-30 arası, 6 register)
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(1.5) # Gateway için nefes alma süresi (1.5 sn)
                 regs_chunk1 = await read_registers_smart(client, 25, 6, slave_id)
                 if not regs_chunk1 or len(regs_chunk1) < 6:
                     raise Exception("Akim/Voltaj (25-30) okunamadi")
@@ -123,7 +123,7 @@ async def read_device_async(
                 raw_volt_ab, raw_volt_bc, raw_volt_ca = regs_chunk1[3], regs_chunk1[4], regs_chunk1[5]
 
                 # Blok 2: Uretim (Tekil okuma, bazi inverterlarda hata verebilir diye soft-fail)
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.5)
                 regs_uretim = await read_registers_smart(client, config["uretim_addr"], 1, slave_id)
                 raw_uretim = regs_uretim[0] if (regs_uretim and len(regs_uretim) >= 1) else 0
 
@@ -132,7 +132,7 @@ async def read_device_async(
                 p_end = max(config["guc_addr"], config["isi_addr"])
                 p_count = (p_end - p_start) + 1
                 
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.5)
                 regs_power = await read_registers_smart(client, p_start, p_count, slave_id)
                 if not regs_power or len(regs_power) < p_count:
                     raise Exception(f"Guc/Isi ({p_start}-{p_end}) okunamadi")
@@ -373,13 +373,7 @@ async def main_loop():
 
             dev_id, ip_address, slave_id, data = result
             
-            # --- SWAP IDs 1 and 2 ONLY FOR URETIM ---
-            if fab_id == "uretim":
-                if dev_id == 1:
-                    dev_id = 2
-                elif dev_id == 2:
-                    dev_id = 1
-            # ----------------------------------------
+
 
             if data:
                 veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
