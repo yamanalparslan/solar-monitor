@@ -26,19 +26,17 @@ logger = logging.getLogger("collector_config")
 # ─────────────────────────────────────────────
 
 ALARM_REGISTERS: list[dict] = [
-    {"addr": 107, "key": "hata_kodu",     "count": 2},
-    {"addr": 109, "key": "hata_kodu_109", "count": 2},
-    {"addr": 111, "key": "hata_kodu_111", "count": 1},
-    {"addr": 112, "key": "hata_kodu_112", "count": 2},
-    {"addr": 114, "key": "hata_kodu_114", "count": 1},
-    {"addr": 115, "key": "hata_kodu_115", "count": 1},
-    {"addr": 116, "key": "hata_kodu_116", "count": 1},
-    {"addr": 117, "key": "hata_kodu_117", "count": 1},
-    {"addr": 118, "key": "hata_kodu_118", "count": 1},
-    {"addr": 119, "key": "hata_kodu_119", "count": 1},
-    {"addr": 120, "key": "hata_kodu_120", "count": 1},
-    {"addr": 121, "key": "hata_kodu_121", "count": 1},
-    {"addr": 122, "key": "hata_kodu_122", "count": 1},
+    {"addr": 108, "key": "hata_kodu",     "count": 2},
+    {"addr": 110, "key": "hata_kodu_111", "count": 1},
+    {"addr": 111, "key": "hata_kodu_112", "count": 2},
+    {"addr": 113, "key": "hata_kodu_114", "count": 1},
+    {"addr": 114, "key": "hata_kodu_115", "count": 1},
+    {"addr": 115, "key": "hata_kodu_116", "count": 1},
+    {"addr": 116, "key": "hata_kodu_117", "count": 1},
+    {"addr": 117, "key": "hata_kodu_118", "count": 1},
+    {"addr": 118, "key": "hata_kodu_119", "count": 1},
+    {"addr": 119, "key": "hata_kodu_120", "count": 1},
+    {"addr": 120, "key": "hata_kodu_121", "count": 1},
 ]
 
 
