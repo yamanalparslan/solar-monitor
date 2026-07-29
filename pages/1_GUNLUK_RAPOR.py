@@ -270,65 +270,50 @@ def goster_rapor():
         df_trend = pd.DataFrame(trend_data)
         df_osos_trend = pd.DataFrame(osos_trend)
         
-        # Draw OSOS Trend Chart
-        if not df_osos_trend.empty:
-            fig_osos = go.Figure()
-            fig_osos.add_trace(go.Bar(
-                x=df_osos_trend["Tarih"], y=df_osos_trend["Şebekeden Çekilen"],
-                name="Şebekeden Çekilen", marker_color="#3b82f6"
+        # Draw Combined OSOS and Trend Chart
+        baslik_zaman = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
+        baslik_uretim = baslik_zaman # for the following charts
+        
+        if not df_trend.empty:
+            fig_combined = go.Figure()
+            
+            if not df_osos_trend.empty:
+                fig_combined.add_trace(go.Bar(
+                    x=df_osos_trend["Tarih"], y=df_osos_trend["Şebekeden Çekilen"],
+                    name="Şebekeden Çekilen", marker_color="#3b82f6"
+                ))
+                fig_combined.add_trace(go.Bar(
+                    x=df_osos_trend["Tarih"], y=df_osos_trend["Satılan"],
+                    name="Şebekeye Satılan", marker_color="#10b981"
+                ))
+                fig_combined.add_trace(go.Bar(
+                    x=df_osos_trend["Tarih"], y=df_osos_trend["Toplam Kullanım"],
+                    name="Toplam Harcanan Enerji", marker_color="#ef4444"
+                ))
+            
+            fig_combined.add_trace(go.Bar(
+                x=df_trend["Tarih"], y=df_trend["Üretim"],
+                name="Pulsar Üretimi", 
+                marker=dict(color='rgba(245, 158, 11, 0.75)', line=dict(color='#f59e0b', width=2)),
+                hovertemplate='%{x}<br>Pulsar Üretimi: %{y:.1f} kWh<extra></extra>'
             ))
-            fig_osos.add_trace(go.Bar(
-                x=df_osos_trend["Tarih"], y=df_osos_trend["Satılan"],
-                name="Şebekeye Satılan", marker_color="#10b981"
-            ))
-            fig_osos.add_trace(go.Bar(
-                x=df_osos_trend["Tarih"], y=df_osos_trend["Toplam Kullanım"],
-                name="Toplam Kullanım", marker_color="#ef4444"
-            ))
-            baslik_zaman = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
-            fig_osos.update_layout(
+            
+            fig_combined.update_layout(
                 barmode='group',
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 margin=dict(l=0, r=0, t=35, b=0),
-                height=320,
-                title=dict(text=f"{baslik_zaman} Enerji Tüketim ve Satış Özeti (kWh)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                height=400,
+                title=dict(text=f"{baslik_zaman} Enerji Üretim, Tüketim ve Satış Özeti (kWh)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
                 yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
                 xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 font=dict(color='#86868B', family='Outfit'),
                 hovermode='x unified'
             )
-            st.plotly_chart(fig_osos, use_container_width=True, config={"displayModeBar": False})
-            st.markdown("<br>", unsafe_allow_html=True)
-
-        if not df_trend.empty:
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=df_trend["Tarih"], y=df_trend["Üretim"],
-                name='İnverter Üretimi',
-                marker=dict(color='rgba(245, 158, 11, 0.75)', line=dict(color='#f59e0b', width=2)),
-                hovertemplate='%{x}<br>Üretim: %{y:.1f} kWh<extra></extra>'
-            ))
-            baslik_uretim = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
-            fig.update_layout(
-                paper_bgcolor='rgba(255,255,255,0)',
-                plot_bgcolor='rgba(255,255,255,0)',
-                margin=dict(l=0, r=0, t=35, b=0),
-                height=280,
-                title=dict(text=f"Tesisin {baslik_uretim} Üretim Trendi", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
-                xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
-                yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
-                font=dict(color='#86868B', family='Outfit'),
-                hovermode='x unified',
-                hoverlabel=dict(
-                    bgcolor='rgba(255,255,255,0.95)',
-                    bordercolor='rgba(245, 158, 11, 0.5)',
-                    font=dict(family='Outfit', size=13, color='#1D1D1F'),
-                    align='left',
-                ),
-            )
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(fig_combined, use_container_width=True, config={"displayModeBar": False})
+            
+            st.info("**Bilgilendirme: Toplam Harcanan Enerji Nasıl Hesaplanır?**\n\n**Toplam Harcanan Enerji** = Şebekeden Çekilen + Öz Tüketim\n\n*(Öz Tüketim = Pulsar Üretimi - Şebekeye Satılan. Üretilen enerjinin satılmayan kısmı tesis içinde tüketilmiş (Öz Tüketim) kabul edilir.)*")
             st.markdown("<br>", unsafe_allow_html=True)
 
             # --- KAZANÇ TRENDİ ---
@@ -364,62 +349,114 @@ def goster_rapor():
                 st.plotly_chart(fig_kazanc, use_container_width=True, config={"displayModeBar": False})
                 st.markdown("<br>", unsafe_allow_html=True)
 
-            # --- O GUNUN GUC PROFILI ---
-            profil_tarih = secilen_tarih.strftime('%Y-%m-%d')
-            conn = veritabani.get_db_connection()
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    SELECT date_trunc('hour', zaman) as saat, AVG(guc)
-                    FROM olcumler 
-                    WHERE fabrika_id = %s AND DATE(zaman) = %s AND guc > 0
-                    GROUP BY saat
-                    ORDER BY saat
-                """, (fab_id, profil_tarih))
-                rows = cursor.fetchall()
-                conn.close()
+            # --- TÜM FABRİKALARIN GÜNLÜK/AYLIK TOPLAM TRENDİ ---
+            karsilastirma_data = []
+            
+            from veritabani import FABRIKALAR
+            
+            if grafik_secim == "Aylık":
+                yil = secilen_tarih.year
+                ay_isimleri = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
                 
-                if rows:
-                    df_guc = pd.DataFrame(rows, columns=['saat', 'ort_guc'])
-                    fig_guc = go.Figure()
+                # Her fabrika için yıllık veriyi baştan çekelim
+                fab_veriler = {}
+                for f_id in FABRIKALAR.keys():
+                    fab_veriler[f_id] = {
+                        "uretim": veritabani.aylik_uretim_getir(f_id, yil),
+                        "osos": veritabani.aylik_osos_getir(f_id, yil)
+                    }
+                
+                for ay in range(1, 13):
+                    ay_adi = ay_isimleri[ay - 1]
+                    toplam_u_kwh = 0
+                    toplam_aktif_cekis = 0
+                    toplam_aktif_veris = 0
                     
-                    # Glow effect trace
-                    fig_guc.add_trace(go.Scatter(
-                        x=df_guc['saat'], y=df_guc['ort_guc'],
-                        mode='lines',
-                        line=dict(color="rgba(16, 185, 129, 0.25)", width=8, shape='spline', smoothing=1.3),
-                        hoverinfo='skip',
-                        showlegend=False
-                    ))
+                    for f_id in FABRIKALAR.keys():
+                        toplam_u_kwh += fab_veriler[f_id]["uretim"].get(ay, 0)
+                        osos_f = fab_veriler[f_id]["osos"].get(ay)
+                        if osos_f:
+                            toplam_aktif_cekis += osos_f.get('aktif_cekis', 0)
+                            toplam_aktif_veris += osos_f.get('aktif_veris', 0)
+                            
+                    oz_tuketim = max(0.0, toplam_u_kwh - toplam_aktif_veris)
+                    toplam_harcanan = toplam_aktif_cekis + oz_tuketim
                     
-                    # Main trace
-                    fig_guc.add_trace(go.Scatter(
-                        x=df_guc['saat'], y=df_guc['ort_guc'],
-                        mode='lines',
-                        name='Ortalama Güç',
-                        line=dict(color="#10b981", width=3, shape='spline', smoothing=1.3),
-                        fill='tozeroy',
-                        fillcolor='rgba(16, 185, 129, 0.15)',
-                        hovertemplate='%{x|%H:%M}<br>Güç: %{y:.1f} W<extra></extra>'
-                    ))
-                    fig_guc.update_layout(
-                        paper_bgcolor='rgba(255,255,255,0)',
-                        plot_bgcolor='rgba(255,255,255,0)',
-                        margin=dict(l=0, r=0, t=35, b=0),
-                        height=280,
-                        title=dict(text=f"{profil_tarih} Tarihli Ortalama Güç Profili (Saatlik)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
-                        xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
-                        yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="Güç (W)"),
-                        font=dict(color='#86868B', family='Outfit'),
-                        hovermode='x unified',
-                        hoverlabel=dict(
-                            bgcolor='rgba(255,255,255,0.95)',
-                            bordercolor='rgba(16, 185, 129, 0.5)',
-                            font=dict(family='Outfit', size=13, color='#1D1D1F'),
-                        )
-                    )
-                    st.plotly_chart(fig_guc, width='stretch', config={"displayModeBar": False})
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    karsilastirma_data.append({
+                        "Tarih": ay_adi,
+                        "Pulsar Üretimi": toplam_u_kwh,
+                        "Şebekeden Çekilen": toplam_aktif_cekis,
+                        "Şebekeye Satılan": toplam_aktif_veris,
+                        "Toplam Harcanan Enerji": toplam_harcanan
+                    })
+            else:
+                for i in range(grafik_secim - 1, -1, -1):
+                    gun_tarih = (secilen_tarih - timedelta(days=i)).strftime('%Y-%m-%d')
+                    
+                    toplam_u_kwh = 0
+                    toplam_aktif_cekis = 0
+                    toplam_aktif_veris = 0
+                    
+                    for f_id in FABRIKALAR.keys():
+                        uretim_sonuc = veritabani.gunluk_uretim_hesapla(gun_tarih, slave_id=None, fabrika_id=f_id)
+                        u_kwh = 0
+                        if uretim_sonuc:
+                            u_kwh = uretim_sonuc.get('modbus_uretim', 0) if uretim_sonuc.get('modbus_uretim', 0) > 0 else uretim_sonuc.get('uretim_kwh', 0)
+                        toplam_u_kwh += u_kwh
+                        
+                        osos_f = veritabani.osos_veri_getir(f_id, gun_tarih)
+                        if osos_f:
+                            toplam_aktif_cekis += osos_f.get('aktif_cekis', 0)
+                            toplam_aktif_veris += osos_f.get('aktif_veris', 0)
+                            
+                    oz_tuketim = max(0.0, toplam_u_kwh - toplam_aktif_veris)
+                    toplam_harcanan = toplam_aktif_cekis + oz_tuketim
+                    
+                    karsilastirma_data.append({
+                        "Tarih": gun_tarih,
+                        "Pulsar Üretimi": toplam_u_kwh,
+                        "Şebekeden Çekilen": toplam_aktif_cekis,
+                        "Şebekeye Satılan": toplam_aktif_veris,
+                        "Toplam Harcanan Enerji": toplam_harcanan
+                    })
+                    
+            if karsilastirma_data:
+                df_karsilastirma = pd.DataFrame(karsilastirma_data)
+                
+                fig_karsilastirma = go.Figure()
+                fig_karsilastirma.add_trace(go.Bar(
+                    x=df_karsilastirma["Tarih"], y=df_karsilastirma["Şebekeden Çekilen"],
+                    name="Şebekeden Çekilen", marker_color="#3b82f6"
+                ))
+                fig_karsilastirma.add_trace(go.Bar(
+                    x=df_karsilastirma["Tarih"], y=df_karsilastirma["Şebekeye Satılan"],
+                    name="Şebekeye Satılan", marker_color="#10b981"
+                ))
+                fig_karsilastirma.add_trace(go.Bar(
+                    x=df_karsilastirma["Tarih"], y=df_karsilastirma["Toplam Harcanan Enerji"],
+                    name="Toplam Harcanan Enerji", marker_color="#ef4444"
+                ))
+                fig_karsilastirma.add_trace(go.Bar(
+                    x=df_karsilastirma["Tarih"], y=df_karsilastirma["Pulsar Üretimi"],
+                    name="Pulsar Üretimi", marker_color="#f59e0b"
+                ))
+                
+                baslik_zaman = f"{secilen_tarih.year} Yılı" if grafik_secim == "Aylık" else f"Son {grafik_secim} Günlük"
+                fig_karsilastirma.update_layout(
+                    barmode='group',
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(l=0, r=0, t=35, b=0),
+                    height=350,
+                    title=dict(text=f"{baslik_zaman} Tüm Fabrikalar Enerji Özeti (kWh)", font=dict(size=14, color='#1D1D1F', family='Outfit', weight='bold')),
+                    yaxis=dict(gridcolor='rgba(0,0,0,0.05)', showgrid=True, zeroline=False, rangemode='tozero', title="kWh"),
+                    xaxis=dict(showgrid=False, showline=True, linecolor='rgba(0,0,0,0.1)'),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    font=dict(color='#86868B', family='Outfit'),
+                    hovermode='x unified'
+                )
+                st.plotly_chart(fig_karsilastirma, use_container_width=True, config={"displayModeBar": False})
+                st.markdown("<br>", unsafe_allow_html=True)
 
         # solar_table ile premium HTML tablo
         tablo_headers = ["CIHAZ", "URETIM (kWh)", "ORT. GUC (W)", "MAKS. GUC (W)", "ORT. VOLTAJ (V)", "ORT. ISI (C)", "HATA", "CALISMA (sa)"]
