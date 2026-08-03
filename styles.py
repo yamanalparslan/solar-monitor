@@ -734,6 +734,9 @@ def solar_table(
 
 def render_top_nav():
     """Apple web sitesi tarzinda yatay (top) navigation bar cizer."""
+    if not st.session_state.get("authenticated"):
+        return
+        
     # Top navbar container CSS
     st.markdown("""
     <style>
