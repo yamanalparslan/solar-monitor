@@ -136,7 +136,7 @@ _LOGIN_CSS = """
 }
 
 .login-title {
-    text-align: left;
+    text-align: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
     font-size: 1.8rem;
     font-weight: 800;
@@ -144,6 +144,7 @@ _LOGIN_CSS = """
     margin-bottom: 4px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
 }
 .login-title-icon {
@@ -159,7 +160,7 @@ _LOGIN_CSS = """
 }
 
 .login-subtitle {
-    text-align: left;
+    text-align: center;
     font-family: 'Outfit', sans-serif;
     font-size: 0.95rem;
     color: #64748b;
@@ -234,7 +235,7 @@ def _show_login_form():
     with col2:
         st.markdown("""
         <div class="login-card">
-            <div class="login-title">Solar Monitor</div>
+            <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
             <div class="login-subtitle">Gunes Enerjisi Santrali Izleme Sistemi</div>
         </div>
         """, unsafe_allow_html=True)
@@ -277,12 +278,7 @@ def _show_login_form():
                         import time as _time
                         _time.sleep(1)
 
-        st.markdown("""
-        <div class="login-footer">
-            Sisteme giris yapmak icin yetkili bilgilerinizi kullanin.<br>
-            (Ayarlar .env dosyasindan yapilandirilabilir)
-        </div>
-        """, unsafe_allow_html=True)
+        
 
 
 
