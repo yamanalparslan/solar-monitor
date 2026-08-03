@@ -282,14 +282,14 @@ div[data-testid="column"]:nth-child(2) {{
 .login-title {{
     text-align: center;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 1.8rem;
-    font-weight: 800;
+    font-size: 2.4rem;
+    font-weight: 900;
     color: #1e293b;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 14px;
     animation: fadeSlideDown 0.6s ease 0.3s both;
 }}
 @keyframes fadeSlideDown {{
@@ -318,9 +318,10 @@ div[data-testid="column"]:nth-child(2) {{
 .login-subtitle {{
     text-align: center;
     font-family: 'Inter', sans-serif;
-    font-size: 0.9rem;
-    color: #94a3b8;
+    font-size: 1.05rem;
+    color: #64748b;
     margin-bottom: 24px;
+    font-weight: 600;
     animation: fadeSlideDown 0.6s ease 0.5s both;
     letter-spacing: 0.5px;
 }}

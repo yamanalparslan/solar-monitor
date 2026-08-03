@@ -46,25 +46,42 @@ if 'refresh_interval' not in st.session_state:
     st.session_state.refresh_interval = 30
 # Fabrika seçilmemişse seçim ekranı göster
 if st.session_state.fabrika_id is None:
+    # Dynamic sky background (same as login, uses system time)
+    from auth import _build_sky_css
+    st.markdown(_build_sky_css(), unsafe_allow_html=True)
+    
     st.markdown("""
     <style>
-    /* Split Background */
-    .stApp, [data-testid="stAppViewContainer"] {
-        background: #1c2950 !important;
-        background-size: cover !important;
-        background-attachment: fixed !important;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    [data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0px !important;
     }
-    
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+        background: transparent !important;
+        background-color: transparent !important;
+    }
     .top-nav {
         display: none !important;
     }
     
     /* Make the middle column a single unified card */
     div[data-testid="column"]:nth-child(2) {
-        background: #ffffff !important;
-        border-radius: 8px !important;
+        background: rgba(255,255,255,0.95) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border-radius: 16px !important;
         padding: 50px 40px 50px 40px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.25) !important;
+        animation: cardEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+        position: relative;
+        z-index: 10;
+    }
+    @keyframes cardEntrance {
+        from { opacity: 0; transform: translateY(50px) scale(0.95); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
     }
     
     /* Buttons */
@@ -72,11 +89,12 @@ if st.session_state.fabrika_id is None:
         background: #ffffff !important;
         border: 1px solid #cbd5e1 !important;
         color: #1e293b !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         font-weight: 700 !important;
-        font-size: 1.05rem !important;
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.1rem !important;
         padding: 30px 10px !important;
-        transition: all 0.2s ease !important;
+        transition: all 0.3s ease !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.02) !important;
         height: auto !important;
         margin-top: 20px !important;
@@ -85,38 +103,52 @@ if st.session_state.fabrika_id is None:
         background: #f8fafc !important;
         border-color: #2563eb !important;
         color: #2563eb !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 25px rgba(37,99,235,0.15) !important;
     }
     
     .login-title {
         text-align: center;
-        font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
-        font-size: 2.2rem;
-        font-weight: 800;
-        color: #ffffff;
-        margin-bottom: 4px;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 2.4rem;
+        font-weight: 900;
+        color: #1e293b;
+        margin-bottom: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 12px;
+        gap: 14px;
+        animation: fadeSlideDown 0.6s ease 0.3s both;
+    }
+    @keyframes fadeSlideDown {
+        from { opacity: 0; transform: translateY(-15px); }
+        to   { opacity: 1; transform: translateY(0); }
     }
     .login-title-icon {
-        background: #2563eb;
+        background: linear-gradient(135deg, #2563eb, #3b82f6);
         color: white;
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         display: flex;
         justify-content: center;
         align-items: center;
         font-size: 20px;
+        animation: iconPulse 3s ease-in-out infinite !important;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    }
+    @keyframes iconPulse {
+        0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }
+        50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }
     }
     .login-subtitle {
         text-align: center;
-        font-family: 'Outfit', sans-serif;
-        font-size: 1rem;
+        font-family: 'Inter', sans-serif;
+        font-size: 1.05rem;
         color: #64748b;
         margin-bottom: 10px;
         font-weight: 600;
+        animation: fadeSlideDown 0.6s ease 0.5s both;
     }
     </style>
     
