@@ -834,16 +834,12 @@ def render_top_nav():
     col1, col2, col3 = st.columns([1.5, 8, 1.5], vertical_alignment="center")
     
     with col1:
-        c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
-        with c_logo:
-            st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
-        with c_btn:
-            if st.session_state.get('fabrika_id'):
+        if st.session_state.get('fabrika_id'):
+            c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
+            with c_logo:
+                st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
+            with c_btn:
                 if st.button("🏭", help="Fabrika Değiştir"):
-                    st.session_state.fabrika_id = None
-                    st.switch_page("1_PANEL.py")
-            else:
-                if st.button("🏠", help="Ana Sayfaya Dön"):
                     st.session_state.fabrika_id = None
                     st.switch_page("1_PANEL.py")
     with col2:
