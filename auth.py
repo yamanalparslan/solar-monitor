@@ -121,18 +121,22 @@ _LOGIN_CSS = """
 
 /* Split Background */
 .stApp, [data-testid="stAppViewContainer"] {
-    background: linear-gradient(165deg, #1c2950 55%, #f4f6f9 55%) !important;
+    background: #1c2950 !important;
     background-size: cover !important;
     background-attachment: fixed !important;
 }
 
 /* KART TASARIMI (Solid White) */
-.login-card {
+div[data-testid="column"]:nth-child(2) {
     background: #ffffff !important;
     border-radius: 8px !important;
-    padding: 40px 36px 40px 36px !important;
+    padding: 40px 36px !important;
     box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
-    text-align: center;
+}
+/* Ensure form wrapper has no border since col2 is the card */
+[data-testid="stForm"] {
+    border: none !important;
+    padding: 0 !important;
 }
 
 .login-title {
@@ -234,8 +238,7 @@ def _show_login_form():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("""
-        <div class="login-card">
-            <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
+                    <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
             <div class="login-subtitle">Gunes Enerjisi Santrali Izleme Sistemi</div>
         </div>
         """, unsafe_allow_html=True)

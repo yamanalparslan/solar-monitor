@@ -50,7 +50,7 @@ if st.session_state.fabrika_id is None:
     <style>
     /* Split Background */
     .stApp, [data-testid="stAppViewContainer"] {
-        background: linear-gradient(165deg, #1c2950 55%, #f4f6f9 55%) !important;
+        background: #1c2950 !important;
         background-size: cover !important;
         background-attachment: fixed !important;
     }
@@ -60,7 +60,7 @@ if st.session_state.fabrika_id is None:
     }
     
     /* Make the middle column a single unified card */
-    div[data-testid="column"]:has(.login-title) {
+    div[data-testid="column"]:nth-child(2) {
         background: #ffffff !important;
         border-radius: 8px !important;
         padding: 50px 40px 50px 40px !important;
@@ -92,7 +92,7 @@ if st.session_state.fabrika_id is None:
         font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
         font-size: 2.2rem;
         font-weight: 800;
-        color: #ffffff;
+        color: #1c2950;
         margin-bottom: 4px;
         display: flex;
         align-items: center;
@@ -114,7 +114,7 @@ if st.session_state.fabrika_id is None:
         text-align: center;
         font-family: 'Outfit', sans-serif;
         font-size: 1rem;
-        color: #cbd5e1;
+        color: #64748b;
         margin-bottom: 10px;
         font-weight: 600;
     }
