@@ -112,34 +112,35 @@ def load_users() -> dict:
     return {"admin": {"hash": _DEFAULT_ADMIN_HASH, "role": "admin"}}
 # ===== DYNAMIC SKY BACKGROUND SYSTEM =====
 import math
+import urllib.parse
 
-def _get_sky_theme():
-    """Saate gore gokyuzu renkleri, gunes/ay pozisyonu ve siluet rengi hesaplar."""
+def _build_sky_css():
+    """Saate gore gokyuzu CSS'i olusturur (gradient, gunes/ay, siluet - hepsi CSS icinde)."""
     from datetime import datetime
     now = datetime.now()
     hour = now.hour + now.minute / 60.0
 
     # === GOKYUZU RENKLERI ===
-    if 5 <= hour < 6.5:       # Safak
+    if 5 <= hour < 6.5:
         sky = "linear-gradient(180deg, #1a1a2e 0%, #16213e 25%, #e94560 60%, #ff8a5c 85%, #ffd89b 100%)"
-        sil = "#0a0a15"
-    elif 6.5 <= hour < 9:     # Sabah
+        sil = "%230a0a15"
+    elif 6.5 <= hour < 9:
         sky = "linear-gradient(180deg, #4a90d9 0%, #87ceeb 45%, #b4d7f5 75%, #ffecd2 100%)"
-        sil = "#12182a"
-    elif 9 <= hour < 15:      # Ogle
+        sil = "%2312182a"
+    elif 9 <= hour < 15:
         sky = "linear-gradient(180deg, #1e3c72 0%, #2a5298 35%, #4a90d9 65%, #87ceeb 100%)"
-        sil = "#0f1b2d"
-    elif 15 <= hour < 17.5:   # Ikindi
+        sil = "%230f1b2d"
+    elif 15 <= hour < 17.5:
         sky = "linear-gradient(180deg, #2c3e50 0%, #3498db 30%, #e67e22 70%, #f39c12 100%)"
-        sil = "#0d1520"
-    elif 17.5 <= hour < 20:   # Gun batimi
+        sil = "%230d1520"
+    elif 17.5 <= hour < 20:
         sky = "linear-gradient(180deg, #2c3e50 0%, #8e44ad 25%, #e74c3c 55%, #f39c12 80%, #f5d061 100%)"
-        sil = "#0a0a15"
-    else:                      # Gece
+        sil = "%230a0a15"
+    else:
         sky = "linear-gradient(180deg, #050510 0%, #0a0a1a 35%, #0f1b38 65%, #1c2950 100%)"
-        sil = "#030308"
+        sil = "%23030308"
 
-    # === GUNES / AY POZISYONU ===
+    # === GUNES / AY (CSS ::before) ===
     if 6 <= hour <= 20:
         progress = (hour - 6) / 14.0
         angle = math.pi * progress
@@ -152,66 +153,92 @@ def _get_sky_theme():
             sun_color, glow = "#ffd700", "rgba(255,215,0,0.4)"
         else:
             sun_color, glow = "#ff4500", "rgba(255,69,0,0.5)"
-        celestial = f'''<div style="position:absolute;left:{sun_x:.1f}%;top:{sun_y:.1f}%;
-            width:{sun_size:.0f}px;height:{sun_size:.0f}px;
-            background:radial-gradient(circle,{sun_color} 30%,{glow} 70%,transparent 100%);
-            border-radius:50%;box-shadow:0 0 {sun_size:.0f}px {glow},0 0 {sun_size*2:.0f}px {glow};
-            transform:translate(-50%,-50%);"></div>'''
-        is_night = False
+        sun_css = f"""
+            content: '';
+            position: fixed;
+            left: {sun_x:.1f}%; top: {sun_y:.1f}%;
+            width: {sun_size:.0f}px; height: {sun_size:.0f}px;
+            background: radial-gradient(circle, {sun_color} 30%, {glow} 70%, transparent 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 {sun_size:.0f}px {glow}, 0 0 {sun_size*2:.0f}px {glow};
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+        """
     else:
-        celestial = '''<div style="position:absolute;left:72%;top:18%;
-            width:28px;height:28px;
-            background:radial-gradient(circle at 35% 35%,#f5f5f5 0%,#e0e0e0 50%,#ccc 100%);
-            border-radius:50%;box-shadow:0 0 20px rgba(255,255,255,0.3),0 0 60px rgba(255,255,255,0.1);
-            transform:translate(-50%,-50%);"></div>'''
-        is_night = True
+        sun_css = """
+            content: '';
+            position: fixed;
+            left: 72%; top: 18%;
+            width: 28px; height: 28px;
+            background: radial-gradient(circle at 35% 35%, #f5f5f5 0%, #e0e0e0 50%, #ccc 100%);
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(255,255,255,0.3), 0 0 60px rgba(255,255,255,0.1);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 1;
+        """
 
-    # === YILDIZLAR (gece) ===
-    stars = ""
-    if is_night or hour < 6.5 or hour > 18.5:
+    # === YILDIZLAR (CSS box-shadow trick) ===
+    stars_css = ""
+    if hour < 6.5 or hour > 18.5:
         import random
         rng = random.Random(now.day)
-        dots = []
-        for _ in range(35):
-            sx, sy = rng.randint(3, 97), rng.randint(3, 55)
-            ss = rng.choice([1, 1.5, 2])
+        shadows = []
+        for _ in range(40):
+            sx = rng.randint(10, 1900)
+            sy = rng.randint(10, 600)
             so = rng.uniform(0.3, 0.9)
-            dots.append(f'<div style="position:absolute;left:{sx}%;top:{sy}%;width:{ss}px;height:{ss}px;background:white;border-radius:50%;opacity:{so};"></div>')
-        stars = "\n".join(dots)
+            shadows.append(f"{sx}px {sy}px 0 0 rgba(255,255,255,{so:.1f})")
+        stars_css = f"""
+            .stApp::after {{
+                content: '';
+                position: fixed;
+                top: 0; left: 0;
+                width: 1px; height: 1px;
+                box-shadow: {', '.join(shadows)};
+                pointer-events: none;
+                z-index: 1;
+            }}
+        """
 
-    return sky, celestial, stars, sil
+    # === SILUET SVG (data URI olarak encode) ===
+    svg_raw = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 200" preserveAspectRatio="none"><path d="M0,200 L0,140 Q100,80 200,120 Q320,55 450,100 Q550,45 680,90 Q800,40 920,95 Q1050,60 1200,120 L1200,200 Z" fill="{sil}"/><g transform="translate(460,78) rotate(-12)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g><g transform="translate(498,72) rotate(-6)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g><g transform="translate(536,70) rotate(-2)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g><line x1="820" y1="70" x2="820" y2="20" stroke="{sil}" stroke-width="3"/><g transform="translate(820,20)"><line x1="0" y1="0" x2="-18" y2="-12" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="16" y2="-10" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="2" y2="18" stroke="{sil}" stroke-width="2.5"/></g><rect x="120" y="100" width="55" height="40" fill="{sil}"/><rect x="135" y="82" width="10" height="58" fill="{sil}"/><rect x="158" y="88" width="8" height="52" fill="{sil}"/><rect x="960" y="88" width="28" height="18" fill="{sil}"/><polygon points="960,88 974,74 988,88" fill="{sil}"/><rect x="1000" y="92" width="22" height="14" fill="{sil}"/><polygon points="1000,92 1011,80 1022,92" fill="{sil}"/><line x1="700" y1="65" x2="700" y2="30" stroke="{sil}" stroke-width="2"/><line x1="688" y1="35" x2="712" y2="35" stroke="{sil}" stroke-width="2"/><line x1="691" y1="42" x2="709" y2="42" stroke="{sil}" stroke-width="2"/></svg>'
 
-def _build_sky_html():
-    """Tam gokyuzu HTML ciktisini olusturur (silüet SVG dahil)."""
-    sky, celestial, stars, sil = _get_sky_theme()
+    # Note: sil already uses %23 prefix for # in URL encoding
+    silhouette_css = f"""
+        .sky-silhouette {{
+            position: fixed;
+            bottom: 0; left: 0;
+            width: 100%; height: 28%;
+            background-image: url("data:image/svg+xml,{svg_raw}");
+            background-size: cover;
+            background-repeat: no-repeat;
+            pointer-events: none;
+            z-index: 2;
+        }}
+    """
 
-    silhouette_svg = f'''<svg viewBox="0 0 1200 200" preserveAspectRatio="none"
-        style="position:absolute;bottom:0;left:0;width:100%;height:28%;">
-        <!-- Tepeler -->
-        <path d="M0,200 L0,140 Q100,80 200,120 Q320,55 450,100 Q550,45 680,90 Q800,40 920,95 Q1050,60 1200,120 L1200,200 Z" fill="{sil}"/>
-        <!-- Gunes panelleri (tepe uzerinde) -->
-        <g transform="translate(460,78) rotate(-12)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
-        <g transform="translate(498,72) rotate(-6)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
-        <g transform="translate(536,70) rotate(-2)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
-        <!-- Ruzgar turbini -->
-        <line x1="820" y1="70" x2="820" y2="20" stroke="{sil}" stroke-width="3"/>
-        <g transform="translate(820,20)"><line x1="0" y1="0" x2="-18" y2="-12" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="16" y2="-10" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="2" y2="18" stroke="{sil}" stroke-width="2.5"/></g>
-        <!-- Fabrika -->
-        <rect x="120" y="100" width="55" height="40" fill="{sil}"/><rect x="135" y="82" width="10" height="58" fill="{sil}"/><rect x="158" y="88" width="8" height="52" fill="{sil}"/>
-        <!-- Evler -->
-        <rect x="960" y="88" width="28" height="18" fill="{sil}"/><polygon points="960,88 974,74 988,88" fill="{sil}"/>
-        <rect x="1000" y="92" width="22" height="14" fill="{sil}"/><polygon points="1000,92 1011,80 1022,92" fill="{sil}"/>
-        <!-- Elektrik diregi -->
-        <line x1="700" y1="65" x2="700" y2="30" stroke="{sil}" stroke-width="2"/>
-        <line x1="688" y1="35" x2="712" y2="35" stroke="{sil}" stroke-width="2"/>
-        <line x1="691" y1="42" x2="709" y2="42" stroke="{sil}" stroke-width="2"/>
-    </svg>'''
-
-    return f'''<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;background:{sky};">
-        {celestial}
-        {stars}
-        {silhouette_svg}
-    </div>'''
+    return f"""
+    <style>
+    .stApp {{
+        background: {sky} !important;
+        background-color: transparent !important;
+    }}
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"] {{
+        background: transparent !important;
+        background-color: transparent !important;
+    }}
+    .stApp::before {{
+        {sun_css}
+    }}
+    {stars_css}
+    {silhouette_css}
+    </style>
+    <div class="sky-silhouette"></div>
+    """
 
 
 # LOGIN CSS (Card + Form styling only, background handled by sky HTML)
@@ -374,9 +401,9 @@ def check_auth() -> bool:
 
 
 def _show_login_form():
-    # Dynamic sky background (computed from current hour)
-    sky_html = _build_sky_html()
-    st.markdown(sky_html, unsafe_allow_html=True)
+    # Dynamic sky background (pure CSS - computed from current hour)
+    sky_css = _build_sky_css()
+    st.markdown(sky_css, unsafe_allow_html=True)
     st.markdown(_LOGIN_CSS_TEMPLATE, unsafe_allow_html=True)
 
     # Boşluk bırakalım ki form çok yukarda durmasın
