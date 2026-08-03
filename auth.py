@@ -108,10 +108,14 @@ def load_users() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    # LOGIN CSS (Light Glassmorphism)
-# 
+    # Fallback: return default admin user
+    return {"admin": {"hash": _DEFAULT_ADMIN_HASH, "role": "admin"}}
+
+# LOGIN CSS (Animated Premium)
 _LOGIN_CSS = """
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 /* GIZLI YAPI */
 [data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
     display: none !important;
@@ -119,29 +123,48 @@ _LOGIN_CSS = """
     height: 0px !important;
 }
 
-/* Split Background */
+/* ===== ANIMATED GRADIENT BACKGROUND ===== */
 .stApp, [data-testid="stAppViewContainer"] {
-    background: #1c2950 !important;
-    background-size: cover !important;
-    background-attachment: fixed !important;
+    background: linear-gradient(-45deg, #0f172a, #1c2950, #1e3a5f, #162544) !important;
+    background-size: 400% 400% !important;
+    animation: gradientShift 12s ease infinite !important;
+    overflow: hidden !important;
 }
 
-/* KART TASARIMI (Solid White) */
+@keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ===== KART — Slide-up + Fade-in ===== */
 div[data-testid="column"]:nth-child(2) {
     background: #ffffff !important;
-    border-radius: 8px !important;
-    padding: 40px 36px !important;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
+    border-radius: 16px !important;
+    padding: 44px 40px !important;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.25) !important;
+    animation: cardEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+    opacity: 0;
+    transform: translateY(40px);
 }
+
+@keyframes cardEntrance {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Ensure form wrapper has no border since col2 is the card */
 [data-testid="stForm"] {
     border: none !important;
     padding: 0 !important;
 }
 
+/* ===== TITLE ===== */
 .login-title {
     text-align: center;
-    font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 1.8rem;
     font-weight: 800;
     color: #ffffff;
@@ -150,71 +173,117 @@ div[data-testid="column"]:nth-child(2) {
     align-items: center;
     justify-content: center;
     gap: 12px;
+    animation: fadeSlideDown 0.6s ease 0.3s both;
 }
+
+@keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-15px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
 .login-title-icon {
-    background: #2563eb;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
     color: white;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 16px;
+    font-size: 18px;
+    animation: iconPulse 3s ease-in-out infinite;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+}
+
+@keyframes iconPulse {
+    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }
+    50%      { box-shadow: 0 6px 25px rgba(37, 99, 235, 0.6); transform: scale(1.05); }
 }
 
 .login-subtitle {
     text-align: center;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.95rem;
-    color: #64748b;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    color: #94a3b8;
     margin-bottom: 24px;
+    animation: fadeSlideDown 0.6s ease 0.5s both;
+    letter-spacing: 0.5px;
 }
 
 div[data-testid="column"] > div {
-    margin-top: -24px !important; 
+    margin-top: -24px !important;
 }
 
-/* Input Alanlari */
+/* ===== INPUT ALANLARI ===== */
 [data-testid="stTextInput"] input {
-    background: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    border: 1.5px solid #e2e8f0 !important;
     color: #1e293b !important;
-    border-radius: 6px !important;
-    padding: 12px 14px !important;
+    border-radius: 10px !important;
+    padding: 14px 16px !important;
     font-weight: 500 !important;
+    font-family: 'Inter', sans-serif !important;
+    transition: all 0.3s ease !important;
 }
 [data-testid="stTextInput"] input:focus {
+    background: #ffffff !important;
     border-color: #2563eb !important;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+    transform: scale(1.01);
 }
 [data-testid="stTextInput"] label {
     color: #475569 !important;
     font-weight: 600 !important;
-    font-size: 0.9rem !important;
+    font-size: 0.85rem !important;
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.3px;
 }
 
-/* Buton */
+/* ===== GIRIS BUTONU — Glow Pulse ===== */
 [data-testid="stButton"] button {
-    background: #2563eb !important;
+    background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
     border: none !important;
     color: #ffffff !important;
-    border-radius: 6px !important;
-    font-weight: 600 !important;
+    border-radius: 10px !important;
+    font-weight: 700 !important;
+    font-family: 'Inter', sans-serif !important;
     padding: 24px 12px !important;
-    transition: all 0.2s ease !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
     margin-top: 10px !important;
-}
-[data-testid="stButton"] button:hover {
-    background: #1d4ed8 !important;
+    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3) !important;
+    letter-spacing: 0.5px;
+    animation: buttonGlow 3s ease-in-out infinite;
 }
 
-/* Hata Mesajlari */
+@keyframes buttonGlow {
+    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
+    50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.5); }
+}
+
+[data-testid="stButton"] button:hover {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 12px 35px rgba(37, 99, 235, 0.5) !important;
+}
+[data-testid="stButton"] button:active {
+    transform: translateY(0px) scale(0.98) !important;
+}
+
+/* ===== HATA MESAJLARI ===== */
 [data-testid="stNotification"] {
     background: #fef2f2 !important;
     border: 1px solid #fecaca !important;
     color: #b91c1c !important;
-    border-radius: 6px !important;
+    border-radius: 10px !important;
+    animation: shakeError 0.4s ease;
+}
+
+@keyframes shakeError {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-8px); }
+    40%      { transform: translateX(8px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
 }
 </style>
 """
@@ -230,6 +299,51 @@ def check_auth() -> bool:
 
 def _show_login_form():
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
+    
+    # Floating solar particles
+    st.markdown("""
+    <style>
+    .particles-container {
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        pointer-events: none;
+        z-index: 0;
+        overflow: hidden;
+    }
+    .particle {
+        position: absolute;
+        border-radius: 50%;
+        opacity: 0;
+        animation: floatUp linear infinite;
+    }
+    @keyframes floatUp {
+        0%   { opacity: 0; transform: translateY(100vh) scale(0); }
+        10%  { opacity: 0.6; }
+        90%  { opacity: 0.3; }
+        100% { opacity: 0; transform: translateY(-10vh) scale(1); }
+    }
+    </style>
+    <div class="particles-container" id="particles"></div>
+    <script>
+    (function() {
+        const container = document.getElementById('particles');
+        if (!container || container.children.length > 0) return;
+        const colors = ['rgba(37,99,235,0.3)', 'rgba(59,130,246,0.2)', 'rgba(99,102,241,0.15)', 'rgba(245,158,11,0.2)', 'rgba(16,185,129,0.15)'];
+        for (let i = 0; i < 20; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 8 + 3;
+            p.style.width = size + 'px';
+            p.style.height = size + 'px';
+            p.style.left = Math.random() * 100 + '%';
+            p.style.background = colors[Math.floor(Math.random() * colors.length)];
+            p.style.animationDuration = (Math.random() * 12 + 8) + 's';
+            p.style.animationDelay = (Math.random() * 10) + 's';
+            container.appendChild(p);
+        }
+    })();
+    </script>
+    """, unsafe_allow_html=True)
     
     # Boşluk bırakalım ki form çok yukarda durmasın
     st.markdown("<br><br><br>", unsafe_allow_html=True)
