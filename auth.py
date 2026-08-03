@@ -140,29 +140,38 @@ def delete_user(username):
 def _get_all_users() -> dict:
     return load_users()
 
-# 
-# LOGIN CSS (Glossy Tasarm)
+# LOGIN CSS (Dark Glassmorphism)
 # 
 _LOGIN_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2Infinitefamily=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+.stApp {
+    background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp') no-repeat center center fixed !important;
+    background-size: cover !important;
+}
 
 .login-container {
     max-width: 420px;
-    margin: 60px auto;
+    margin: 60px auto 0 auto;
     padding: 0;
 }
+
 .login-card {
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    border-radius: 20px;
-    padding: 40px 36px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 24px !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    padding: 40px 36px 20px 36px;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
     position: relative;
     overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+    border-bottom: none !important;
 }
+
 .login-card::before {
     content: '';
     position: absolute;
@@ -170,36 +179,97 @@ _LOGIN_CSS = """
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(135deg, #0071E3, #32ADE6);
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
 }
-.login-logo {
-    text-align: center;
-    margin-bottom: 8px;
-    font-size: 3rem;
-}
+
 .login-title {
     text-align: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #0071E3, #32ADE6);
+    background: linear-gradient(135deg, #38bdf8, #818cf8);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     margin-bottom: 4px;
 }
+
 .login-subtitle {
     text-align: center;
     font-family: 'Outfit', sans-serif;
-    font-size: 0.85rem;
-    color: #64748b;
-    margin-bottom: 28px;
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin-bottom: 0px;
 }
+
+[data-testid="stForm"] {
+    background: rgba(15, 23, 42, 0.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 24px !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+    padding: 10px 36px 40px 36px !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
+    border-top: none !important;
+}
+
+div[data-testid="column"] > div {
+    margin-top: -24px !important; 
+}
+
+[data-testid="stTextInput"] input {
+    background: rgba(255, 255, 255, 0.05) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    padding: 12px 16px !important;
+    transition: all 0.3s ease !important;
+}
+[data-testid="stTextInput"] input:focus {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2) !important;
+}
+[data-testid="stTextInput"] label {
+    color: #cbd5e1 !important;
+    font-weight: 500 !important;
+}
+
+[data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(135deg, #0ea5e9, #3b82f6) !important;
+    border: none !important;
+    color: white !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    padding: 12px !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4) !important;
+    margin-top: 10px !important;
+}
+[data-testid="stFormSubmitButton"] button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.6) !important;
+}
+[data-testid="stFormSubmitButton"] button:active {
+    transform: translateY(0px) !important;
+}
+
+[data-testid="stNotification"] {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    color: #fca5a5 !important;
+    border-radius: 12px !important;
+}
+
 .login-footer {
     text-align: center;
     font-family: 'Outfit', sans-serif;
     font-size: 0.75rem;
-    color: #475569;
+    color: #64748b;
     margin-top: 20px;
 }
 </style>
@@ -207,76 +277,26 @@ _LOGIN_CSS = """
 
 
 def check_auth() -> bool:
-    """Kimlik dorulama kontrol.
-
-    Auth devre dysa True dner.
-    Giri yaplmsa True dner.
-    Giri yaplmamsa login formu gsterir ve False dner.
-    """
     if not _is_auth_enabled():
         return True
-
-    # Zaten giri yaplm mInfinite
     if st.session_state.get("authenticated"):
         return True
-
-    # Login ekrann gster
     _show_login_form()
     return False
 
 
 def _show_login_form():
-    """Glossy login formu gsterir."""
-    # Arka plan ve login CSS
-    st.markdown("""
-    <style>
-    .stApp {
-        background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp') no-repeat center center fixed !important;
-        background-size: cover !important;
-    }
-    
-    /* Login card is somewhat transparent so we can see the background */
-    .login-card {
-        background: rgba(255, 255, 255, 0.85) !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-    }
-    
-    /* Make the Streamlit form itself frosted glass too! */
-    [data-testid="stForm"] {
-        background: rgba(255, 255, 255, 0.65) !important;
-        backdrop-filter: blur(16px) !important;
-        -webkit-backdrop-filter: blur(16px) !important;
-        border: none !important;
-        border-radius: 20px !important;
-        border-top-left-radius: 0 !important;
-        border-top-right-radius: 0 !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1) !important;
-        padding: 32px !important;
-    }
-    
-    /* Center the col2 content closer to the title card */
-    div[data-testid="column"] > div {
-        margin-top: -24px !important; 
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
 
     st.markdown("""
     <div class="login-container">
         <div class="login-card">
-            <div class="login-logo"></div>
             <div class="login-title">Solar Monitor</div>
             <div class="login-subtitle">Gunes Enerjisi Santrali Izleme Sistemi</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Login formu (Streamlit native  CSS card'n altna yerleir)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         with st.form("login_form", clear_on_submit=False):
@@ -293,9 +313,8 @@ def _show_login_form():
                 
                 if current_time < rate_record["lockout_until"]:
                     kalan = int(rate_record["lockout_until"] - current_time)
-                    st.error(f"Çok fazla hatalı deneme yaptınız. Lütfen {kalan} saniye bekleyin.")
+                    st.error(f"Cok fazla hatali deneme yaptiniz. Lutfen {kalan} saniye bekleyin.")
                 else:
-                    # Süre dolmuşsa resetle
                     if rate_record["attempts"] >= 3:
                         rate_record["attempts"] = 0
                         
@@ -303,18 +322,19 @@ def _show_login_form():
                     if username_input in users and _verify_password(password_input, users[username_input]["hash"]):
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username_input
-                        rate_record["attempts"] = 0 # Başarılı girişte sıfırla
+                        rate_record["attempts"] = 0
                         _save_rate_record(rate_key, rate_record)
                         st.rerun()
                     else:
                         rate_record["attempts"] += 1
                         if rate_record["attempts"] >= 3:
                             rate_record["lockout_until"] = current_time + 30
-                            st.error("Çok fazla hatalı deneme yaptınız. Lütfen 30 saniye bekleyin.")
+                            st.error("Cok fazla hatali deneme yaptiniz. Lutfen 30 saniye bekleyin.")
                         else:
                             st.error(f"Kullanici adi veya sifre hatali! (Kalan deneme: {3 - rate_record['attempts']})")
                         _save_rate_record(rate_key, rate_record)
-                        time.sleep(1) # Time-delay attack mitigation
+                        import time as _time
+                        _time.sleep(1)
 
         st.markdown("""
         <div class="login-footer">
@@ -322,6 +342,7 @@ def _show_login_form():
             (Ayarlar .env dosyasindan yapilandirilabilir)
         </div>
         """, unsafe_allow_html=True)
+
 
 
 def logout_button():
