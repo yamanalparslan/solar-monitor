@@ -59,7 +59,7 @@ if st.session_state.fabrika_id is None:
         visibility: hidden !important;
         height: 0px !important;
     }
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+    [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
         background: transparent !important;
         background-color: transparent !important;
     }
@@ -87,15 +87,15 @@ if st.session_state.fabrika_id is None:
     /* Buttons */
     [data-testid="stButton"] button {
         background: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        color: #1e293b !important;
-        border-radius: 10px !important;
-        font-weight: 700 !important;
+        border: 2px solid #cbd5e1 !important;
+        color: #0f172a !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
         font-family: 'Inter', sans-serif !important;
-        font-size: 1.1rem !important;
-        padding: 30px 10px !important;
+        font-size: 1.25rem !important;
+        padding: 35px 10px !important;
         transition: all 0.3s ease !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.02) !important;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.05) !important;
         height: auto !important;
         margin-top: 20px !important;
     }

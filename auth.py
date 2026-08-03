@@ -252,7 +252,7 @@ _LOGIN_CSS_TEMPLATE = """
     height: 0px !important;
 }}
 
-.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {{
+[data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {{
     background: transparent !important;
     background-color: transparent !important;
 }}
@@ -332,11 +332,12 @@ div[data-testid="column"] > div {{
 
 [data-testid="stTextInput"] input {{
     background: #f8fafc !important;
-    border: 1.5px solid #e2e8f0 !important;
-    color: #1e293b !important;
+    border: 2px solid #cbd5e1 !important;
+    color: #0f172a !important;
     border-radius: 10px !important;
-    padding: 14px 16px !important;
-    font-weight: 500 !important;
+    padding: 16px 18px !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
     transition: all 0.3s ease !important;
 }}
@@ -346,10 +347,12 @@ div[data-testid="column"] > div {{
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
 }}
 [data-testid="stTextInput"] label {{
-    color: #475569 !important;
-    font-weight: 600 !important;
-    font-size: 0.85rem !important;
+    color: #1e293b !important;
+    font-weight: 800 !important;
+    font-size: 1.1rem !important;
     font-family: 'Inter', sans-serif !important;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px !important;
 }}
 
 [data-testid="stButton"] button {{
@@ -357,11 +360,12 @@ div[data-testid="column"] > div {{
     border: none !important;
     color: #ffffff !important;
     border-radius: 10px !important;
-    font-weight: 700 !important;
+    font-weight: 800 !important;
     font-family: 'Inter', sans-serif !important;
-    padding: 24px 12px !important;
+    font-size: 1.15rem !important;
+    padding: 26px 12px !important;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    margin-top: 10px !important;
+    margin-top: 15px !important;
     animation: buttonGlow 2.5s ease-in-out infinite !important;
 }}
 @keyframes buttonGlow {{
