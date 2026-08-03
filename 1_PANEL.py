@@ -46,20 +46,10 @@ if 'refresh_interval' not in st.session_state:
     st.session_state.refresh_interval = 30
 # Fabrika seçilmemişse seçim ekranı göster
 if st.session_state.fabrika_id is None:
-    import base64
-    import os
-    bg_path = os.path.join("static", "bg.jpg")
-    if os.path.exists(bg_path):
-        with open(bg_path, "rb") as f:
-            bg_b64 = base64.b64encode(f.read()).decode()
-        bg_url = f"url('data:image/jpeg;base64,{bg_b64}')"
-    else:
-        bg_url = "linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%)"
-
     st.markdown("""
     <style>
-    .stApp {
-        background: """ + bg_url + """ no-repeat center center fixed !important;
+    .stApp, [data-testid="stAppViewContainer"] {
+        background: url('/app/static/bg.jpg') no-repeat center center fixed !important;
         background-size: cover !important;
     }
     

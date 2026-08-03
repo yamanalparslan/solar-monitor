@@ -1,15 +1,15 @@
+﻿# ===================================================
+# Solar Monitor â€” Docker Compose (v2)
 # ===================================================
-# Solar Monitor — Docker Compose (v2)
-# ===================================================
-# Tüm servisleri tek komutla başlatır:
+# TÃ¼m servisleri tek komutla baÅŸlatÄ±r:
 #   docker-compose up -d
 #
 # Servisler:
-#   panel            → Streamlit Dashboard    (:8501)
-#   collector        → Async Modbus Collector  (collector_async.py)
-#   api              → FastAPI REST API       (:8503)
-#   healthcheck      → HTTP Health Endpoint   (:8502)
-#   prometheus-exp   → Metrik Exporter        (:9100)
+#   panel            â†’ Streamlit Dashboard    (:8501)
+#   collector        â†’ Async Modbus Collector  (collector_async.py)
+#   api              â†’ FastAPI REST API       (:8503)
+#   healthcheck      â†’ HTTP Health Endpoint   (:8502)
+#   prometheus-exp   â†’ Metrik Exporter        (:9100)
 # ===================================================
 
 x-common: &common
@@ -21,13 +21,14 @@ x-common: &common
   volumes:
     - ./data:/app/data
     - ./backups:/app/backups
-    # Üretim güvenliği: Kaynak kodun tamamı host'tan bağlanmaz. Image üzerinden çalışır.
+    - ./static:/app/static
+    # Ãœretim gÃ¼venliÄŸi: Kaynak kodun tamamÄ± host'tan baÄŸlanmaz. Image Ã¼zerinden Ã§alÄ±ÅŸÄ±r.
     # NOT: pgdata volume'u yalnizca solar-postgres servisine mount edilir.
   environment:
     - PYTHONUNBUFFERED=1
 
 services:
-  # ─── PostgreSQL / TimescaleDB ───
+  # â”€â”€â”€ PostgreSQL / TimescaleDB â”€â”€â”€
   solar-postgres:
     image: timescale/timescaledb:latest-pg15
     container_name: solar_postgres
@@ -52,15 +53,15 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Veri Toplayıcı (Async - Ana Collector) ───
+  # â”€â”€â”€ Veri ToplayÄ±cÄ± (Async - Ana Collector) â”€â”€â”€
   solar-collector:
     <<: *common
     container_name: solar_collector
-    # collector_async.py artık ana collector dosyasıdır.
-    # - Her metrik için holding (FC3) + input (FC4) + blok okuma fallback dener
-    # - to_signed16 ile voltaj/akım signed değer desteği
-    # - decode_temperature_register ile otomatik sıcaklık scale tespiti
-    # - Tüm slave'leri asyncio.gather ile paralel okur
+    # collector_async.py artÄ±k ana collector dosyasÄ±dÄ±r.
+    # - Her metrik iÃ§in holding (FC3) + input (FC4) + blok okuma fallback dener
+    # - to_signed16 ile voltaj/akÄ±m signed deÄŸer desteÄŸi
+    # - decode_temperature_register ile otomatik sÄ±caklÄ±k scale tespiti
+    # - TÃ¼m slave'leri asyncio.gather ile paralel okur
     entrypoint: [ "python", "collector_async.py" ]
     depends_on:
       solar-postgres:
@@ -75,11 +76,11 @@ services:
       retries: 3
       start_period: 120s
 
-  # ─── Ana Dashboard ───
+  # â”€â”€â”€ Ana Dashboard â”€â”€â”€
   solar-monitor:
     <<: *common
     container_name: solar_monitor_pro
-    entrypoint: [ "streamlit", "run", "1_PANEL.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none" ]
+    entrypoint: [ "streamlit", "run", "1_PANEL.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.fileWatcherType=none", "--server.enableStaticServing=true" ]
     ports:
       - "8501:8501"
     depends_on:
@@ -93,7 +94,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # ─── REST API ───
+  # â”€â”€â”€ REST API â”€â”€â”€
   solar-api:
     <<: *common
     container_name: solar_api
@@ -116,7 +117,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # ─── Healthcheck Endpoint ───
+  # â”€â”€â”€ Healthcheck Endpoint â”€â”€â”€
   solar-healthcheck:
     <<: *common
     container_name: solar_healthcheck
@@ -136,7 +137,7 @@ services:
       retries: 3
       start_period: 120s
 
-  # ─── Prometheus Exporter ───
+  # â”€â”€â”€ Prometheus Exporter â”€â”€â”€
   solar-prometheus:
     <<: *common
     container_name: solar_prometheus
@@ -153,7 +154,7 @@ services:
       retries: 3
       start_period: 30s
 
-  # ─── Grafana Dashboard ───
+  # â”€â”€â”€ Grafana Dashboard â”€â”€â”€
   solar-grafana:
     image: grafana/grafana:10.4.0
     container_name: solar_grafana
@@ -169,13 +170,13 @@ services:
     depends_on:
       - solar-prometheus
 
-  # ─── MQTT Broker ───
+  # â”€â”€â”€ MQTT Broker â”€â”€â”€
   solar-mosquitto:
     image: eclipse-mosquitto:2.0.18
     container_name: solar_mosquitto
     restart: unless-stopped
     ports:
-      # Güvenlik: Sadece iç ağa (localhost) publish et, dışarı açma
+      # GÃ¼venlik: Sadece iÃ§ aÄŸa (localhost) publish et, dÄ±ÅŸarÄ± aÃ§ma
       - "127.0.0.1:1883:1883"
     environment:
       - MQTT_USER=${MQTT_USER:-solaradmin}
@@ -185,7 +186,7 @@ services:
     command: >
       sh -c "touch /tmp/passwd && mosquitto_passwd -b /tmp/passwd $${MQTT_USER} $${MQTT_PASSWORD} && exec mosquitto -c /mosquitto/config/mosquitto.conf"
 
-  # ─── MQTT Dinleyici ───
+  # â”€â”€â”€ MQTT Dinleyici â”€â”€â”€
   solar-mqtt-listener:
     <<: *common
     container_name: solar_mqtt_listener
@@ -194,11 +195,11 @@ services:
       - solar-mosquitto
     entrypoint: [ "python", "mqtt_listener.py" ]
     # Image'dan miras kalan Streamlit healthcheck'i bu servis icin anlamsiz
-    # (8501 portunu dinlemiyor) — kalici 'unhealthy' gorunmesine yol aciyordu.
+    # (8501 portunu dinlemiyor) â€” kalici 'unhealthy' gorunmesine yol aciyordu.
     healthcheck:
       disable: true
 
-  # ─── Otomatik Veritabani Yedekleme ───
+  # â”€â”€â”€ Otomatik Veritabani Yedekleme â”€â”€â”€
   solar-backup:
     image: timescale/timescaledb:latest-pg15
     container_name: solar_backup
