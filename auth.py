@@ -227,20 +227,11 @@ def check_auth() -> bool:
 
 def _show_login_form():
     """Glossy login formu gsterir."""
-    import base64
-    bg_path = os.path.join("static", "login_bg.jpg")
-    if os.path.exists(bg_path):
-        with open(bg_path, "rb") as f:
-            bg_b64 = base64.b64encode(f.read()).decode()
-        bg_url = f"url('data:image/jpeg;base64,{bg_b64}')"
-    else:
-        bg_url = "url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp')"
-
     # Arka plan ve login CSS
     st.markdown("""
     <style>
     .stApp {
-        background: """ + bg_url + """ no-repeat center center fixed !important;
+        background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp') no-repeat center center fixed !important;
         background-size: cover !important;
     }
     
