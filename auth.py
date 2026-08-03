@@ -124,16 +124,25 @@ _LOGIN_CSS = """
 }
 
 /* ===== ANIMATED GRADIENT BACKGROUND ===== */
-.stApp, [data-testid="stAppViewContainer"] {
-    background: linear-gradient(-45deg, #0f172a, #1c2950, #1e3a5f, #162544) !important;
-    background-size: 400% 400% !important;
-    animation: gradientShift 12s ease infinite !important;
-    overflow: hidden !important;
+.stApp {
+    background: linear-gradient(-45deg, #0a0f1e, #1c2950, #1a3a5c, #0f1b38, #1c2950) !important;
+    background-color: transparent !important;
+    background-size: 300% 300% !important;
+    animation: gradientShift 8s ease infinite !important;
+}
+[data-testid="stAppViewContainer"] {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+[data-testid="stMain"], [data-testid="stMainBlockContainer"] {
+    background: transparent !important;
 }
 
 @keyframes gradientShift {
     0%   { background-position: 0% 50%; }
+    25%  { background-position: 50% 100%; }
     50%  { background-position: 100% 50%; }
+    75%  { background-position: 50% 0%; }
     100% { background-position: 0% 50%; }
 }
 
@@ -142,16 +151,18 @@ div[data-testid="column"]:nth-child(2) {
     background: #ffffff !important;
     border-radius: 16px !important;
     padding: 44px 40px !important;
-    box-shadow: 0 25px 60px rgba(0,0,0,0.25) !important;
-    animation: cardEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
-    opacity: 0;
-    transform: translateY(40px);
+    box-shadow: 0 25px 60px rgba(0,0,0,0.3) !important;
+    animation: cardEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) both !important;
 }
 
 @keyframes cardEntrance {
+    from {
+        opacity: 0;
+        transform: translateY(50px) scale(0.95);
+    }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
@@ -167,7 +178,7 @@ div[data-testid="column"]:nth-child(2) {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 1.8rem;
     font-weight: 800;
-    color: #ffffff;
+    color: #1e293b;
     margin-bottom: 4px;
     display: flex;
     align-items: center;
@@ -191,13 +202,13 @@ div[data-testid="column"]:nth-child(2) {
     justify-content: center;
     align-items: center;
     font-size: 18px;
-    animation: iconPulse 3s ease-in-out infinite;
+    animation: iconPulse 3s ease-in-out infinite !important;
     box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
 }
 
 @keyframes iconPulse {
     0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }
-    50%      { box-shadow: 0 6px 25px rgba(37, 99, 235, 0.6); transform: scale(1.05); }
+    50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }
 }
 
 .login-subtitle {
@@ -229,7 +240,6 @@ div[data-testid="column"] > div {
     background: #ffffff !important;
     border-color: #2563eb !important;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
-    transform: scale(1.01);
 }
 [data-testid="stTextInput"] label {
     color: #475569 !important;
@@ -250,14 +260,13 @@ div[data-testid="column"] > div {
     padding: 24px 12px !important;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
     margin-top: 10px !important;
-    box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3) !important;
     letter-spacing: 0.5px;
-    animation: buttonGlow 3s ease-in-out infinite;
+    animation: buttonGlow 2.5s ease-in-out infinite !important;
 }
 
 @keyframes buttonGlow {
     0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
-    50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.5); }
+    50%      { box-shadow: 0 8px 40px rgba(37, 99, 235, 0.6); }
 }
 
 [data-testid="stButton"] button:hover {
@@ -275,7 +284,7 @@ div[data-testid="column"] > div {
     border: 1px solid #fecaca !important;
     color: #b91c1c !important;
     border-radius: 10px !important;
-    animation: shakeError 0.4s ease;
+    animation: shakeError 0.4s ease !important;
 }
 
 @keyframes shakeError {
@@ -286,6 +295,40 @@ div[data-testid="column"] > div {
     80%      { transform: translateX(4px); }
 }
 </style>
+"""
+
+# Floating particles HTML component (runs in its own iframe with JS)
+_PARTICLES_HTML = """
+<div id="particle-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;overflow:hidden;"></div>
+<script>
+const canvas = document.getElementById('particle-canvas');
+const colors = ['rgba(37,99,235,0.35)','rgba(59,130,246,0.25)','rgba(99,102,241,0.2)','rgba(245,158,11,0.25)','rgba(16,185,129,0.2)'];
+for (let i = 0; i < 25; i++) {
+    const p = document.createElement('div');
+    const size = Math.random() * 10 + 4;
+    const dur = Math.random() * 14 + 8;
+    const delay = Math.random() * 12;
+    const left = Math.random() * 100;
+    p.style.cssText = `
+        position:absolute; border-radius:50%;
+        width:${size}px; height:${size}px;
+        left:${left}%; bottom:-20px;
+        background:${colors[Math.floor(Math.random()*colors.length)]};
+        animation: rise ${dur}s linear ${delay}s infinite;
+    `;
+    canvas.appendChild(p);
+}
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes rise {
+        0%   { transform: translateY(0) scale(0); opacity:0; }
+        10%  { opacity:0.7; transform: translateY(-10vh) scale(1); }
+        90%  { opacity:0.2; }
+        100% { transform: translateY(-110vh) scale(0.5); opacity:0; }
+    }
+`;
+document.head.appendChild(style);
+</script>
 """
 
 def check_auth() -> bool:
@@ -300,50 +343,9 @@ def check_auth() -> bool:
 def _show_login_form():
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
     
-    # Floating solar particles
-    st.markdown("""
-    <style>
-    .particles-container {
-        position: fixed;
-        top: 0; left: 0; width: 100vw; height: 100vh;
-        pointer-events: none;
-        z-index: 0;
-        overflow: hidden;
-    }
-    .particle {
-        position: absolute;
-        border-radius: 50%;
-        opacity: 0;
-        animation: floatUp linear infinite;
-    }
-    @keyframes floatUp {
-        0%   { opacity: 0; transform: translateY(100vh) scale(0); }
-        10%  { opacity: 0.6; }
-        90%  { opacity: 0.3; }
-        100% { opacity: 0; transform: translateY(-10vh) scale(1); }
-    }
-    </style>
-    <div class="particles-container" id="particles"></div>
-    <script>
-    (function() {
-        const container = document.getElementById('particles');
-        if (!container || container.children.length > 0) return;
-        const colors = ['rgba(37,99,235,0.3)', 'rgba(59,130,246,0.2)', 'rgba(99,102,241,0.15)', 'rgba(245,158,11,0.2)', 'rgba(16,185,129,0.15)'];
-        for (let i = 0; i < 20; i++) {
-            const p = document.createElement('div');
-            p.className = 'particle';
-            const size = Math.random() * 8 + 3;
-            p.style.width = size + 'px';
-            p.style.height = size + 'px';
-            p.style.left = Math.random() * 100 + '%';
-            p.style.background = colors[Math.floor(Math.random() * colors.length)];
-            p.style.animationDuration = (Math.random() * 12 + 8) + 's';
-            p.style.animationDelay = (Math.random() * 10) + 's';
-            container.appendChild(p);
-        }
-    })();
-    </script>
-    """, unsafe_allow_html=True)
+    # Floating particles via st.components.v1.html (supports JavaScript)
+    import streamlit.components.v1 as components
+    components.html(_PARTICLES_HTML, height=0, scrolling=False)
     
     # Boşluk bırakalım ki form çok yukarda durmasın
     st.markdown("<br><br><br>", unsafe_allow_html=True)
