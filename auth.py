@@ -418,9 +418,8 @@ def _show_login_form():
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("""
-                    <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
+            <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
             <div class="login-subtitle">Gunes Enerjisi Santrali Izleme Sistemi</div>
-        </div>
         """, unsafe_allow_html=True)
 
         with st.form("login_form", clear_on_submit=False):
