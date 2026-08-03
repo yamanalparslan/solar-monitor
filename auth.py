@@ -108,39 +108,7 @@ def load_users() -> dict:
                 return json.load(f)
         except Exception:
             pass
-    # Varsayılan admin (eğer dosya yoksa)
-    default = {
-        "admin": {
-            "hash": _DEFAULT_ADMIN_HASH,
-            "role": "admin"
-        }
-    }
-    save_users(default)
-    return default
-
-def save_users(users_dict: dict):
-    os.makedirs("data", exist_ok=True)
-    with open(_USERS_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(users_dict, f, indent=4)
-
-def add_user(username, plain_password, role):
-    users = load_users()
-    users[username] = {
-        "hash": _get_password_hash(plain_password),
-        "role": role
-    }
-    save_users(users)
-
-def delete_user(username):
-    users = load_users()
-    if username in users:
-        del users[username]
-        save_users(users)
-
-def _get_all_users() -> dict:
-    return load_users()
-
-# LOGIN CSS (Dark Glassmorphism)
+    # LOGIN CSS (Light Glassmorphism)
 # 
 _LOGIN_CSS = """
 <style>
@@ -151,25 +119,23 @@ _LOGIN_CSS = """
     background-size: cover !important;
 }
 
-.login-container {
-    max-width: 420px;
-    margin: 60px auto 0 auto;
-    padding: 0;
-}
+/* Tüm içeriği ortalamak için col2'ye max-width verebiliriz, 
+   ama col2 zaten responsive'dir. Kartın column'ı tam doldurması için %100 yapıyoruz */
 
 .login-card {
-    background: rgba(15, 23, 42, 0.7) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: rgba(255, 255, 255, 0.55) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
     border-radius: 24px !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
     padding: 40px 36px 20px 36px;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
     position: relative;
     overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08) !important;
     border-bottom: none !important;
+    width: 100% !important;
 }
 
 .login-card::before {
@@ -178,16 +144,16 @@ _LOGIN_CSS = """
     top: 0;
     left: 0;
     right: 0;
-    height: 3px;
-    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    height: 4px;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
 }
 
 .login-title {
     text-align: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
-    font-size: 1.8rem;
+    font-size: 2rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #38bdf8, #818cf8);
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -197,80 +163,89 @@ _LOGIN_CSS = """
 .login-subtitle {
     text-align: center;
     font-family: 'Outfit', sans-serif;
-    font-size: 0.9rem;
-    color: #94a3b8;
+    font-size: 0.95rem;
+    color: #475569;
     margin-bottom: 0px;
 }
 
 [data-testid="stForm"] {
-    background: rgba(15, 23, 42, 0.7) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    background: rgba(255, 255, 255, 0.55) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
     border-radius: 24px !important;
     border-top-left-radius: 0 !important;
     border-top-right-radius: 0 !important;
     padding: 10px 36px 40px 36px !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08) !important;
     border-top: none !important;
+    width: 100% !important;
 }
 
 div[data-testid="column"] > div {
     margin-top: -24px !important; 
 }
 
+/* Light Mode Input Alanları */
 [data-testid="stTextInput"] input {
-    background: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    color: white !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    border: 1px solid rgba(148, 163, 184, 0.3) !important;
+    color: #1e293b !important;
     border-radius: 12px !important;
     padding: 12px 16px !important;
     transition: all 0.3s ease !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
 }
 [data-testid="stTextInput"] input:focus {
-    background: rgba(255, 255, 255, 0.1) !important;
+    background: #ffffff !important;
     border-color: #38bdf8 !important;
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2) !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
 }
 [data-testid="stTextInput"] label {
-    color: #cbd5e1 !important;
-    font-weight: 500 !important;
+    color: #475569 !important;
+    font-weight: 600 !important;
 }
 
+/* Submit Butonu */
 [data-testid="stFormSubmitButton"] button {
-    background: linear-gradient(135deg, #0ea5e9, #3b82f6) !important;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
     border: none !important;
     color: white !important;
     border-radius: 12px !important;
     font-weight: 600 !important;
     padding: 12px !important;
     transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.4) !important;
+    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3) !important;
     margin-top: 10px !important;
 }
 [data-testid="stFormSubmitButton"] button:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.6) !important;
+    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.4) !important;
 }
 [data-testid="stFormSubmitButton"] button:active {
     transform: translateY(0px) !important;
 }
 
+/* Hata Mesajları */
 [data-testid="stNotification"] {
-    background: rgba(239, 68, 68, 0.1) !important;
-    border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    background: rgba(254, 226, 226, 0.8) !important;
+    border: 1px solid rgba(248, 113, 113, 0.5) !important;
     backdrop-filter: blur(10px) !important;
     -webkit-backdrop-filter: blur(10px) !important;
-    color: #fca5a5 !important;
+    color: #991b1b !important;
     border-radius: 12px !important;
 }
 
 .login-footer {
     text-align: center;
     font-family: 'Outfit', sans-serif;
-    font-size: 0.75rem;
-    color: #64748b;
-    margin-top: 20px;
+    font-size: 0.8rem;
+    color: #475569;
+    margin-top: 24px;
+    background: rgba(255, 255, 255, 0.6);
+    padding: 10px;
+    border-radius: 8px;
+    backdrop-filter: blur(10px);
 }
 </style>
 """
@@ -287,18 +262,20 @@ def check_auth() -> bool:
 
 def _show_login_form():
     st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
+    
+    # Boşluk bırakalım ki form çok yukarda durmasın
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
 
-    st.markdown("""
-    <div class="login-container">
+    # Login formunu ve kartını aynı kolon içine alıyoruz (Böylece genişlikleri BİREBİR aynı olur)
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        st.markdown("""
         <div class="login-card">
             <div class="login-title">Solar Monitor</div>
             <div class="login-subtitle">Gunes Enerjisi Santrali Izleme Sistemi</div>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
         with st.form("login_form", clear_on_submit=False):
             username_input = st.text_input("Kullanici Adi", placeholder="admin")
             password_input = st.text_input("Sifre", type="password", placeholder="")
@@ -309,6 +286,7 @@ def _show_login_form():
                 rate_key = f"{client_ip}_{username_input}"
                 
                 rate_record = _get_rate_record(rate_key)
+                import time
                 current_time = time.time()
                 
                 if current_time < rate_record["lockout_until"]:
