@@ -246,19 +246,19 @@ _LOGIN_CSS_TEMPLATE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-[data-testid="stSidebar"], [data-testid="stHeader"], footer, header {{
+[data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
     display: none !important;
     visibility: hidden !important;
     height: 0px !important;
-}}
+}
 
-[data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {{
+[data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {
     background: transparent !important;
     background-color: transparent !important;
-}}
+}
 
 /* ===== KART — Slide-up + Fade-in ===== */
-div[data-testid="column"]:nth-child(2) {{
+div[data-testid="column"]:nth-child(2) {
     background: rgba(255,255,255,0.95) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
@@ -268,69 +268,69 @@ div[data-testid="column"]:nth-child(2) {{
     animation: cardEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) both !important;
     position: relative;
     z-index: 10;
-}}
-@keyframes cardEntrance {{
-    from {{ opacity: 0; transform: translateY(50px) scale(0.95); }}
-    to   {{ opacity: 1; transform: translateY(0) scale(1); }}
-}}
+}
+@keyframes cardEntrance {
+    from { opacity: 0; transform: translateY(50px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
 
-[data-testid="stForm"] {{
+[data-testid="stForm"] {
     border: none !important;
     padding: 0 !important;
-}}
+}
 
-.login-title {{
+.login-title {
     text-align: center;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 2.4rem;
+    font-size: 3.2rem;
     font-weight: 900;
     color: #1e293b;
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 16px;
     animation: fadeSlideDown 0.6s ease 0.3s both;
-}}
-@keyframes fadeSlideDown {{
-    from {{ opacity: 0; transform: translateY(-15px); }}
-    to   {{ opacity: 1; transform: translateY(0); }}
-}}
+}
+@keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-15px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
 
-.login-title-icon {{
+.login-title-icon {
     background: linear-gradient(135deg, #2563eb, #3b82f6);
     color: white;
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 18px;
+    font-size: 24px;
     animation: iconPulse 3s ease-in-out infinite !important;
     box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-}}
-@keyframes iconPulse {{
-    0%, 100% {{ box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }}
-    50%      {{ box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }}
-}}
+}
+@keyframes iconPulse {
+    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }
+    50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }
+}
 
-.login-subtitle {{
+.login-subtitle {
     text-align: center;
     font-family: 'Inter', sans-serif;
-    font-size: 1.05rem;
+    font-size: 1.2rem;
     color: #64748b;
-    margin-bottom: 24px;
+    margin-bottom: 30px;
     font-weight: 600;
     animation: fadeSlideDown 0.6s ease 0.5s both;
     letter-spacing: 0.5px;
-}}
+}
 
-div[data-testid="column"] > div {{
+div[data-testid="column"] > div {
     margin-top: -24px !important;
-}}
+}
 
-[data-testid="stTextInput"] input {{
+[data-testid="stTextInput"] input {
     background: #f8fafc !important;
     border: 2px solid #cbd5e1 !important;
     color: #0f172a !important;
@@ -340,22 +340,22 @@ div[data-testid="column"] > div {{
     font-weight: 700 !important;
     font-family: 'Inter', sans-serif !important;
     transition: all 0.3s ease !important;
-}}
-[data-testid="stTextInput"] input:focus {{
+}
+[data-testid="stTextInput"] input:focus {
     background: #ffffff !important;
     border-color: #2563eb !important;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
-}}
-[data-testid="stTextInput"] label {{
+}
+[data-testid="stTextInput"] label {
     color: #1e293b !important;
     font-weight: 800 !important;
     font-size: 1.1rem !important;
     font-family: 'Inter', sans-serif !important;
     letter-spacing: 0.5px;
     margin-bottom: 8px !important;
-}}
+}
 
-[data-testid="stButton"] button {{
+[data-testid="stButton"] button {
     background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
     border: none !important;
     color: #ffffff !important;
@@ -367,31 +367,31 @@ div[data-testid="column"] > div {{
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
     margin-top: 15px !important;
     animation: buttonGlow 2.5s ease-in-out infinite !important;
-}}
-@keyframes buttonGlow {{
-    0%, 100% {{ box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }}
-    50%      {{ box-shadow: 0 8px 40px rgba(37, 99, 235, 0.6); }}
-}}
-[data-testid="stButton"] button:hover {{
+}
+@keyframes buttonGlow {
+    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
+    50%      { box-shadow: 0 8px 40px rgba(37, 99, 235, 0.6); }
+}
+[data-testid="stButton"] button:hover {
     background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
     transform: translateY(-2px) !important;
     box-shadow: 0 12px 35px rgba(37, 99, 235, 0.5) !important;
-}}
+}
 
-[data-testid="stNotification"] {{
+[data-testid="stNotification"] {
     background: #fef2f2 !important;
     border: 1px solid #fecaca !important;
     color: #b91c1c !important;
     border-radius: 10px !important;
     animation: shakeError 0.4s ease !important;
-}}
-@keyframes shakeError {{
-    0%, 100% {{ transform: translateX(0); }}
-    20% {{ transform: translateX(-8px); }}
-    40% {{ transform: translateX(8px); }}
-    60% {{ transform: translateX(-4px); }}
-    80% {{ transform: translateX(4px); }}
-}}
+}
+@keyframes shakeError {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+}
 </style>
 """
 
