@@ -113,7 +113,7 @@ if st.session_state.fabrika_id is None:
     [data-testid="stButton"] button {
         background: rgba(255, 255, 255, 0.8) !important;
         border: 1px solid rgba(148, 163, 184, 0.3) !important;
-        color: #1e293b !important;
+        color: #000000 !important;
         border-radius: 16px !important;
         font-weight: 700 !important;
         font-size: 1.1rem !important;
@@ -148,7 +148,7 @@ if st.session_state.fabrika_id is None:
         text-align: center;
         font-family: 'Outfit', sans-serif;
         font-size: 1rem;
-        color: #475569;
+        color: #000000;
         margin-bottom: 0px;
         font-weight: 600;
     }
@@ -485,7 +485,7 @@ def render_summary_section():
                     title={'text': f"ID:{dev_id}", 'font': {'size': 14, 'color': '#94a3b8', 'family': 'Inter'}},
                     number={'suffix': 'KW', 'font': {'size': 22, 'color': durum_renk, 'family': 'Inter'}},
                     gauge={
-                        'axis': {'range': [0, 250], 'tickcolor': '#334155', 'tickfont': {'color': '#475569'}},
+                        'axis': {'range': [0, 250], 'tickcolor': '#334155', 'tickfont': {'color': '#000000'}},
                         'bar': {'color': durum_renk},
                         'bgcolor': 'rgba(15, 23, 42, 0.6)',
                         'borderwidth': 1,

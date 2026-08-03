@@ -164,7 +164,7 @@ _LOGIN_CSS = """
     text-align: center;
     font-family: 'Outfit', sans-serif;
     font-size: 0.95rem;
-    color: #475569;
+    color: #000000;
     margin-bottom: 0px;
 }
 
@@ -190,7 +190,7 @@ div[data-testid="column"] > div {
 [data-testid="stTextInput"] input {
     background: rgba(255, 255, 255, 0.8) !important;
     border: 1px solid rgba(148, 163, 184, 0.3) !important;
-    color: #1e293b !important;
+    color: #000000 !important;
     border-radius: 12px !important;
     padding: 12px 16px !important;
     transition: all 0.3s ease !important;
@@ -202,7 +202,7 @@ div[data-testid="column"] > div {
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
 }
 [data-testid="stTextInput"] label {
-    color: #475569 !important;
+    color: #000000 !important;
     font-weight: 600 !important;
 }
 
@@ -240,7 +240,7 @@ div[data-testid="column"] > div {
     text-align: center;
     font-family: 'Outfit', sans-serif;
     font-size: 0.8rem;
-    color: #475569;
+    color: #000000;
     margin-top: 24px;
     background: rgba(255, 255, 255, 0.6);
     padding: 10px;
