@@ -59,27 +59,12 @@ if st.session_state.fabrika_id is None:
         display: none !important;
     }
     
-    /* Title Card */
-    .factory-card-top {
+    /* Make the middle column a single unified card */
+    div[data-testid="column"]:has(.login-title) {
         background: #ffffff !important;
-        border: none !important;
-        border-radius: 8px 8px 0 0 !important;
-        padding: 50px 36px 10px 36px;
-        text-align: center;
+        border-radius: 8px !important;
+        padding: 50px 40px 50px 40px !important;
         box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
-        position: relative;
-    }
-    
-    .factory-card-bottom {
-        background: #ffffff !important;
-        border: none !important;
-        border-radius: 0 0 8px 8px !important;
-        padding: 20px 36px 50px 36px !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.08) !important;
-    }
-    
-    div[data-testid="column"] > div {
-        margin-top: -24px !important; 
     }
     
     /* Buttons */
@@ -89,11 +74,12 @@ if st.session_state.fabrika_id is None:
         color: #1e293b !important;
         border-radius: 8px !important;
         font-weight: 700 !important;
-        font-size: 1.1rem !important;
-        padding: 30px 20px !important;
+        font-size: 1.05rem !important;
+        padding: 30px 10px !important;
         transition: all 0.2s ease !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.02) !important;
         height: auto !important;
+        margin-top: 20px !important;
     }
     [data-testid="stButton"] button:hover {
         background: #f8fafc !important;
@@ -129,7 +115,7 @@ if st.session_state.fabrika_id is None:
         font-family: 'Outfit', sans-serif;
         font-size: 1rem;
         color: #64748b;
-        margin-bottom: 0px;
+        margin-bottom: 10px;
         font-weight: 600;
     }
     </style>
@@ -140,13 +126,10 @@ if st.session_state.fabrika_id is None:
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("""
-        <div class="factory-card-top">
-            <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
-            <div class="login-subtitle">IZLEMEK ISTEDIGINIZ FABRIKAYI SECIN</div>
-        </div>
+        <div class="login-title"><div class="login-title-icon">◑</div> <span>Solar<span style="color:#2563eb;">Monitor</span></span></div>
+        <div class="login-subtitle">IZLEMEK ISTEDIGINIZ FABRIKAYI SECIN</div>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="factory-card-bottom">', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
             if st.button("🔧 MEKANIK FABRIKA", width='stretch', type="secondary"):
@@ -156,7 +139,6 @@ if st.session_state.fabrika_id is None:
             if st.button("🏭 URETIM FABRIKASI", width='stretch', type="secondary"):
                 st.session_state.fabrika_id = "uretim"
                 st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
 fab_id = st.session_state.fabrika_id
