@@ -112,144 +112,107 @@ def load_users() -> dict:
 # 
 _LOGIN_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+/* GIZLI YAPI */
+[data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0px !important;
+}
 
-.stApp {
-    background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160659.688.webp') no-repeat center center fixed !important;
+/* Split Background */
+.stApp, [data-testid="stAppViewContainer"] {
+    background: linear-gradient(165deg, #1c2950 55%, #f4f6f9 55%) !important;
     background-size: cover !important;
+    background-attachment: fixed !important;
 }
 
-/* Tüm içeriği ortalamak için col2'ye max-width verebiliriz, 
-   ama col2 zaten responsive'dir. Kartın column'ı tam doldurması için %100 yapıyoruz */
-
+/* KART TASARIMI (Solid White) */
 .login-card {
-    background: rgba(255, 255, 255, 0.55) !important;
-    border: 1px solid rgba(255, 255, 255, 0.8) !important;
-    border-radius: 24px !important;
-    border-bottom-left-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    padding: 40px 36px 20px 36px;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    position: relative;
-    overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08) !important;
-    border-bottom: none !important;
-    width: 100% !important;
-}
-
-.login-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    background: #ffffff !important;
+    border-radius: 8px !important;
+    padding: 40px 36px 40px 36px !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08) !important;
+    text-align: center;
 }
 
 .login-title {
-    text-align: center;
+    text-align: left;
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
-    font-size: 2rem;
+    font-size: 1.8rem;
     font-weight: 800;
-    background: linear-gradient(135deg, #0ea5e9, #2563eb);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #1c2950;
     margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.login-title-icon {
+    background: #2563eb;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 16px;
 }
 
 .login-subtitle {
-    text-align: center;
+    text-align: left;
     font-family: 'Outfit', sans-serif;
     font-size: 0.95rem;
-    color: #000000;
-    margin-bottom: 0px;
-}
-
-[data-testid="stForm"] {
-    background: rgba(255, 255, 255, 0.55) !important;
-    border: 1px solid rgba(255, 255, 255, 0.8) !important;
-    border-radius: 24px !important;
-    border-top-left-radius: 0 !important;
-    border-top-right-radius: 0 !important;
-    padding: 10px 36px 40px 36px !important;
-    backdrop-filter: blur(24px) !important;
-    -webkit-backdrop-filter: blur(24px) !important;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08) !important;
-    border-top: none !important;
-    width: 100% !important;
+    color: #64748b;
+    margin-bottom: 24px;
 }
 
 div[data-testid="column"] > div {
     margin-top: -24px !important; 
 }
 
-/* Light Mode Input Alanları */
+/* Input Alanlari */
 [data-testid="stTextInput"] input {
-    background: rgba(255, 255, 255, 0.8) !important;
-    border: 1px solid rgba(148, 163, 184, 0.3) !important;
-    color: #000000 !important;
-    border-radius: 12px !important;
-    padding: 12px 16px !important;
-    transition: all 0.3s ease !important;
-    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02) !important;
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    color: #1e293b !important;
+    border-radius: 6px !important;
+    padding: 12px 14px !important;
+    font-weight: 500 !important;
 }
 [data-testid="stTextInput"] input:focus {
-    background: #ffffff !important;
-    border-color: #38bdf8 !important;
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+    border-color: #2563eb !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
 }
 [data-testid="stTextInput"] label {
-    color: #000000 !important;
+    color: #475569 !important;
     font-weight: 600 !important;
+    font-size: 0.9rem !important;
 }
 
-/* Submit Butonu */
-[data-testid="stFormSubmitButton"] button {
-    background: linear-gradient(135deg, #0ea5e9, #2563eb) !important;
+/* Buton */
+[data-testid="stButton"] button {
+    background: #2563eb !important;
     border: none !important;
-    color: white !important;
-    border-radius: 12px !important;
+    color: #ffffff !important;
+    border-radius: 6px !important;
     font-weight: 600 !important;
-    padding: 12px !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 4px 15px rgba(14, 165, 233, 0.3) !important;
+    padding: 24px 12px !important;
+    transition: all 0.2s ease !important;
     margin-top: 10px !important;
 }
-[data-testid="stFormSubmitButton"] button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 25px rgba(14, 165, 233, 0.4) !important;
-}
-[data-testid="stFormSubmitButton"] button:active {
-    transform: translateY(0px) !important;
+[data-testid="stButton"] button:hover {
+    background: #1d4ed8 !important;
 }
 
-/* Hata Mesajları */
+/* Hata Mesajlari */
 [data-testid="stNotification"] {
-    background: rgba(254, 226, 226, 0.8) !important;
-    border: 1px solid rgba(248, 113, 113, 0.5) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
-    color: #991b1b !important;
-    border-radius: 12px !important;
-}
-
-.login-footer {
-    text-align: center;
-    font-family: 'Outfit', sans-serif;
-    font-size: 0.8rem;
-    color: #000000;
-    margin-top: 24px;
-    background: rgba(255, 255, 255, 0.6);
-    padding: 10px;
-    border-radius: 8px;
-    backdrop-filter: blur(10px);
+    background: #fef2f2 !important;
+    border: 1px solid #fecaca !important;
+    color: #b91c1c !important;
+    border-radius: 6px !important;
 }
 </style>
 """
-
 
 def check_auth() -> bool:
     if not _is_auth_enabled():
