@@ -110,70 +110,149 @@ def load_users() -> dict:
             pass
     # Fallback: return default admin user
     return {"admin": {"hash": _DEFAULT_ADMIN_HASH, "role": "admin"}}
+# ===== DYNAMIC SKY BACKGROUND SYSTEM =====
+import math
 
-# LOGIN CSS (Animated Premium)
-_LOGIN_CSS = """
+def _get_sky_theme():
+    """Saate gore gokyuzu renkleri, gunes/ay pozisyonu ve siluet rengi hesaplar."""
+    from datetime import datetime
+    now = datetime.now()
+    hour = now.hour + now.minute / 60.0
+
+    # === GOKYUZU RENKLERI ===
+    if 5 <= hour < 6.5:       # Safak
+        sky = "linear-gradient(180deg, #1a1a2e 0%, #16213e 25%, #e94560 60%, #ff8a5c 85%, #ffd89b 100%)"
+        sil = "#0a0a15"
+    elif 6.5 <= hour < 9:     # Sabah
+        sky = "linear-gradient(180deg, #4a90d9 0%, #87ceeb 45%, #b4d7f5 75%, #ffecd2 100%)"
+        sil = "#12182a"
+    elif 9 <= hour < 15:      # Ogle
+        sky = "linear-gradient(180deg, #1e3c72 0%, #2a5298 35%, #4a90d9 65%, #87ceeb 100%)"
+        sil = "#0f1b2d"
+    elif 15 <= hour < 17.5:   # Ikindi
+        sky = "linear-gradient(180deg, #2c3e50 0%, #3498db 30%, #e67e22 70%, #f39c12 100%)"
+        sil = "#0d1520"
+    elif 17.5 <= hour < 20:   # Gun batimi
+        sky = "linear-gradient(180deg, #2c3e50 0%, #8e44ad 25%, #e74c3c 55%, #f39c12 80%, #f5d061 100%)"
+        sil = "#0a0a15"
+    else:                      # Gece
+        sky = "linear-gradient(180deg, #050510 0%, #0a0a1a 35%, #0f1b38 65%, #1c2950 100%)"
+        sil = "#030308"
+
+    # === GUNES / AY POZISYONU ===
+    if 6 <= hour <= 20:
+        progress = (hour - 6) / 14.0
+        angle = math.pi * progress
+        sun_x = 15 + 70 * progress
+        sun_y = 70 - 55 * math.sin(angle)
+        sun_size = 30 + 20 * math.sin(angle)
+        if hour < 8:
+            sun_color, glow = "#ff6b35", "rgba(255,107,53,0.5)"
+        elif hour < 16:
+            sun_color, glow = "#ffd700", "rgba(255,215,0,0.4)"
+        else:
+            sun_color, glow = "#ff4500", "rgba(255,69,0,0.5)"
+        celestial = f'''<div style="position:absolute;left:{sun_x:.1f}%;top:{sun_y:.1f}%;
+            width:{sun_size:.0f}px;height:{sun_size:.0f}px;
+            background:radial-gradient(circle,{sun_color} 30%,{glow} 70%,transparent 100%);
+            border-radius:50%;box-shadow:0 0 {sun_size:.0f}px {glow},0 0 {sun_size*2:.0f}px {glow};
+            transform:translate(-50%,-50%);"></div>'''
+        is_night = False
+    else:
+        celestial = '''<div style="position:absolute;left:72%;top:18%;
+            width:28px;height:28px;
+            background:radial-gradient(circle at 35% 35%,#f5f5f5 0%,#e0e0e0 50%,#ccc 100%);
+            border-radius:50%;box-shadow:0 0 20px rgba(255,255,255,0.3),0 0 60px rgba(255,255,255,0.1);
+            transform:translate(-50%,-50%);"></div>'''
+        is_night = True
+
+    # === YILDIZLAR (gece) ===
+    stars = ""
+    if is_night or hour < 6.5 or hour > 18.5:
+        import random
+        rng = random.Random(now.day)
+        dots = []
+        for _ in range(35):
+            sx, sy = rng.randint(3, 97), rng.randint(3, 55)
+            ss = rng.choice([1, 1.5, 2])
+            so = rng.uniform(0.3, 0.9)
+            dots.append(f'<div style="position:absolute;left:{sx}%;top:{sy}%;width:{ss}px;height:{ss}px;background:white;border-radius:50%;opacity:{so};"></div>')
+        stars = "\n".join(dots)
+
+    return sky, celestial, stars, sil
+
+def _build_sky_html():
+    """Tam gokyuzu HTML ciktisini olusturur (silüet SVG dahil)."""
+    sky, celestial, stars, sil = _get_sky_theme()
+
+    silhouette_svg = f'''<svg viewBox="0 0 1200 200" preserveAspectRatio="none"
+        style="position:absolute;bottom:0;left:0;width:100%;height:28%;">
+        <!-- Tepeler -->
+        <path d="M0,200 L0,140 Q100,80 200,120 Q320,55 450,100 Q550,45 680,90 Q800,40 920,95 Q1050,60 1200,120 L1200,200 Z" fill="{sil}"/>
+        <!-- Gunes panelleri (tepe uzerinde) -->
+        <g transform="translate(460,78) rotate(-12)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
+        <g transform="translate(498,72) rotate(-6)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
+        <g transform="translate(536,70) rotate(-2)"><rect x="0" y="0" width="28" height="2" fill="{sil}"/><rect x="2" y="-11" width="24" height="10" fill="{sil}" rx="1"/><line x1="14" y1="0" x2="14" y2="-11" stroke="{sil}" stroke-width="2"/></g>
+        <!-- Ruzgar turbini -->
+        <line x1="820" y1="70" x2="820" y2="20" stroke="{sil}" stroke-width="3"/>
+        <g transform="translate(820,20)"><line x1="0" y1="0" x2="-18" y2="-12" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="16" y2="-10" stroke="{sil}" stroke-width="2.5"/><line x1="0" y1="0" x2="2" y2="18" stroke="{sil}" stroke-width="2.5"/></g>
+        <!-- Fabrika -->
+        <rect x="120" y="100" width="55" height="40" fill="{sil}"/><rect x="135" y="82" width="10" height="58" fill="{sil}"/><rect x="158" y="88" width="8" height="52" fill="{sil}"/>
+        <!-- Evler -->
+        <rect x="960" y="88" width="28" height="18" fill="{sil}"/><polygon points="960,88 974,74 988,88" fill="{sil}"/>
+        <rect x="1000" y="92" width="22" height="14" fill="{sil}"/><polygon points="1000,92 1011,80 1022,92" fill="{sil}"/>
+        <!-- Elektrik diregi -->
+        <line x1="700" y1="65" x2="700" y2="30" stroke="{sil}" stroke-width="2"/>
+        <line x1="688" y1="35" x2="712" y2="35" stroke="{sil}" stroke-width="2"/>
+        <line x1="691" y1="42" x2="709" y2="42" stroke="{sil}" stroke-width="2"/>
+    </svg>'''
+
+    return f'''<div style="position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;overflow:hidden;background:{sky};">
+        {celestial}
+        {stars}
+        {silhouette_svg}
+    </div>'''
+
+
+# LOGIN CSS (Card + Form styling only, background handled by sky HTML)
+_LOGIN_CSS_TEMPLATE = """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* GIZLI YAPI */
-[data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
+[data-testid="stSidebar"], [data-testid="stHeader"], footer, header {{
     display: none !important;
     visibility: hidden !important;
     height: 0px !important;
-}
+}}
 
-/* ===== ANIMATED GRADIENT BACKGROUND ===== */
-.stApp {
-    background: linear-gradient(-45deg, #0a0f1e, #1c2950, #1a3a5c, #0f1b38, #1c2950) !important;
-    background-color: transparent !important;
-    background-size: 300% 300% !important;
-    animation: gradientShift 8s ease infinite !important;
-}
-[data-testid="stAppViewContainer"] {
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"] {{
     background: transparent !important;
     background-color: transparent !important;
-}
-[data-testid="stMain"], [data-testid="stMainBlockContainer"] {
-    background: transparent !important;
-}
-
-@keyframes gradientShift {
-    0%   { background-position: 0% 50%; }
-    25%  { background-position: 50% 100%; }
-    50%  { background-position: 100% 50%; }
-    75%  { background-position: 50% 0%; }
-    100% { background-position: 0% 50%; }
-}
+}}
 
 /* ===== KART — Slide-up + Fade-in ===== */
-div[data-testid="column"]:nth-child(2) {
-    background: #ffffff !important;
+div[data-testid="column"]:nth-child(2) {{
+    background: rgba(255,255,255,0.95) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
     border-radius: 16px !important;
     padding: 44px 40px !important;
-    box-shadow: 0 25px 60px rgba(0,0,0,0.3) !important;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.25) !important;
     animation: cardEntrance 1s cubic-bezier(0.16, 1, 0.3, 1) both !important;
-}
+    position: relative;
+    z-index: 10;
+}}
+@keyframes cardEntrance {{
+    from {{ opacity: 0; transform: translateY(50px) scale(0.95); }}
+    to   {{ opacity: 1; transform: translateY(0) scale(1); }}
+}}
 
-@keyframes cardEntrance {
-    from {
-        opacity: 0;
-        transform: translateY(50px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-/* Ensure form wrapper has no border since col2 is the card */
-[data-testid="stForm"] {
+[data-testid="stForm"] {{
     border: none !important;
     padding: 0 !important;
-}
+}}
 
-/* ===== TITLE ===== */
-.login-title {
+.login-title {{
     text-align: center;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 1.8rem;
@@ -185,14 +264,13 @@ div[data-testid="column"]:nth-child(2) {
     justify-content: center;
     gap: 12px;
     animation: fadeSlideDown 0.6s ease 0.3s both;
-}
+}}
+@keyframes fadeSlideDown {{
+    from {{ opacity: 0; transform: translateY(-15px); }}
+    to   {{ opacity: 1; transform: translateY(0); }}
+}}
 
-@keyframes fadeSlideDown {
-    from { opacity: 0; transform: translateY(-15px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.login-title-icon {
+.login-title-icon {{
     background: linear-gradient(135deg, #2563eb, #3b82f6);
     color: white;
     width: 36px;
@@ -204,14 +282,13 @@ div[data-testid="column"]:nth-child(2) {
     font-size: 18px;
     animation: iconPulse 3s ease-in-out infinite !important;
     box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
-}
+}}
+@keyframes iconPulse {{
+    0%, 100% {{ box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }}
+    50%      {{ box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }}
+}}
 
-@keyframes iconPulse {
-    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4); transform: scale(1); }
-    50%      { box-shadow: 0 8px 30px rgba(37, 99, 235, 0.7); transform: scale(1.08); }
-}
-
-.login-subtitle {
+.login-subtitle {{
     text-align: center;
     font-family: 'Inter', sans-serif;
     font-size: 0.9rem;
@@ -219,14 +296,13 @@ div[data-testid="column"]:nth-child(2) {
     margin-bottom: 24px;
     animation: fadeSlideDown 0.6s ease 0.5s both;
     letter-spacing: 0.5px;
-}
+}}
 
-div[data-testid="column"] > div {
+div[data-testid="column"] > div {{
     margin-top: -24px !important;
-}
+}}
 
-/* ===== INPUT ALANLARI ===== */
-[data-testid="stTextInput"] input {
+[data-testid="stTextInput"] input {{
     background: #f8fafc !important;
     border: 1.5px solid #e2e8f0 !important;
     color: #1e293b !important;
@@ -235,22 +311,20 @@ div[data-testid="column"] > div {
     font-weight: 500 !important;
     font-family: 'Inter', sans-serif !important;
     transition: all 0.3s ease !important;
-}
-[data-testid="stTextInput"] input:focus {
+}}
+[data-testid="stTextInput"] input:focus {{
     background: #ffffff !important;
     border-color: #2563eb !important;
     box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
-}
-[data-testid="stTextInput"] label {
+}}
+[data-testid="stTextInput"] label {{
     color: #475569 !important;
     font-weight: 600 !important;
     font-size: 0.85rem !important;
     font-family: 'Inter', sans-serif !important;
-    letter-spacing: 0.3px;
-}
+}}
 
-/* ===== GIRIS BUTONU — Glow Pulse ===== */
-[data-testid="stButton"] button {
+[data-testid="stButton"] button {{
     background: linear-gradient(135deg, #2563eb, #3b82f6) !important;
     border: none !important;
     color: #ffffff !important;
@@ -260,76 +334,35 @@ div[data-testid="column"] > div {
     padding: 24px 12px !important;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
     margin-top: 10px !important;
-    letter-spacing: 0.5px;
     animation: buttonGlow 2.5s ease-in-out infinite !important;
-}
-
-@keyframes buttonGlow {
-    0%, 100% { box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }
-    50%      { box-shadow: 0 8px 40px rgba(37, 99, 235, 0.6); }
-}
-
-[data-testid="stButton"] button:hover {
+}}
+@keyframes buttonGlow {{
+    0%, 100% {{ box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3); }}
+    50%      {{ box-shadow: 0 8px 40px rgba(37, 99, 235, 0.6); }}
+}}
+[data-testid="stButton"] button:hover {{
     background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
     transform: translateY(-2px) !important;
     box-shadow: 0 12px 35px rgba(37, 99, 235, 0.5) !important;
-}
-[data-testid="stButton"] button:active {
-    transform: translateY(0px) scale(0.98) !important;
-}
+}}
 
-/* ===== HATA MESAJLARI ===== */
-[data-testid="stNotification"] {
+[data-testid="stNotification"] {{
     background: #fef2f2 !important;
     border: 1px solid #fecaca !important;
     color: #b91c1c !important;
     border-radius: 10px !important;
     animation: shakeError 0.4s ease !important;
-}
-
-@keyframes shakeError {
-    0%, 100% { transform: translateX(0); }
-    20%      { transform: translateX(-8px); }
-    40%      { transform: translateX(8px); }
-    60%      { transform: translateX(-4px); }
-    80%      { transform: translateX(4px); }
-}
+}}
+@keyframes shakeError {{
+    0%, 100% {{ transform: translateX(0); }}
+    20% {{ transform: translateX(-8px); }}
+    40% {{ transform: translateX(8px); }}
+    60% {{ transform: translateX(-4px); }}
+    80% {{ transform: translateX(4px); }}
+}}
 </style>
 """
 
-# Floating particles HTML component (runs in its own iframe with JS)
-_PARTICLES_HTML = """
-<div id="particle-canvas" style="position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;overflow:hidden;"></div>
-<script>
-const canvas = document.getElementById('particle-canvas');
-const colors = ['rgba(37,99,235,0.35)','rgba(59,130,246,0.25)','rgba(99,102,241,0.2)','rgba(245,158,11,0.25)','rgba(16,185,129,0.2)'];
-for (let i = 0; i < 25; i++) {
-    const p = document.createElement('div');
-    const size = Math.random() * 10 + 4;
-    const dur = Math.random() * 14 + 8;
-    const delay = Math.random() * 12;
-    const left = Math.random() * 100;
-    p.style.cssText = `
-        position:absolute; border-radius:50%;
-        width:${size}px; height:${size}px;
-        left:${left}%; bottom:-20px;
-        background:${colors[Math.floor(Math.random()*colors.length)]};
-        animation: rise ${dur}s linear ${delay}s infinite;
-    `;
-    canvas.appendChild(p);
-}
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes rise {
-        0%   { transform: translateY(0) scale(0); opacity:0; }
-        10%  { opacity:0.7; transform: translateY(-10vh) scale(1); }
-        90%  { opacity:0.2; }
-        100% { transform: translateY(-110vh) scale(0.5); opacity:0; }
-    }
-`;
-document.head.appendChild(style);
-</script>
-"""
 
 def check_auth() -> bool:
     if not _is_auth_enabled():
@@ -341,16 +374,15 @@ def check_auth() -> bool:
 
 
 def _show_login_form():
-    st.markdown(_LOGIN_CSS, unsafe_allow_html=True)
-    
-    # Floating particles via st.components.v1.html (supports JavaScript)
-    import streamlit.components.v1 as components
-    components.html(_PARTICLES_HTML, height=0, scrolling=False)
-    
+    # Dynamic sky background (computed from current hour)
+    sky_html = _build_sky_html()
+    st.markdown(sky_html, unsafe_allow_html=True)
+    st.markdown(_LOGIN_CSS_TEMPLATE, unsafe_allow_html=True)
+
     # Boşluk bırakalım ki form çok yukarda durmasın
     st.markdown("<br><br><br>", unsafe_allow_html=True)
 
-    # Login formunu ve kartını aynı kolon içine alıyoruz (Böylece genişlikleri BİREBİR aynı olur)
+    # Login formunu ve kartını aynı kolon içine alıyoruz
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         st.markdown("""
