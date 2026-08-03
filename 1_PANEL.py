@@ -62,39 +62,124 @@ if st.session_state.fabrika_id is None:
         background: """ + bg_url + """ no-repeat center center fixed !important;
         background-size: cover !important;
     }
-    .factory-select-container {
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        padding: 40px 60px;
-        border-radius: 24px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+    
+    /* Hide top nav items to make the selection screen clean */
+    .top-nav {
+        display: none !important;
+    }
+    
+    /* Title Card */
+    .factory-card-top {
+        background: rgba(255, 255, 255, 0.65) !important;
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+        border-bottom: none !important;
+        border-radius: 24px 24px 0 0 !important;
+        padding: 50px 36px 10px 36px;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
         text-align: center;
+        box-shadow: 0 -10px 40px rgba(0,0,0,0.05) !important;
+        position: relative;
+        overflow: hidden;
+    }
+    .factory-card-top::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    }
+    
+    /* Container for buttons that matches the width of the card perfectly */
+    .factory-card-bottom {
+        background: rgba(255, 255, 255, 0.65) !important;
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+        border-top: none !important;
+        border-radius: 0 0 24px 24px !important;
+        padding: 20px 36px 50px 36px !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08) !important;
+    }
+    
+    /* Bridge the gap between top and bottom cards */
+    div[data-testid="column"] > div {
+        margin-top: -24px !important; 
+    }
+    
+    /* Giant beautiful buttons */
+    [data-testid="stButton"] button {
+        background: rgba(255, 255, 255, 0.8) !important;
+        border: 1px solid rgba(148, 163, 184, 0.3) !important;
+        color: #1e293b !important;
+        border-radius: 16px !important;
+        font-weight: 700 !important;
+        font-size: 1.1rem !important;
+        padding: 30px 20px !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
+        height: auto !important;
+    }
+    [data-testid="stButton"] button:hover {
+        background: #ffffff !important;
+        border-color: #0ea5e9 !important;
+        transform: translateY(-4px) !important;
+        box-shadow: 0 12px 25px rgba(14, 165, 233, 0.2) !important;
+        color: #0ea5e9 !important;
+    }
+    [data-testid="stButton"] button:active {
+        transform: translateY(0px) !important;
+    }
+    
+    .login-title {
+        text-align: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #0ea5e9, #2563eb);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 4px;
+    }
+    .login-subtitle {
+        text-align: center;
+        font-family: 'Outfit', sans-serif;
+        font-size: 1rem;
+        color: #475569;
+        margin-bottom: 0px;
+        font-weight: 600;
     }
     </style>
-    <div style="display:flex;justify-content:center;align-items:center;min-height:60vh;">
-        <div class="factory-select-container">
-            <h1 style="font-size:3rem;font-weight:800;
-                background:linear-gradient(135deg,#0071E3,#32ADE6);
-                -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                margin-bottom:8px;">☀️ SOLAR MONITOR</h1>
-            <p style="color:#515154;font-size:1.1rem;margin-bottom:32px;font-weight:500;">IZLEMEK ISTEDIGINIZ FABRIKAYI SECIN</p>
-        </div>
-    </div>
+    
+    <br><br><br><br>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
+        st.markdown("""
+        <div class="factory-card-top">
+            <div class="login-title">SOLAR MONITOR</div>
+            <div class="login-subtitle">IZLEMEK ISTEDIGINIZ FABRIKAYI SECIN</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # We need a wrapper div to visually connect the bottom to the top
+        st.markdown('<div class="factory-card-bottom">', unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            if st.button("🔧 MEKANIK FABRIKA", width='stretch', type="primary"):
+            if st.button("🔧 MEKANIK FABRIKA", width='stretch', type="secondary"):
                 st.session_state.fabrika_id = "mekanik"
                 st.rerun()
         with c2:
-            if st.button("🏭 URETIM FABRIKASI", width='stretch', type="primary"):
+            if st.button("🏭 URETIM FABRIKASI", width='stretch', type="secondary"):
                 st.session_state.fabrika_id = "uretim"
                 st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
+
 
 fab_id = st.session_state.fabrika_id
 fab_info = FABRIKALAR[fab_id]
