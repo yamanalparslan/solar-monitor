@@ -144,7 +144,7 @@ div[data-testid="column"]:nth-child(2) {
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
     font-size: 1.8rem;
     font-weight: 800;
-    color: #1c2950;
+    color: #ffffff;
     margin-bottom: 4px;
     display: flex;
     align-items: center;

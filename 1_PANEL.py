@@ -92,7 +92,7 @@ if st.session_state.fabrika_id is None:
         font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif;
         font-size: 2.2rem;
         font-weight: 800;
-        color: #1c2950;
+        color: #ffffff;
         margin-bottom: 4px;
         display: flex;
         align-items: center;
