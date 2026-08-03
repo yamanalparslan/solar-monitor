@@ -7,7 +7,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 from models import FAULT_MAP_107, FAULT_MAP_109, FAULT_MAP_111, FAULT_MAP_112, FAULT_MAP_114, FAULT_MAP_115, FAULT_MAP_116, FAULT_MAP_117, FAULT_MAP_118, FAULT_MAP_119, FAULT_MAP_120, FAULT_MAP_121, FAULT_MAP_122, determine_severity
 from styles import render_top_nav, inject_glossy_css, section_header, alarm_card, badge, kpi_row
-from auth import check_auth, logout_button
+from auth import check_auth, logout_button, get_user_role, get_current_user
 
 st.set_page_config(page_title="AKTIF ALARMLAR", page_icon="", layout="wide")
 inject_glossy_css()

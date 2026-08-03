@@ -6,7 +6,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani, utils
 from styles import render_top_nav, inject_glossy_css, section_header, solar_table
-from auth import check_auth, logout_button
+from auth import check_auth, logout_button, get_user_role, get_current_user
 
 st.set_page_config(page_title="VERI AKTARIMI", page_icon="", layout="wide")
 inject_glossy_css()

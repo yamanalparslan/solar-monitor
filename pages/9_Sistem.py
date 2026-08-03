@@ -29,11 +29,9 @@ fab_id = st.session_state.fabrika_id
 
 st.title("⚙️ SISTEM DURUMU")
 
-api_pass = st.text_input("Sistem Sayfası Şifresi", type="password", key="sys_pass")
-if api_pass != "1444":
-    if api_pass:
-        st.error("Hatalı şifre.")
-    st.stop()
+if get_user_role(st.session_state.username) != 'admin':
+        st.error("Bu sayfayi yalnizca yoneticiler degistirebilir.")
+        st.stop()
 
 runtime_config = load_runtime_config()
 section_header("⚙", "SISTEM BILGILERI", "KONFIGURASYON VE ORTAM DURUMU")
@@ -232,7 +230,7 @@ with st.form("ayar_form"):
             help="Ondalik olarak yazabilirsiniz. Ornek: 1.0 veya 0.1",
         )
 
-    # Sistem sayfasında admin onayı ve sayfa şifresi 1444 onaylandığı için bu ayar butonunu aktifleştirebiliriz.
+    # Sistem sayfasında admin onayı yapıldığı için bu ayar butonunu aktifleştirebiliriz.
     submitted = st.form_submit_button("AYARLARI KALICI OLARAK KAYDET", type="primary", width='stretch')
 
 if submitted:
@@ -322,8 +320,59 @@ else:
             st.rerun()
 
 
+
+st.markdown("---")
+section_header("👥", "KULLANICI YÖNETİMİ", "Kullanıcı Ekle / Sil / Düzenle")
+
+import auth
+
+# Get all users (returns dict of username: hash)
+all_users = auth.load_users()
+
+c1, c2 = st.columns([2, 1])
+
+with c1:
+    st.subheader("Mevcut Kullanıcılar")
+    user_data = []
+    for uname, udata in all_users.items():
+        role = udata.get("role", "viewer")
+        user_data.append({"Kullanıcı Adı": uname, "Yetki Rolü": role})
+        
+    df_users = pd.DataFrame(user_data)
+    st.dataframe(df_users, use_container_width=True)
+    
+    st.subheader("Kullanıcı Sil")
+    del_user = st.selectbox("Silinecek Kullanıcıyı Seçin", options=[u for u in all_users.keys() if u != st.session_state.username])
+    if st.button("Kullanıcıyı Sil", type="primary"):
+        if del_user:
+            auth.delete_user(del_user)
+            st.success(f"{del_user} başarıyla silindi!")
+            st.rerun()
+
+with c2:
+    st.subheader("Yeni Kullanıcı Ekle")
+    with st.form("new_user_form"):
+        new_username = st.text_input("Kullanıcı Adı")
+        new_password = st.text_input("Şifre", type="password")
+        new_role = st.selectbox("Rol", ["admin", "user"])
+        
+        submitted_user = st.form_submit_button("Kullanıcı Oluştur")
+        
+        if submitted_user:
+            if new_username and new_password:
+                if new_username in all_users:
+                    st.error("Bu kullanıcı zaten var.")
+                else:
+                    auth.add_user(new_username, new_password, new_role)
+                    st.success(f"{new_username} ({new_role}) oluşturuldu.")
+                    st.rerun()
+            else:
+                st.error("Kullanıcı adı ve şifre zorunludur.")
+
+
 st.markdown("<hr>", unsafe_allow_html=True)
 section_header("🔑", "API Üretici", "Dış Sistemler İçin Yetkili API Anahtarı Oluşturun")
+
 
 config_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'api_config.json')
 os.makedirs(os.path.dirname(config_path), exist_ok=True)

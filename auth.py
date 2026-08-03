@@ -93,20 +93,52 @@ def _is_auth_enabled() -> bool:
 _DEFAULT_ADMIN_HASH = "0139dcacdd93868fd19a701191131882297aab91532bfb7b825b886f19ae7a53"
 
 def _get_credentials() -> tuple[str, str]:
-    """Kullanc ad ve ifre hash'ini dner.
-    
-    Returns:
-        (username, password_hash)  hash bosa varsaylan 'admin' ifresi kullanlr
-    """
-    username = os.getenv("AUTH_USERNAME", "admin")
-    password_hash = os.getenv("AUTH_PASSWORD_HASH", "")
+    pass # Deprecated
 
-    # Hash tanml deilse varsaylan ifre: "admin"
-    if not password_hash:
-        password_hash = _DEFAULT_ADMIN_HASH
 
-    return username, password_hash
 
+# 
+import json
+_USERS_JSON_PATH = os.path.join("data", "users.json")
+
+def load_users() -> dict:
+    if os.path.exists(_USERS_JSON_PATH):
+        try:
+            with open(_USERS_JSON_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # Varsayılan admin (eğer dosya yoksa)
+    default = {
+        "admin": {
+            "hash": _DEFAULT_ADMIN_HASH,
+            "role": "admin"
+        }
+    }
+    save_users(default)
+    return default
+
+def save_users(users_dict: dict):
+    os.makedirs("data", exist_ok=True)
+    with open(_USERS_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(users_dict, f, indent=4)
+
+def add_user(username, plain_password, role):
+    users = load_users()
+    users[username] = {
+        "hash": _get_password_hash(plain_password),
+        "role": role
+    }
+    save_users(users)
+
+def delete_user(username):
+    users = load_users()
+    if username in users:
+        del users[username]
+        save_users(users)
+
+def _get_all_users() -> dict:
+    return load_users()
 
 # 
 # LOGIN CSS (Glossy Tasarm)
@@ -267,8 +299,8 @@ def _show_login_form():
                     if rate_record["attempts"] >= 3:
                         rate_record["attempts"] = 0
                         
-                    expected_user, expected_hash = _get_credentials()
-                    if username_input == expected_user and _verify_password(password_input, expected_hash):
+                    users = load_users()
+                    if username_input in users and _verify_password(password_input, users[username_input]["hash"]):
                         st.session_state["authenticated"] = True
                         st.session_state["username"] = username_input
                         rate_record["attempts"] = 0 # Başarılı girişte sıfırla
@@ -322,12 +354,8 @@ def get_current_user() -> str:
     return st.session_state.get("username", "admin")
 
 def get_user_role(username: str) -> str:
-    """Kullanıcının rolünü .env'den (USER_ROLES) okur. Varsayılan: viewer."""
-    roles_str = os.getenv("USER_ROLES", "admin:admin")
-    roles = {}
-    for pair in roles_str.split(","):
-        if ":" in pair:
-            u, r = pair.split(":", 1)
-            roles[u.strip()] = r.strip().lower()
-    
-    return roles.get(username, "viewer")
+    """Kullanıcının rolünü users.json'dan okur."""
+    users = load_users()
+    if username in users:
+        return users[username].get("role", "viewer")
+    return "viewer"

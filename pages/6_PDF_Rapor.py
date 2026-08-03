@@ -12,7 +12,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import veritabani
 import utils
 from styles import render_top_nav, inject_glossy_css, section_header, kpi_row
-from auth import check_auth, logout_button
+from auth import check_auth, logout_button, get_user_role, get_current_user
 
 st.set_page_config(page_title="PDF RAPOR", page_icon="", layout="wide")
 inject_glossy_css()

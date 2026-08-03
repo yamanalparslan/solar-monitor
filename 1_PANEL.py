@@ -49,7 +49,7 @@ if st.session_state.fabrika_id is None:
     st.markdown("""
     <style>
     .stApp {
-        background: url('https://sp.sanayigazetesi.com.tr/wp-content/uploads/2025/03/Resim-2025-03-30T160718.008.webp') no-repeat center center fixed !important;
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%) !important;
         background-size: cover !important;
     }
     .factory-select-container {
@@ -97,12 +97,16 @@ if 'ayarlar_kaydedildi' not in st.session_state:
 @st.cache_data(ttl=timedelta(seconds=2), show_spinner=False)
 def _fetch_summary_data(fab_id: str):
     """Aynı saniye içerisinde defalarca db okumasını engellemek için cache'lenir."""
-    return veritabani.tum_cihazlarin_son_durumu(fab_id)
+    rows = veritabani.tum_cihazlarin_son_durumu(fab_id)
+    # Streamlit cache_data DictRow objelerini deserialize ederken tuple'a donusturdugu icin
+    # onbellege almadan once standart dict'e cevirmemiz gerekiyor.
+    return [dict(r) for r in rows]
 
 @st.cache_data(ttl=timedelta(seconds=30), show_spinner=False)
 def _fetch_device_data(dev_id: int, fab_id: str, limit: int = 2880):
     """Tekil cihaz grafigi icin cihaz verisini onbellek ile getirir."""
-    return veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
+    rows = veritabani.son_verileri_getir(dev_id, limit=limit, fabrika_id=fab_id)
+    return [dict(r) for r in rows]
 
 # --- YAN MENU ---
 # --- ANA EKRAN ---
@@ -344,8 +348,29 @@ def render_summary_section():
             col_idx = idx % cols_per_row
             
             # Make sure the row has enough elements to unpack into CihazDurumu
-            padded_row = list(row) + [0] * max(0, 19 - len(row))
-            cd = CihazDurumu(*padded_row[:19])
+            
+            cd = CihazDurumu(
+                slave_id=row['slave_id'],
+                son_zaman=row.get('son_zaman', row.get('zaman')), # In tum_cihazlarin_son_durumu it is aliased as son_zaman
+                guc=row['guc'],
+                voltaj=row['voltaj'],
+                akim=row['akim'],
+                sicaklik=row['sicaklik'],
+                hata_kodu=row['hata_kodu'],
+                hata_kodu_109=row.get('hata_kodu_109', 0),
+                hata_kodu_111=row.get('hata_kodu_111', 0),
+                hata_kodu_112=row.get('hata_kodu_112', 0),
+                hata_kodu_114=row.get('hata_kodu_114', 0),
+                hata_kodu_115=row.get('hata_kodu_115', 0),
+                hata_kodu_116=row.get('hata_kodu_116', 0),
+                hata_kodu_117=row.get('hata_kodu_117', 0),
+                hata_kodu_118=row.get('hata_kodu_118', 0),
+                hata_kodu_119=row.get('hata_kodu_119', 0),
+                hata_kodu_120=row.get('hata_kodu_120', 0),
+                hata_kodu_121=row.get('hata_kodu_121', 0),
+                hata_kodu_122=row.get('hata_kodu_122', 0)
+            )
+
             
             dev_id = cd.slave_id
             dev_guc = cd.guc if cd.guc is not None else 0
@@ -390,15 +415,15 @@ def render_summary_section():
         # TABLO: st.dataframe yerine solar_table (hover row highlight)
         tablo_rows = []
         for row in summary_data:
-            zaman_fmt = pd.to_datetime(row[1], errors='coerce')
+            zaman_fmt = pd.to_datetime(row.get('son_zaman', row.get('zaman')), errors='coerce')
             zaman_fmt = zaman_fmt.strftime('%H:%M:%S') if pd.notna(zaman_fmt) else "-"
-            isi_val = utils.normalize_temperature_value(float(row[5] or 0))
+            isi_val = utils.normalize_temperature_value(float(row['sicaklik'] or 0))
             tablo_rows.append([
-                row[0],          # ID
+                row['slave_id'],          # ID
                 zaman_fmt,
-                f"{float(row[2] or 0):.1f}",
-                f"{float(row[3] or 0):.1f}",
-                f"{float(row[4] or 0):.2f}",
+                f"{float(row['guc'] or 0):.1f}",
+                f"{float(row['voltaj'] or 0):.1f}",
+                f"{float(row['akim'] or 0):.2f}",
                 f"{isi_val:.1f}",
             ])
         solar_table(
@@ -419,12 +444,16 @@ def render_summary_section():
         tablo_verileri = []
         
         # Her inverter icin ayri satir
+        # Cachelenmiş veya anlık toplu 7 günlük veri
+        haftalik_data = veritabani.haftalik_uretim_ozeti(fabrika_id=fab_id, gun_sayisi=7)
+        
         for dev_id in active_dev_ids:
             row = [f"ID {dev_id}"]
             for i in range(6, -1, -1):
                 t = bugun - timedelta(days=i)
                 gun_str = t.strftime('%Y-%m-%d')
-                ur = veritabani.gunluk_uretim_hesapla(gun_str, slave_id=dev_id, fabrika_id=fab_id)
+                
+                ur = haftalik_data.get((gun_str, dev_id), None)
                 val = 0
                 if ur:
                     val = ur.get('modbus_uretim', 0) if ur.get('modbus_uretim', 0) > 0 else ur.get('uretim_kwh', 0)
@@ -436,7 +465,8 @@ def render_summary_section():
         for i in range(6, -1, -1):
             t = bugun - timedelta(days=i)
             gun_str = t.strftime('%Y-%m-%d')
-            ur = veritabani.gunluk_uretim_hesapla(gun_str, slave_id=None, fabrika_id=fab_id)
+            
+            ur = haftalik_data.get((gun_str, None), None)
             val = 0
             if ur:
                 val = ur.get('modbus_uretim', 0) if ur.get('modbus_uretim', 0) > 0 else ur.get('uretim_kwh', 0)
@@ -458,15 +488,18 @@ st.subheader(" TEKLI CIHAZ INCELEMESI")
 def render_tek_cihaz_grafikleri(sel_id, metrik_isim):
     chart_area = st.empty()
 
-    detail_data = veritabani.son_verileri_getir(sel_id, limit=2880, fabrika_id=fab_id)
+    detail_data = _fetch_device_data(sel_id, fab_id, limit=1440) # Bugunun max limiti 1440 dk
     if detail_data:
         try:
             cols_det = ["timestamp", "guc", "voltaj", "akim", "sicaklik", "hata_kodu", "hata_kodu_109", "hata_kodu_111", "hata_kodu_112", "hata_kodu_114", "hata_kodu_115", "hata_kodu_116", "hata_kodu_117", "hata_kodu_118", "hata_kodu_119", "hata_kodu_120", "hata_kodu_121", "hata_kodu_122", "voltaj_ab", "voltaj_bc", "voltaj_ca", "akim_a", "akim_b", "akim_c"]
-            df_det = pd.DataFrame(detail_data, columns=cols_det[:len(detail_data[0])] if detail_data else cols_det)
-            
-            df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], errors='coerce')
-            df_det["guc"] = pd.to_numeric(df_det["guc"], errors='coerce')
-            df_det["voltaj"] = pd.to_numeric(df_det["voltaj"], errors='coerce')
+            df_det = pd.DataFrame(detail_data)
+            if not df_det.empty:
+                if "zaman" in df_det.columns and "timestamp" not in df_det.columns:
+                    df_det = df_det.rename(columns={"zaman": "timestamp"})
+                
+                df_det["timestamp"] = pd.to_datetime(df_det["timestamp"], errors='coerce')
+                df_det["guc"] = pd.to_numeric(df_det.get("guc", 0), errors='coerce')
+                df_det["voltaj"] = pd.to_numeric(df_det.get("voltaj", 0), errors='coerce')
             
             if "voltaj_ab" in df_det.columns:
                 df_det["voltaj_ab"] = pd.to_numeric(df_det["voltaj_ab"], errors='coerce')
@@ -572,15 +605,15 @@ def render_status_bar():
     if summary_data:
         from datetime import datetime
         try:
-            son_zaman = max(row[1] for row in summary_data if row[1])
+            son_zaman = max(row.get('son_zaman', row.get('zaman')) for row in summary_data if row.get('son_zaman', row.get('zaman')))
             son_dt = pd.to_datetime(son_zaman) if son_zaman else None
             if son_dt:
                 gecen_sure = (datetime.now() - son_dt).total_seconds()
                 collector_aktif = gecen_sure < 120
             veri_bos_gorunuyor = all(
-                (float(row[2] or 0) == 0.0)
-                and (float(row[3] or 0) == 0.0)
-                and (float(row[4] or 0) == 0.0)
+                (float(row['guc'] or 0) == 0.0)
+                and (float(row['voltaj'] or 0) == 0.0)
+                and (float(row['akim'] or 0) == 0.0)
                 for row in summary_data
             )
         except Exception:

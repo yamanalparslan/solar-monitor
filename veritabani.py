@@ -1,29 +1,55 @@
 import psycopg2
+from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import DictCursor
 import os
 from datetime import datetime, timedelta
 
-def get_db_connection():
-    """Çoklu container ve thread erişimi için PostgreSQL bağlantısı oluşturur."""
-    host = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    dbname = os.getenv("POSTGRES_DB", "solar_db")
-    user = os.getenv("POSTGRES_USER", "solar_user")
-    password = os.getenv("POSTGRES_PASSWORD", "solar_pass_2026")
+_pool = None
 
-    try:
-        # psycopg2 default is thread-safe for new connections
-        conn = psycopg2.connect(
-            host=host,
-            port=port,
-            dbname=dbname,
-            user=user,
-            password=password
-        )
-        return conn
-    except Exception as e:
-        print(f"[DB_HATA] PostgreSQL bağlantısı kurulamadı: {e}")
-        return None
+def get_pool():
+    global _pool
+    if _pool is None:
+        host = os.getenv("POSTGRES_HOST", "localhost")
+        port = os.getenv("POSTGRES_PORT", "5432")
+        dbname = os.getenv("POSTGRES_DB", "solar_db")
+        user = os.getenv("POSTGRES_USER", "solar_user")
+        password = os.getenv("POSTGRES_PASSWORD", "solar_pass_2026")
+        
+        try:
+            _pool = ThreadedConnectionPool(
+                minconn=1, maxconn=20, 
+                host=host, port=port, dbname=dbname, user=user, password=password
+            )
+        except Exception as e:
+            print(f"[DB_HATA] PostgreSQL havuzu oluşturulamadı: {e}")
+    return _pool
+
+class PooledConnectionProxy:
+    def __init__(self, pool, conn):
+        self._pool = pool
+        self._conn = conn
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def cursor(self, *args, **kwargs):
+        if 'cursor_factory' not in kwargs:
+            kwargs['cursor_factory'] = DictCursor
+        return self._conn.cursor(*args, **kwargs)
+
+    def close(self):
+        self._pool.putconn(self._conn)
+
+def get_db_connection():
+    """Çoklu container ve thread erişimi için PostgreSQL havuzundan bağlantı döndürür."""
+    pool = get_pool()
+    if pool:
+        try:
+            conn = pool.getconn()
+            return PooledConnectionProxy(pool, conn)
+        except Exception as e:
+            print(f"[DB_HATA] Havuzdan bağlantı alınamadı: {e}")
+    return None
 
 # ── Fabrika Tanımları ──
 FABRIKALAR = {
@@ -249,9 +275,9 @@ def retention_policy_senkronize(conn=None):
     kendi_baglantisi = conn is None
     if kendi_baglantisi:
         conn = get_db_connection()
-        if not conn:
-            return
-        conn.autocommit = True
+    if not conn:
+        return
+    conn.autocommit = True
     cursor = conn.cursor()
     try:
         cursor.execute("SELECT deger FROM ayarlar WHERE anahtar = 'veri_saklama_gun'")
@@ -439,9 +465,9 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
 
 def veri_kaydet(fabrika_id, slave_id, guc, voltaj, akim, sicaklik, modbus_uretim=0, hatalar=None, voltaj_ab=0, voltaj_bc=0, voltaj_ca=0, akim_a=0, akim_b=0, akim_c=0):
     if hatalar is None: hatalar = []
+    conn = get_db_connection()
+    if not conn: return
     try:
-        conn = get_db_connection()
-        if not conn: return
         cursor = conn.cursor()
         
         simdi = datetime.now()
@@ -527,7 +553,8 @@ def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRI
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
     if not conn: return []
-    cursor = conn.cursor()
+    from psycopg2.extras import DictCursor
+    cursor = conn.cursor(cursor_factory=DictCursor)
     cursor.execute("""
         SELECT DISTINCT ON (slave_id) 
                slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik,
@@ -542,12 +569,7 @@ def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     """, (fabrika_id,))
     rows = cursor.fetchall()
     conn.close()
-    
-    formatted_rows = []
-    for r in rows:
-        formatted_rows.append((r[0], str(r[1]), *r[2:]))
-        
-    return formatted_rows
+    return rows
 
 def db_temizle(fabrika_id=None):
     conn = get_db_connection()
@@ -672,29 +694,100 @@ def saatlik_ozet_getir(slave_id, baslangic_tarihi, bitis_tarihi, fabrika_id=VARS
         return []
 
 def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
+    from datetime import datetime
     conn = get_db_connection()
     if not conn: return None
-    cursor = conn.cursor()
-    baslangic_str = f"{baslangic} 00:00:00"
-    bitis_str = f"{bitis} 23:59:59"
     try:
-        if slave_id:
-            cursor.execute('''SELECT AVG(guc), AVG(voltaj), AVG(akim), AVG(sicaklik), MAX(guc), MIN(guc), COUNT(*)
-                FROM olcumler WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s AND slave_id = %s''',
-                (fabrika_id, baslangic_str, bitis_str, slave_id))
-        else:
-            cursor.execute('''SELECT AVG(guc), AVG(voltaj), AVG(akim), AVG(sicaklik), MAX(guc), MIN(guc), COUNT(*)
-                FROM olcumler WHERE fabrika_id = %s AND zaman BETWEEN %s AND %s''',
-                (fabrika_id, baslangic_str, bitis_str))
-        sonuc = cursor.fetchone()
-        return {'ort_guc': sonuc[0] or 0, 'ort_voltaj': sonuc[1] or 0, 'ort_akim': sonuc[2] or 0,
-                'ort_sicaklik': sonuc[3] or 0, 'max_guc': sonuc[4] or 0, 'min_guc': sonuc[5] or 0,
-                'toplam_olcum': sonuc[6] or 0}
-    except Exception as e:
-        print(f"[WARN] Ortalama hesaplama hatası: {e}")
-        return None
+        with conn.cursor() as cursor:
+            baslangic_str = f"{baslangic} 00:00:00"
+            bitis_str = f"{bitis} 23:59:59"
+            
+            is_long = False
+            try:
+                b_date = datetime.strptime(baslangic, '%Y-%m-%d')
+                e_date = datetime.strptime(bitis, '%Y-%m-%d')
+                if (e_date - b_date).days > 1:
+                    is_long = True
+            except: pass
+            
+            table_name = "olcumler_saatlik" if is_long else "olcumler"
+            time_col = "zaman_saati" if is_long else "zaman"
+            
+            try:
+                if slave_id:
+                    cursor.execute(f'''SELECT AVG(guc), AVG(voltaj), AVG(akim), AVG(sicaklik), MAX(guc), MIN(guc), COUNT(*)
+                        FROM {table_name} WHERE fabrika_id = %s AND {time_col} BETWEEN %s AND %s AND slave_id = %s''',
+                        (fabrika_id, baslangic_str, bitis_str, slave_id))
+                else:
+                    cursor.execute(f'''SELECT AVG(guc), AVG(voltaj), AVG(akim), AVG(sicaklik), MAX(guc), MIN(guc), COUNT(*)
+                        FROM {table_name} WHERE fabrika_id = %s AND {time_col} BETWEEN %s AND %s''',
+                        (fabrika_id, baslangic_str, bitis_str))
+                sonuc = cursor.fetchone()
+                return {'ort_guc': sonuc[0] or 0, 'ort_voltaj': sonuc[1] or 0, 'ort_akim': sonuc[2] or 0,
+                        'ort_sicaklik': sonuc[3] or 0, 'max_guc': sonuc[4] or 0, 'min_guc': sonuc[5] or 0,
+                        'toplam_olcum': sonuc[6] or 0}
+            except Exception as e:
+                print(f"[WARN] Ortalama hesaplama hatası: {e}")
+                return None
+
+
     finally:
         conn.close()
+def haftalik_uretim_ozeti(fabrika_id=VARSAYILAN_FABRIKA, gun_sayisi=7):
+    """
+    Son X gün için, her bir cihazın (slave_id) günlük üretim verisini tek bir sorguda getirir.
+    Dönen yapı: 
+    {
+        (tarih_str, slave_id): {'modbus_uretim': ..., 'uretim_kwh': ...},
+        (tarih_str, None): {'modbus_uretim': ..., 'uretim_kwh': ...} # Toplam
+    }
+    """
+    ozet = {}
+    conn = get_db_connection()
+    if not conn: return ozet
+    try:
+        with conn.cursor() as cursor:
+            # PostgreSQL'de INTERVAL '6 days' (bugün + 6 gün önce = 7 gün)
+            interval_str = f"{gun_sayisi - 1} days"
+            cursor.execute(f"""
+                SELECT 
+                    slave_id, 
+                    DATE(zaman) as gun,
+                    AVG(guc) as ort_guc,
+                    COUNT(*) as olcum_sayisi,
+                    MAX(CASE WHEN guc > 0 THEN modbus_uretim ELSE 0 END) as modbus_uretim
+                FROM olcumler
+                WHERE fabrika_id = %s AND zaman >= CURRENT_DATE - INTERVAL '{interval_str}'
+                GROUP BY slave_id, DATE(zaman)
+            """, (fabrika_id,))
+            
+            rows = cursor.fetchall()
+            
+            # Günlük cihaz verileri
+            for row in rows:
+                s_id = row['slave_id']
+                # DictCursor ile row['gun'] doğrudan datetime.date objesi döner
+                gun_str = row['gun'].strftime('%Y-%m-%d')
+                ort_guc = row['ort_guc'] or 0
+                modbus_ur = row['modbus_uretim'] or 0
+                uretim_kwh = (ort_guc * 24) / 1000
+                
+                ozet[(gun_str, s_id)] = {
+                    'modbus_uretim': modbus_ur,
+                    'uretim_kwh': uretim_kwh
+                }
+                
+                # O günün toplamını da ekleyelim
+                if (gun_str, None) not in ozet:
+                    ozet[(gun_str, None)] = {'modbus_uretim': 0.0, 'uretim_kwh': 0.0}
+                
+                ozet[(gun_str, None)]['modbus_uretim'] += modbus_ur
+                ozet[(gun_str, None)]['uretim_kwh'] += uretim_kwh
+
+    finally:
+        conn.close()
+    return ozet
+
 
 def gunluk_uretim_hesapla(tarih, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()

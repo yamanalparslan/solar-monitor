@@ -26,7 +26,8 @@ CRM Entegrasyonu:
         Header: X-API-Key: xxxxx  (.env'deki CRM_API_KEY)
 """
 
-from fastapi import FastAPI, HTTPException, Query, Depends, Header, WebSocket, WebSocketDisconnect, Request
+from fastapi import Security, FastAPI, HTTPException, Query, Depends, Header, WebSocket, WebSocketDisconnect, Request
+from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -82,15 +83,17 @@ veritabani.init_db()
 # API Key Doğrulama (basit)
 # ─────────────────────────────────────────────
 
-def verify_api_key(request: Request, x_api_key: Optional[str] = Header(None), api_key: Optional[str] = Query(None)):
-    """API Key doğrulama.
 
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(request: Request, x_api_key: str = Security(api_key_header)):
+    """API Key doğrulama.
+    
     .env'de CRM_API_KEY=gizli_anahtar olarak ayarlayın.
     """
-    provided_key = x_api_key or api_key
+    provided_key = x_api_key
     if not provided_key:
         raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
-
     # 1. Check generated api_config.json
     config_path = os.path.join(os.path.dirname(__file__), 'data', 'api_config.json')
     if os.path.exists(config_path):
@@ -221,14 +224,16 @@ def get_system_status(request: Request, fabrika: str = Query("mekanik", descript
 
     last_time = None
     if durum:
-        times = [r[1] for r in durum if r[1]]
+        times = [r['son_zaman'] for r in durum if r['son_zaman']]
         if times:
             last_time = max(times)
 
     return SystemStatus(
         status="healthy" if durum else "no_data",
         active_devices=len(durum),
-        last_data_time=last_time,
+        # `zaman` bir timestamp kolonu; psycopg2 datetime döner. SystemStatus
+        # bunu `str` bekliyor ve pydantic v2 datetime'ı str'e çevirmez.
+        last_data_time=str(last_time) if last_time else None,
         db_size_mb=istatistik["db_boyut_mb"] if istatistik else None,
     )
 
@@ -254,9 +259,9 @@ def get_all_devices(request: Request, fabrika: Optional[str] = Query(None, descr
             continue
             
         for row in rows:
-            guc = float(row[2]) if row[2] else 0
+            guc = float(row['guc']) if row['guc'] else 0
             hata = (row[6] if len(row) > 6 and row[6] else 0)
-            gunluk_uretim = float(row[19]) if len(row) > 19 and row[19] else 0.0
+            gunluk_uretim = float(row['modbus_uretim']) if len(row) > 19 and row['modbus_uretim'] else 0.0
 
             if hata:
                 durum = "ARIZA"
@@ -267,13 +272,14 @@ def get_all_devices(request: Request, fabrika: Optional[str] = Query(None, descr
 
             device_dict = {
                 "fabrika_id": f_id,
-                "slave_id": row[0],
-                "son_zaman": row[1],
-                "zaman": row[1],
+                "slave_id": row['slave_id'],
+                # Sorgu `zaman as son_zaman` diyor — sözlük anahtarı takma addır.
+                "son_zaman": row['son_zaman'],
+                "zaman": row['son_zaman'],
                 "guc": guc,
-                "voltaj": round(float(row[3]), 1) if row[3] else 0,
-                "akim": round(float(row[4]), 2) if row[4] else 0,
-                "sicaklik": round(float(row[5]), 1) if row[5] else 0,
+                "voltaj": round(float(row['voltaj']), 1) if row['voltaj'] else 0,
+                "akim": round(float(row['akim']), 2) if row['akim'] else 0,
+                "sicaklik": round(float(row['sicaklik']), 1) if row['sicaklik'] else 0,
                 "gunluk_uretim_kwh": gunluk_uretim,
                 "hata_kodu": hata,
                 "durum": durum,
@@ -300,6 +306,9 @@ def get_device_latest(request: Request, slave_id: int, limit: int = Query(10, ge
     response = []
     for row in veriler:
         device_dict = {
+            # `son_verileri_getir` düz `conn.cursor()` kullanıyor (DictCursor
+            # değil), yani satırlar tuple'dır — sözlük erişimi çalışmaz. Sorgu
+            # sırası: zaman, guc, voltaj, akim, sicaklik, hata_kodu, ...
             "zaman": str(row[0]),
             "guc": float(row[1] or 0),
             "voltaj": float(row[2] or 0),
@@ -464,8 +473,9 @@ def get_active_alarms(request: Request, fabrika: str = Query("mekanik", descript
 
         if hata_kodlari:
             alarms.append(AlarmInfo(
-                slave_id=row[0],
-                zaman=row[1] or "",
+                slave_id=row['slave_id'],
+                # AlarmInfo.zaman bir `str`; kolon timestamp döndürür.
+                zaman=str(row['son_zaman']) if row['son_zaman'] else "",
                 hata_kodlari=hata_kodlari,
             ))
 
@@ -550,15 +560,15 @@ def _build_ws_payload() -> dict:
         rows = veritabani.tum_cihazlarin_son_durumu(fab_id)
         devices = []
         for row in rows:
-            guc = float(row[2]) if row[2] else 0
+            guc = float(row['guc']) if row['guc'] else 0
             hata = (row[6] if len(row) > 6 and row[6] else 0)
             devices.append({
-                "slave_id": row[0],
-                "son_zaman": row[1],
+                "slave_id": row['slave_id'],
+                "son_zaman": row['son_zaman'],
                 "guc": guc,
-                "voltaj": round(float(row[3]), 1) if row[3] else 0,
-                "akim": round(float(row[4]), 2) if row[4] else 0,
-                "sicaklik": round(float(row[5]), 1) if row[5] else 0,
+                "voltaj": round(float(row['voltaj']), 1) if row['voltaj'] else 0,
+                "akim": round(float(row['akim']), 2) if row['akim'] else 0,
+                "sicaklik": round(float(row['sicaklik']), 1) if row['sicaklik'] else 0,
                 "hata_kodu": hata,
             })
         all_data[fab_id] = devices
@@ -659,9 +669,38 @@ async def ws_notify(request: Request, _=Depends(verify_api_key)):
 
 # ─── Canlı Dashboard HTML ───
 
+
+def verify_live_api_key(request: Request, x_api_key: str = Security(api_key_header), api_key: str = Query(None)):
+    provided_key = x_api_key or api_key
+    if not provided_key:
+        raise HTTPException(status_code=401, detail="Geçersiz veya eksik API anahtarı")
+    
+    # Kodu kopyala/yapıştır yapmamak için config yükleme kısmı:
+    # Aslında doğrudan verify_api_key içindeki yetki kontrolünü çağırabiliriz
+    # ama fastAPI'de Depends() injectionları ile çalışıyor. 
+    # Şimdilik live_dashboard html yüklediği için roles list dönmese de olur, sadece exception atmazsa yeter.
+    config_path = os.path.join(os.path.dirname(__file__), 'data', 'api_config.json')
+    if os.path.exists(config_path):
+        import json
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config_data = json.load(f)
+            if "api_key" in config_data and config_data.get("api_key") == provided_key:
+                return
+            if provided_key in config_data:
+                return
+        except: pass
+        
+    env_key = os.getenv("CRM_API_KEY")
+    if env_key and provided_key == env_key:
+        return
+        
+    raise HTTPException(status_code=401, detail="Yetkisiz erişim")
+
+
 @app.get("/live", response_class=HTMLResponse, tags=["Dashboard"])
 @limiter.limit("20/minute")
-async def live_dashboard(request: Request, _=Depends(verify_api_key)):
+async def live_dashboard(request: Request, _=Depends(verify_live_api_key)):
     """WebSocket canlı izleme dashboard'u.
 
     Tarayıcıdan http://SUNUCU_IP:8503/live?api_key=XXX açarak

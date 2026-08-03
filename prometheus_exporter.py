@@ -37,32 +37,29 @@ def update_metrics():
             cihaz_durumlari = veritabani.tum_cihazlarin_son_durumu(fab_id)
             
             for cihaz in cihaz_durumlari:
-                padded_cihaz = list(cihaz) + [0] * max(0, 19 - len(cihaz))
-                cd = CihazDurumu(*padded_cihaz[:19])
-                
-                s_id = str(cd.slave_id)
+                s_id = str(cihaz['slave_id'])
                 
                 # Prometheus ölçüm ibrelerini (gauge) güncelle
-                solar_guc.labels(slave_id=s_id, fabrika=fab_id).set(cd.guc)
-                solar_voltaj.labels(slave_id=s_id, fabrika=fab_id).set(cd.voltaj)
-                solar_akim.labels(slave_id=s_id, fabrika=fab_id).set(cd.akim)
-                solar_sicaklik.labels(slave_id=s_id, fabrika=fab_id).set(cd.sicaklik)
+                solar_guc.labels(slave_id=s_id, fabrika=fab_id).set(cihaz['guc'] or 0)
+                solar_voltaj.labels(slave_id=s_id, fabrika=fab_id).set(cihaz['voltaj'] or 0)
+                solar_akim.labels(slave_id=s_id, fabrika=fab_id).set(cihaz['akim'] or 0)
+                solar_sicaklik.labels(slave_id=s_id, fabrika=fab_id).set(cihaz['sicaklik'] or 0)
                 
                 # Tüm Hata kodlarını ayrı labellarla kayıt et
                 hatalar = {
-                    "107": cd.hata_kodu or 0,
-                    "109": cd.hata_kodu_109 or 0,
-                    "111": cd.hata_kodu_111 or 0,
-                    "112": cd.hata_kodu_112 or 0,
-                    "114": cd.hata_kodu_114 or 0,
-                    "115": cd.hata_kodu_115 or 0,
-                    "116": cd.hata_kodu_116 or 0,
-                    "117": cd.hata_kodu_117 or 0,
-                    "118": cd.hata_kodu_118 or 0,
-                    "119": cd.hata_kodu_119 or 0,
-                    "120": cd.hata_kodu_120 or 0,
-                    "121": cd.hata_kodu_121 or 0,
-                    "122": cd.hata_kodu_122 or 0,
+                    "107": cihaz['hata_kodu'] or 0,
+                    "109": cihaz['hata_kodu_109'] or 0,
+                    "111": cihaz['hata_kodu_111'] or 0,
+                    "112": cihaz['hata_kodu_112'] or 0,
+                    "114": cihaz['hata_kodu_114'] or 0,
+                    "115": cihaz['hata_kodu_115'] or 0,
+                    "116": cihaz['hata_kodu_116'] or 0,
+                    "117": cihaz['hata_kodu_117'] or 0,
+                    "118": cihaz['hata_kodu_118'] or 0,
+                    "119": cihaz['hata_kodu_119'] or 0,
+                    "120": cihaz['hata_kodu_120'] or 0,
+                    "121": cihaz['hata_kodu_121'] or 0,
+                    "122": cihaz['hata_kodu_122'] or 0,
                 }
                 
                 for reg, val in hatalar.items():
