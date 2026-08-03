@@ -319,7 +319,8 @@ div[data-testid="column"]:nth-child(2) {
     text-align: center;
     font-family: 'Inter', sans-serif;
     font-size: 1.2rem;
-    color: #64748b;
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
     margin-bottom: 30px;
     font-weight: 600;
     animation: fadeSlideDown 0.6s ease 0.5s both;
