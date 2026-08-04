@@ -1,0 +1,5 @@
+# Kabuk scriptleri Linux konteynerlerin icinde /bin/sh ile calistiriliyor.
+# Windows'ta core.autocrlf=true oldugu icin checkout sirasinda CRLF'e cevrilirlerse
+# kabuk "set: illegal option -" hatasi verip konteyner crash dongusune giriyor.
+# Bu yuzden .sh dosyalari her zaman LF ile yazilsin.
+*.sh text eol=lf

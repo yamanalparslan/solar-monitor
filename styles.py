@@ -837,7 +837,7 @@ def render_top_nav():
         c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
         with c_logo:
             if st.session_state.get('fabrika_id'):
-                st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
+                st.markdown("<span class='nav-logo' style='margin-right:0;'>Solar<span style='color:white;'>Monitor</span></span>", unsafe_allow_html=True)
         with c_btn:
             if st.session_state.get('fabrika_id'):
                 if st.button("🏭", help="Fabrika Değiştir"):
