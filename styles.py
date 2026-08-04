@@ -161,7 +161,7 @@ div[data-testid="stDataFrame"],
 .stButton > button {
     background: rgba(0, 113, 227, 0.05) !important;
     border: 1px solid rgba(0, 113, 227, 0.15) !important;
-    border-radius: 980px !important; /* Fully rounded buttons like Apple */
+    border-radius: 12px !important; /* Rounded square buttons */
     color: var(--accent-blue) !important;
     font-weight: 500 !important;
     font-family: -apple-system, BlinkMacSystemFont, 'Outfit', sans-serif !important;
@@ -834,13 +834,17 @@ def render_top_nav():
     col1, col2, col3 = st.columns([1.5, 8, 1.5], vertical_alignment="center")
     
     with col1:
-        if st.session_state.get('fabrika_id'):
-            c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
-            with c_logo:
+        c_logo, c_btn = st.columns([0.75, 0.25], vertical_alignment="center")
+        with c_logo:
+            if st.session_state.get('fabrika_id'):
                 st.markdown("<span class='nav-logo' style='margin-right:0;'>SolarMonitor</span>", unsafe_allow_html=True)
-            with c_btn:
+        with c_btn:
+            if st.session_state.get('fabrika_id'):
                 if st.button("🏭", help="Fabrika Değiştir"):
                     st.session_state.fabrika_id = None
+                    st.switch_page("1_PANEL.py")
+            else:
+                if st.button("🏠", help="Ana Sayfa"):
                     st.switch_page("1_PANEL.py")
     with col2:
         if st.session_state.get('fabrika_id'):

@@ -52,7 +52,8 @@ if st.session_state.fabrika_id is None:
     
     st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 
     [data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
         display: none !important;
@@ -84,8 +85,8 @@ if st.session_state.fabrika_id is None:
         to   { opacity: 1; transform: translateY(0) scale(1); }
     }
     
-    /* Buttons */
-    [data-testid="stButton"] button {
+    /* Factory Selection Buttons */
+    div[data-testid="stHorizontalBlock"] div[data-testid="stHorizontalBlock"] [data-testid="stButton"] button {
         background: #ffffff !important;
         border: 2px solid #cbd5e1 !important;
         color: #0f172a !important;
@@ -99,7 +100,7 @@ if st.session_state.fabrika_id is None:
         height: auto !important;
         margin-top: 20px !important;
     }
-    [data-testid="stButton"] button:hover {
+    div[data-testid="stHorizontalBlock"] div[data-testid="stHorizontalBlock"] [data-testid="stButton"] button:hover {
         background: #f8fafc !important;
         border-color: #2563eb !important;
         color: #2563eb !important;
@@ -145,7 +146,7 @@ if st.session_state.fabrika_id is None:
         text-align: center;
         font-family: 'Inter', sans-serif;
         font-size: 1.05rem;
-        color: #64748b;
+        color: white;
         margin-bottom: 10px;
         font-weight: 600;
         animation: fadeSlideDown 0.6s ease 0.5s both;

@@ -29,7 +29,7 @@ fab_id = st.session_state.fabrika_id
 
 st.title("⚙️ SISTEM DURUMU")
 
-if get_user_role(st.session_state.username) != 'admin':
+if get_user_role(st.session_state.get('username', 'admin')) != 'admin':
         st.error("Bu sayfayi yalnizca yoneticiler degistirebilir.")
         st.stop()
 
@@ -342,7 +342,7 @@ with c1:
     st.dataframe(df_users, use_container_width=True)
     
     st.subheader("Kullanıcı Sil")
-    del_user = st.selectbox("Silinecek Kullanıcıyı Seçin", options=[u for u in all_users.keys() if u != st.session_state.username])
+    del_user = st.selectbox("Silinecek Kullanıcıyı Seçin", options=[u for u in all_users.keys() if u != st.session_state.get('username', 'admin')])
     if st.button("Kullanıcıyı Sil", type="primary"):
         if del_user:
             auth.delete_user(del_user)

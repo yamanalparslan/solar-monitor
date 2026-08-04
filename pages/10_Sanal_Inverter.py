@@ -10,7 +10,7 @@ render_top_nav()
 if not check_auth():
     st.stop()
 import auth
-if get_user_role(st.session_state.username) != 'admin':
+if get_user_role(st.session_state.get('username', 'admin')) != 'admin':
     st.error("Bu sayfayi yalnizca yoneticiler goruntuleyebilir.")
     st.stop()
 

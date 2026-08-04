@@ -110,6 +110,29 @@ def load_users() -> dict:
             pass
     # Fallback: return default admin user
     return {"admin": {"hash": _DEFAULT_ADMIN_HASH, "role": "admin"}}
+
+def save_users(users: dict):
+    os.makedirs(os.path.dirname(_USERS_JSON_PATH), exist_ok=True)
+    with open(_USERS_JSON_PATH, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=4)
+
+def add_user(username: str, password: str, role: str = "user") -> bool:
+    users = load_users()
+    if username in users:
+        return False
+    password_hash = _get_password_hash(password)
+    users[username] = {"hash": password_hash, "role": role}
+    save_users(users)
+    return True
+
+def delete_user(username: str) -> bool:
+    users = load_users()
+    if username in users:
+        del users[username]
+        save_users(users)
+        return True
+    return False
+
 # ===== DYNAMIC SKY BACKGROUND SYSTEM =====
 import math
 import urllib.parse
@@ -221,6 +244,7 @@ def _build_sky_css():
 
     return f"""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap');
     .stApp {{
         background: {sky} !important;
         background-color: transparent !important;
@@ -244,7 +268,7 @@ def _build_sky_css():
 # LOGIN CSS (Card + Form styling only, background handled by sky HTML)
 _LOGIN_CSS_TEMPLATE = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 
 [data-testid="stSidebar"], [data-testid="stHeader"], footer, header {
     display: none !important;

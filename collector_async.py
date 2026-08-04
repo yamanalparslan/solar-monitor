@@ -113,14 +113,20 @@ async def read_device_async(
 
             # ── 1. ADIM: TEMEL METRIKLERI PARCALI BLOK OLARAK OKU ──
             try:
-                # Blok 1: Akim ve Voltaj (25-30 arası, 6 register)
+                # Blok 1: Akim ve Voltaj (ayarlardan gelen adreslere gore 3'er register okuma)
                 await asyncio.sleep(1.5) # Gateway için nefes alma süresi (1.5 sn)
-                regs_chunk1 = await read_registers_smart(client, 25, 6, slave_id)
-                if not regs_chunk1 or len(regs_chunk1) < 6:
-                    raise Exception("Akim/Voltaj (25-30) okunamadi")
+                akim_addr = config.get("akim_addr", 25)
+                regs_akim = await read_registers_smart(client, akim_addr, 3, slave_id)
+                if not regs_akim or len(regs_akim) < 3:
+                    raise Exception(f"Akim ({akim_addr}) okunamadi")
                 
-                raw_akim_a, raw_akim_b, raw_akim_c = regs_chunk1[0], regs_chunk1[1], regs_chunk1[2]
-                raw_volt_ab, raw_volt_bc, raw_volt_ca = regs_chunk1[3], regs_chunk1[4], regs_chunk1[5]
+                volt_addr = config.get("volt_addr", 28)
+                regs_volt = await read_registers_smart(client, volt_addr, 3, slave_id)
+                if not regs_volt or len(regs_volt) < 3:
+                    raise Exception(f"Voltaj ({volt_addr}) okunamadi")
+                
+                raw_akim_a, raw_akim_b, raw_akim_c = regs_akim[0], regs_akim[1], regs_akim[2]
+                raw_volt_ab, raw_volt_bc, raw_volt_ca = regs_volt[0], regs_volt[1], regs_volt[2]
 
                 # Blok 2: Uretim (Tekil okuma, bazi inverterlarda hata verebilir diye soft-fail)
                 await asyncio.sleep(0.5)
