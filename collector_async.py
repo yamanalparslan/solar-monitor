@@ -168,6 +168,35 @@ async def read_device_async(
             
             # Akim icin genel bir ortalama deger de tutalim
             val_akim = round((val_akim_a + val_akim_b + val_akim_c) / 3, 2)
+
+            # --- MODBUS 1-REGISTER SHIFT OTO-DUZELTME ---
+            # Cihaz (Gateway/Inverter) donanimsal kilitlenmeden dolayi paketleri 1 register ileri kaydirdiginda:
+            # Voltaj CA adresi (40031) yerine Frekans'i (40032) okur => Deger 50.00 Hz * 0.1(scale) = 500.0 V olur.
+            # (Frekans dalgalanmasindan dolayi 49.96 Hz = 499.6 V gelebilir, bu yuzden aralik kontrolu yapiyoruz)
+            # Akim C adresi (40028) yerine Voltaj AB'yi (40029) okur => Deger 7600 * 0.1 = 760.0 A olur.
+            if 480.0 <= val_volt_ca <= 520.0 and val_akim_c > 500.0:
+                logger.warning(f"Modbus 1-Register Shift tespit edildi (IP: {ip_address}, ID: {slave_id}). Oto-duzeltme uygulaniyor.")
+                
+                # Voltajlari 1 adim geri kaydirarak kurtarma
+                gercek_volt_bc = val_volt_ab  # Okunan Volt AB aslinda Volt BC idi
+                gercek_volt_ca = val_volt_bc  # Okunan Volt BC aslinda Volt CA idi
+                gercek_volt_ab = utils.to_signed16(raw_akim_c) * config["volt_scale"] # Okunan Akim C icinde Volt AB sakliydi
+                
+                val_volt_ab = gercek_volt_ab
+                val_volt_bc = gercek_volt_bc
+                val_volt_ca = gercek_volt_ca
+                val_volt = round((val_volt_ab + val_volt_bc + val_volt_ca) / 3, 2)
+                
+                # Akimlari 1 adim geri kaydirarak kurtarma
+                gercek_akim_b = val_akim_a  # Okunan Akim A aslinda Akim B idi
+                gercek_akim_c = val_akim_b  # Okunan Akim B aslinda Akim C idi
+                gercek_akim_a = gercek_akim_b # Gercek Akim A diziden dustugu icin, sistemi dengeli (B'ye esit) varsayiyoruz
+                
+                val_akim_a = gercek_akim_a
+                val_akim_b = gercek_akim_b
+                val_akim_c = gercek_akim_c
+                val_akim = round((val_akim_a + val_akim_b + val_akim_c) / 3, 2)
+                # ----------------------------------------------
             
             val_guc  = utils.to_signed16(raw_guc)  * config["guc_scale"]
             val_isi  = utils.decode_temperature_register(raw_isi, config["isi_scale"])
