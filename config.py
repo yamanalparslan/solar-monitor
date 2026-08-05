@@ -119,6 +119,14 @@ def setup_logging(name: str = "solar_monitor") -> logging.Logger:
         level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
         logger.setLevel(level)
 
+        # propagate kapatiliyor: collector'lar ayrica logging.basicConfig()
+        # cagirdigi icin root'a da handler eklenmis oluyordu ve her kayit iki
+        # kez basiliyordu (biri bu formatla, biri root'un varsayilan
+        # "ERROR:ad:mesaj" formatiyla). Sahadaki 24 saatlik logda 3348 hata
+        # satirinin gercek karsiligi 1674 hataydi. Root yapilandirmasi
+        # ucuncu taraf kutuphaneler (pymodbus) icin yerinde kaliyor.
+        logger.propagate = False
+
         handler = logging.StreamHandler()
         handler.setLevel(level)
 

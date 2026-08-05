@@ -79,18 +79,93 @@ from collector_config import load_config, start_daily_webhook_thread  # noqa: F4
 # Cihaz Okuma (Dinamik Blok Okuma - Async)
 # ─────────────────────────────────────────────
 
-async def read_registers_smart(client: AsyncModbusTcpClient, start_addr: int, count: int, slave_id: int):
+# ─────────────────────────────────────────────
+# Gateway zamanlamasi (ayarlanabilir)
+# ─────────────────────────────────────────────
+#
+# RS485 gateway istekler arasinda bosluk bekliyor. Sahada olculdu: bosluksuz
+# giden tek okuma (akim'in hemen ardindan gelen voltaj) 24 saatte 1674 kez
+# basarisiz oldu, bosluklu okumalarin toplam hata sayisi 2'ydi. Ucuncu cihaz
+# (uretim/1) hic hata vermedi; digerleri dongulerin ~%60'ini kaybetti.
+#
+# Bu yuzden: (1) her istekten once bosluk birakilir, (2) yakin adres
+# araliklari tek blokta okunarak istek sayisi dusurulur, (3) sureler
+# .env'den ayarlanabilir cunku dogru deger gateway modeline gore degisir.
+GATEWAY_ILK_GECIKME_SN = float(os.getenv("MODBUS_GATEWAY_ILK_GECIKME_SN", "1.5"))
+GATEWAY_ISTEK_ARASI_SN = float(os.getenv("MODBUS_ISTEK_ARASI_GECIKME_SN", "0.5"))
+GATEWAY_ALARM_GECIKME_SN = float(os.getenv("MODBUS_ALARM_GECIKME_SN", "0.5"))
+# Tek istekte okunacak azami register sayisi. Uretimde 33-44 (12 register)
+# sorunsuz okunuyor; 16 guvenli bir ust sinir.
+MAX_BLOK_REGISTER = int(os.getenv("MODBUS_MAX_BLOK_REGISTER", "16"))
+
+
+def okuma_plani(araliklar, max_blok: int = None):
+    """Yakin adres araliklarini tek blok okumaya gruplar.
+
+    araliklar: [(ad, baslangic, adet), ...]
+    Doner:     [{"start": int, "count": int, "offsetler": {ad: offset}}, ...]
+
+    Neden: her Modbus istegi gateway'de bosluk bekletmesi gerektiriyor, yani
+    istek sayisi dogrudan dongu suresi ve hata olasiligi demek. Uretim
+    ayarlarinda akim=26, voltaj=29 (3'er register) ardisik oldugu icin tek
+    26-31 blogunda okunur; uretim=36 zaten guc=33..isi=44 araliginin icinde
+    kaldigi icin ayrica okunmasina gerek yoktur (eskiden register 36 her
+    dongude iki kez okunuyordu).
+
+    Ornek (uretim ayarlari, max_blok=16):
+        akim 26+3, voltaj 29+3, uretim 36+1, guc 33+1, isi 44+1
+        -> [ {26, 6, {akim:0, voltaj:3}},
+             {33, 12, {guc:0, uretim:3, isi:11}} ]
+        4 istek yerine 2 istek.
+    """
+    if max_blok is None:
+        max_blok = MAX_BLOK_REGISTER
+
+    gruplar = []
+    for ad, baslangic, adet in sorted(araliklar, key=lambda a: (a[1], a[0])):
+        if gruplar:
+            grup = gruplar[-1]
+            yeni_son = max(grup["start"] + grup["count"], baslangic + adet)
+            if yeni_son - grup["start"] <= max_blok:
+                grup["count"] = yeni_son - grup["start"]
+                grup["offsetler"][ad] = baslangic - grup["start"]
+                grup["araliklar"][ad] = (baslangic, adet)
+                continue
+
+        gruplar.append({
+            "start": baslangic,
+            "count": adet,
+            "offsetler": {ad: 0},
+            # Blok okuma basarisiz olursa tek tek denemek icin gerekli.
+            "araliklar": {ad: (baslangic, adet)},
+        })
+
+    return gruplar
+
+
+async def read_registers_smart(client: AsyncModbusTcpClient, start_addr: int, count: int, slave_id: int,
+                               istek_arasi_sn: float = None):
     """
     Önce holding registers olarak blok halinde okumayı dener.
     Hata alırsa veya boşsa input registers olarak okumayı dener.
     Hepsinde hata alırsa None döner.
+
+    Iki deneme arasinda da gateway boslugu birakilir: holding hemen ardindan
+    input istegi gondermek tam olarak sahada cokmesine yol acan bosluksuz
+    istek kalibiydi.
     """
+    if istek_arasi_sn is None:
+        istek_arasi_sn = GATEWAY_ISTEK_ARASI_SN
+
     try:
         rr = await client.read_holding_registers(address=start_addr, count=count, slave=slave_id)
         if rr is not None and not rr.isError() and getattr(rr, "registers", None):
             return rr.registers
     except Exception:
         pass
+
+    if istek_arasi_sn > 0:
+        await asyncio.sleep(istek_arasi_sn)
 
     try:
         rr = await client.read_input_registers(address=start_addr, count=count, slave=slave_id)
@@ -100,6 +175,50 @@ async def read_registers_smart(client: AsyncModbusTcpClient, start_addr: int, co
         pass
 
     return None
+
+
+async def metrikleri_oku(client, slave_id: int, araliklar, ip_address: str = "",
+                         istek_arasi_sn: float = None, max_blok: int = None):
+    """Plani uygulayip {ad: [register...]} dondurur.
+
+    Bir blok okunamazsa o blogun icindeki araliklar tek tek, aralarinda
+    gateway boslugu birakilarak yeniden denenir. Boylece 6 register'lik blok
+    okumayi kabul etmeyen bir cihaz eski davranisla calismaya devam eder.
+    """
+    if istek_arasi_sn is None:
+        istek_arasi_sn = GATEWAY_ISTEK_ARASI_SN
+
+    sonuc = {}
+    ilk_istek = True
+
+    for grup in okuma_plani(araliklar, max_blok):
+        if not ilk_istek and istek_arasi_sn > 0:
+            await asyncio.sleep(istek_arasi_sn)
+        ilk_istek = False
+
+        regs = await read_registers_smart(
+            client, grup["start"], grup["count"], slave_id, istek_arasi_sn
+        )
+
+        if regs and len(regs) >= grup["count"]:
+            for ad, offset in grup["offsetler"].items():
+                _, adet = grup["araliklar"][ad]
+                sonuc[ad] = regs[offset:offset + adet]
+            continue
+
+        # Blok okuma basarisiz: araliklari tek tek dene.
+        logger.warning(
+            "IP %s ID %s blok okuma basarisiz (%s-%s), araliklar tek tek denenecek",
+            ip_address, slave_id, grup["start"], grup["start"] + grup["count"] - 1
+        )
+        for ad, (baslangic, adet) in grup["araliklar"].items():
+            if istek_arasi_sn > 0:
+                await asyncio.sleep(istek_arasi_sn)
+            tek = await read_registers_smart(client, baslangic, adet, slave_id, istek_arasi_sn)
+            if tek and len(tek) >= adet:
+                sonuc[ad] = tek[:adet]
+
+    return sonuc
 
 
 async def read_device_async(
@@ -116,41 +235,49 @@ async def read_device_async(
             if not client.connected:
                 raise Exception("TCP connection failed to establish")
 
-            # ── 1. ADIM: TEMEL METRIKLERI PARCALI BLOK OLARAK OKU ──
+            # ── 1. ADIM: TEMEL METRIKLERI PLANLI BLOK OKUMAYLA AL ──
+            # Tum metrik araliklari tek planda gruplanir; boylece bosluksuz
+            # ardisik istek kalmaz ve istek sayisi duser (uretim ayarlarinda
+            # 4 istek yerine 2). Sahada cokme tam olarak bosluksuz istekte
+            # yasaniyordu.
             try:
-                # Blok 1: Akim ve Voltaj (ayarlardan gelen adreslere gore 3'er register okuma)
-                await asyncio.sleep(1.5) # Gateway için nefes alma süresi (1.5 sn)
-                akim_addr = config.get("akim_addr", 25)
-                regs_akim = await read_registers_smart(client, akim_addr, 3, slave_id)
-                if not regs_akim or len(regs_akim) < 3:
+                akim_addr = int(config["akim_addr"])
+                volt_addr = int(config["volt_addr"])
+                guc_addr = int(config["guc_addr"])
+                isi_addr = int(config["isi_addr"])
+                uretim_addr = int(config["uretim_addr"])
+
+                await asyncio.sleep(GATEWAY_ILK_GECIKME_SN)  # Gateway icin nefes alma suresi
+
+                degerler = await metrikleri_oku(
+                    client, slave_id,
+                    [
+                        ("akim", akim_addr, 3),
+                        ("voltaj", volt_addr, 3),
+                        ("guc", guc_addr, 1),
+                        ("isi", isi_addr, 1),
+                        ("uretim", uretim_addr, 1),
+                    ],
+                    ip_address=ip_address,
+                )
+
+                if "akim" not in degerler:
                     raise Exception(f"Akim ({akim_addr}) okunamadi")
-                
-                volt_addr = config.get("volt_addr", 28)
-                regs_volt = await read_registers_smart(client, volt_addr, 3, slave_id)
-                if not regs_volt or len(regs_volt) < 3:
+                if "voltaj" not in degerler:
                     raise Exception(f"Voltaj ({volt_addr}) okunamadi")
-                
-                raw_akim_a, raw_akim_b, raw_akim_c = regs_akim[0], regs_akim[1], regs_akim[2]
-                raw_volt_ab, raw_volt_bc, raw_volt_ca = regs_volt[0], regs_volt[1], regs_volt[2]
+                if "guc" not in degerler:
+                    raise Exception(f"Guc ({guc_addr}) okunamadi")
+                if "isi" not in degerler:
+                    raise Exception(f"Isi ({isi_addr}) okunamadi")
 
-                # Blok 2: Uretim (Tekil okuma, bazi inverterlarda hata verebilir diye soft-fail)
-                await asyncio.sleep(0.5)
-                regs_uretim = await read_registers_smart(client, config["uretim_addr"], 1, slave_id)
-                raw_uretim = regs_uretim[0] if (regs_uretim and len(regs_uretim) >= 1) else 0
+                raw_akim_a, raw_akim_b, raw_akim_c = degerler["akim"][:3]
+                raw_volt_ab, raw_volt_bc, raw_volt_ca = degerler["voltaj"][:3]
+                raw_guc = degerler["guc"][0]
+                raw_isi = degerler["isi"][0]
 
-                # Blok 3: Guc ve Isi Adresleri
-                p_start = min(config["guc_addr"], config["isi_addr"])
-                p_end = max(config["guc_addr"], config["isi_addr"])
-                p_count = (p_end - p_start) + 1
-                
-                await asyncio.sleep(0.5)
-                regs_power = await read_registers_smart(client, p_start, p_count, slave_id)
-                if not regs_power or len(regs_power) < p_count:
-                    raise Exception(f"Guc/Isi ({p_start}-{p_end}) okunamadi")
-                
-                raw_guc = regs_power[config["guc_addr"] - p_start]
-                raw_isi = regs_power[config["isi_addr"] - p_start]
-                
+                # Uretim soft-fail: bazi inverterlarda bu register yok.
+                raw_uretim = degerler["uretim"][0] if "uretim" in degerler else 0
+
             except Exception as e:
                 logger.error(f"IP {ip_address} ID {slave_id} veri okuma hatasi: {e}")
                 try:
@@ -235,7 +362,9 @@ async def read_device_async(
 
                 alarm_regs = None
                 if alarm_count < 50:
-                    await asyncio.sleep(0.05)
+                    # Onceki metrik istegiyle arasinda gateway boslugu birakilir
+                    # (eskiden 0.05 sn idi, yani pratikte bosluksuz).
+                    await asyncio.sleep(GATEWAY_ALARM_GECIKME_SN)
                     alarm_regs = await read_registers_smart(client, alarm_start, alarm_count, slave_id)
 
                 if alarm_regs is not None and len(alarm_regs) == alarm_count:
@@ -258,11 +387,16 @@ async def read_device_async(
                         for reg in config["alarm_registers"]:
                             a_addr = reg["addr"]
                             a_count = reg.get("count", 2)
-                            
+
+                            # Her istek oncesi bosluk: bu dongu eskiden hem
+                            # register'lar arasinda hem holding/input denemeleri
+                            # arasinda bosluksuz istek gonderiyordu.
+                            await asyncio.sleep(GATEWAY_ISTEK_ARASI_SN)
                             rr_alarm = await client.read_holding_registers(address=a_addr, count=a_count, slave=slave_id)
                             if rr_alarm.isError():
+                                await asyncio.sleep(GATEWAY_ISTEK_ARASI_SN)
                                 rr_alarm = await client.read_input_registers(address=a_addr, count=a_count, slave=slave_id)
-                            
+
                             if rr_alarm.isError():
                                 if isinstance(rr_alarm, pymodbus.exceptions.ModbusIOException):
                                     logger.warning(f"IP {ip_address} ID {slave_id} alarm timeout, stopping alarm reads.")
