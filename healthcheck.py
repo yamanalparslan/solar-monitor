@@ -11,9 +11,24 @@ veri akışının sağlıklı çalışıp çalışmadığını test eder.
     python healthcheck.py --serve    → HEALTH_PORT üzerinde HTTP endpoint
                                        (/health JSON döner)
 
-En kritik kontrol veri tazeliğidir: collector ayakta görünüp veri yazmıyorsa
-sessizce veri kaybederiz. Son ölçüm beklenenden eskiyse unhealthy döneriz ve
-Docker restart politikası collector'ı toparlar.
+Tasarım kararı — iki durum birbirinden ayrılır:
+
+  1. "Collector öldü / DB'ye yazamıyor"  → unhealthy (exit 1, HTTP 503).
+  2. "Cihazlar cevap vermiyor" → degraded (exit 0, HTTP 200, gövdede
+     `degraded: true`). Sahada okumaların büyük bölümü başarısız oluyor
+     (24 saatte 1611 [CEVAP YOK], cihaz başına 39 dakikaya varan boşluklar);
+     bu collector'ın arızası değil, hattın/cihazın durumu.
+
+Eski ölçüt "son ölçüm ne kadar eski" idi ve bu ikisini ayırt edemiyordu:
+ölçüm akışı meşru sekilde kesintili olduğu için collector sapasağlam
+çalışırken de unhealthy görünebiliyordu. Canlılık ölçütü artık
+`collector_heartbeat` tablosu — collector cihazlardan cevap alamasa bile
+her döngüde oraya kalp atışı yazar.
+
+NOT: `unhealthy` durumu tek başına konteyneri yeniden başlatmaz. Docker'ın
+restart politikası konteynerin *çıkışına* tepki verir, sağlık durumuna değil
+(unhealthy'de restart yalnızca Swarm/Kubernetes davranışıdır). Buradaki exit
+kodunun işlevi durumu doğru raporlamak ve izleme tarafına sinyal vermektir.
 """
 
 import json
@@ -22,11 +37,14 @@ import sys
 
 import veritabani
 
-# Son ölçüm, beklenen periyodun bu katından eskiyse veri akışı durmuş sayılır.
+# Kalp atışı, beklenen periyodun bu katından eskiyse collector durmuş sayılır.
 TAZELIK_TOLERANS_KATI = 3.0
 # Tolerans hiçbir zaman bu değerin altına inmesin (kısa refresh_rate'lerde
 # tek bir gecikmiş döngü yüzünden alarm üretmemek için).
 MIN_TOLERANS_SN = 180.0
+# Kalp atışı hiç yoksa (ilk kurulum, collector henüz ilk döngüsünü bitirmedi)
+# bu süre boyunca hoşgörü gösterilir. Docker start_period bunu zaten kapsıyor.
+ILK_KALP_ATISI_TOLERANS_SN = 300.0
 
 
 def test_database() -> tuple[bool, str]:
@@ -44,11 +62,12 @@ def test_database() -> tuple[bool, str]:
         conn.close()
 
 
-def test_veri_tazeligi() -> tuple[bool, str]:
-    """Collector'ın hâlâ veri yazdığını doğrular.
+def test_collector_canli() -> tuple[bool, str]:
+    """Collector'ın döngüsünü hâlâ çevirdiğini doğrular.
 
-    Her fabrika için son ölçümün yaşını, o fabrikanın refresh_rate ayarına
-    göre beklenen süreyle karşılaştırır.
+    Ölçüm tazeliği yerine `collector_heartbeat` tablosuna bakılır: cihazlar
+    cevap vermese bile collector her döngüde oraya yazar. Böylece cihaz
+    sessizliği collector arızası gibi raporlanmaz.
 
     Yaş, SQL'deki NOW() yerine Python tarafında hesaplanır: zaman kolonu
     timezone taşımıyor ve collector yerel saat yazıyor, dolayısıyla doğru
@@ -58,62 +77,106 @@ def test_veri_tazeligi() -> tuple[bool, str]:
 
     from veritabani import FABRIKALAR
 
-    conn = veritabani.get_db_connection()
-    if not conn:
-        return False, "Veri tazeligi kontrol edilemedi (DB baglantisi yok)"
+    kayitlar = veritabani.heartbeat_getir()
+    if kayitlar is None:
+        return False, "Kalp atisi okunamadi (DB hatasi)"
 
-    try:
-        cursor = conn.cursor()
-        sorunlar = []
-        detaylar = []
+    if not kayitlar:
+        # Henüz hiç döngü tamamlanmadı. Docker start_period bunu kapsar;
+        # kalıcı olarak unhealthy'e düşmemek için hoşgörülü davranıyoruz.
+        return True, (
+            "Kalp atisi henuz yok — collector ilk dongusunu tamamlamamis olabilir "
+            f"({int(ILK_KALP_ATISI_TOLERANS_SN)}s hosgoru)"
+        )
 
-        for fab_id in FABRIKALAR:
-            cursor.execute("SELECT MAX(zaman) FROM olcumler WHERE fabrika_id = %s", (fab_id,))
-            row = cursor.fetchone()
-            son_zaman = row[0] if row else None
+    sorunlar = []
+    detaylar = []
 
-            if son_zaman is None:
-                sorunlar.append(f"{fab_id}: hic veri yok")
-                continue
+    for fab_id in FABRIKALAR:
+        kayit = kayitlar.get(fab_id)
+        if not kayit or kayit.get("son_dongu") is None:
+            detaylar.append(f"{fab_id}: kalp atisi yok (fabrika devrede olmayabilir)")
+            continue
 
-            yas = (datetime.now() - son_zaman).total_seconds()
-            try:
-                refresh = float(veritabani.ayar_oku("refresh_rate", "60", fab_id))
-            except (TypeError, ValueError):
-                refresh = 60.0
+        yas = (datetime.now() - kayit["son_dongu"]).total_seconds()
+        beklenen = float(kayit.get("beklenen_periyot_sn") or 60.0)
+        tolerans = max(MIN_TOLERANS_SN, beklenen * TAZELIK_TOLERANS_KATI)
 
-            tolerans = max(MIN_TOLERANS_SN, refresh * TAZELIK_TOLERANS_KATI)
-            detaylar.append(f"{fab_id}: son veri {int(yas)}s once (limit {int(tolerans)}s)")
+        detaylar.append(
+            f"{fab_id}: son dongu {int(yas)}s once "
+            f"(limit {int(tolerans)}s, {kayit.get('okunan_cihaz', 0)} okundu / "
+            f"{kayit.get('cevapsiz_cihaz', 0)} cevapsiz)"
+        )
 
-            if yas > tolerans:
-                sorunlar.append(
-                    f"{fab_id}: son veri {int(yas)}s once — {int(tolerans)}s limitini asti"
-                )
+        if yas > tolerans:
+            sorunlar.append(
+                f"{fab_id}: collector {int(yas)}s dongu cevirmedi — {int(tolerans)}s limitini asti"
+            )
 
-        if sorunlar:
-            return False, "; ".join(sorunlar)
-        return True, "; ".join(detaylar) if detaylar else "Fabrika tanimli degil"
-    except Exception as e:
-        return False, f"Veri tazeligi kontrol hatasi: {e}"
-    finally:
-        conn.close()
+    if sorunlar:
+        return False, "; ".join(sorunlar)
+    if not detaylar:
+        return True, "Fabrika tanimli degil"
+    return True, "; ".join(detaylar)
+
+
+def test_veri_akisi() -> tuple[bool, str]:
+    """Cihazlardan veri gelip gelmediğini raporlar — bilgilendirme amaçlı.
+
+    Bu kontrol `unhealthy` üretmez: cihaz sessizliği collector'ın arızası
+    değil, hattın/cihazın durumudur ve collector'a müdahale ile düzelmez.
+    Sonuç `degraded` bayrağı olarak gövdeye yazılır; alarm/bildirim tarafının
+    ve `cihaz_durum_log` üzerinden çalışabilirlik raporunun işi.
+    """
+    kayitlar = veritabani.heartbeat_getir()
+    if not kayitlar:
+        return True, "Kalp atisi yok — veri akisi degerlendirilemedi"
+
+    cevapsizlar = veritabani.cevapsiz_cihazlari_getir()
+    toplam_okunan = sum(int(k.get("okunan_cihaz") or 0) for k in kayitlar.values())
+
+    if toplam_okunan == 0:
+        detay = "Hicbir cihazdan veri alinamiyor"
+        if cevapsizlar:
+            liste = ", ".join(f"{c['fabrika_id']}/{c['slave_id']}" for c in cevapsizlar[:10])
+            detay += f" (cevapsiz: {liste})"
+        return False, detay
+
+    if cevapsizlar:
+        liste = ", ".join(f"{c['fabrika_id']}/{c['slave_id']}" for c in cevapsizlar[:10])
+        return False, f"{toplam_okunan} cihaz okunuyor, cevapsiz: {liste}"
+
+    return True, f"{toplam_okunan} cihazdan veri aliniyor"
 
 
 def durum_topla() -> dict:
-    """Tüm kontrolleri koşturup yapılandırılmış sonuç döner."""
+    """Tüm kontrolleri koşturup yapılandırılmış sonuç döner.
+
+    `status` yalnızca sistemin kendi arızalarında "unhealthy" olur (DB
+    erişilemez ya da collector döngü çevirmiyor). Cihaz sessizliği `degraded`
+    bayrağıyla bildirilir ama sağlık durumunu bozmaz — aksi halde meşru
+    kesintiler sürekli yanlış alarm üretir ve gerçek arıza gözden kaçar.
+    """
     db_ok, db_msg = test_database()
 
-    # DB erişilemiyorsa veri tazeliğini kontrol etmenin anlamı yok.
     if db_ok:
-        veri_ok, veri_msg = test_veri_tazeligi()
+        collector_ok, collector_msg = test_collector_canli()
+        akis_ok, akis_msg = test_veri_akisi()
     else:
-        veri_ok, veri_msg = False, "DB erisilemedigi icin kontrol edilmedi"
+        collector_ok, collector_msg = False, "DB erisilemedigi icin kontrol edilmedi"
+        akis_ok, akis_msg = False, "DB erisilemedigi icin kontrol edilmedi"
+
+    saglikli = db_ok and collector_ok
 
     return {
-        "status": "healthy" if (db_ok and veri_ok) else "unhealthy",
+        "status": "healthy" if saglikli else "unhealthy",
+        # Sistem ayakta ama cihazlardan veri gelmiyor: izleme icin gorunur,
+        # Docker restart'i icin tetikleyici degil.
+        "degraded": saglikli and not akis_ok,
         "checks": {
             "database": {"ok": db_ok, "detail": db_msg},
-            "veri_tazeligi": {"ok": veri_ok, "detail": veri_msg},
+            "collector_canli": {"ok": collector_ok, "detail": collector_msg},
+            "veri_akisi": {"ok": akis_ok, "detail": akis_msg, "kritik": False},
         },
     }
 
@@ -123,12 +186,24 @@ def run_healthcheck() -> None:
     sonuc = durum_topla()
 
     for ad, kontrol in sonuc["checks"].items():
-        isaret = "OK" if kontrol["ok"] else "FAIL"
+        if kontrol["ok"]:
+            isaret = "OK"
+        # Kritik olmayan kontroller (cihaz sessizligi) saglik durumunu bozmaz;
+        # loglarda FAIL yerine WARN gorunsun ki gercek ariza gozden kacmasin.
+        elif kontrol.get("kritik", True):
+            isaret = "FAIL"
+        else:
+            isaret = "WARN"
         print(f"[{isaret}] {ad}: {kontrol['detail']}")
 
     if sonuc["status"] != "healthy":
         print("HEALTHCHECK FAILED")
         sys.exit(1)
+
+    if sonuc.get("degraded"):
+        # Cihazlar sessiz ama sistem ayakta: yeniden baslatmak bunu cozmez.
+        print("HEALTHCHECK PASSED (DEGRADED — cihazlardan veri gelmiyor)")
+        sys.exit(0)
 
     print("HEALTHCHECK PASSED")
     sys.exit(0)

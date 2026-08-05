@@ -267,8 +267,13 @@ def start_collector():
 
     while True:
         baslangic = time.time()
-        refresh_rate = 60 
-        
+        refresh_rate = 60
+
+        # Cihaz basina cevap durumu: healthcheck artik olcum tazeligi yerine
+        # kalp atisina bakiyor, bu yuzden senkron collector de yazmak zorunda.
+        cevap_durumlari = []
+        fab_sayaclari = {fab_id: {"okunan": 0, "cevapsiz": 0} for fab_id in FABRIKALAR}
+
         if time.time() - last_config_update > 30:
             for fab_id in FABRIKALAR:
                 fab_configs[fab_id] = load_config(fab_id)
@@ -294,13 +299,24 @@ def start_collector():
                     client = clients[client_key]
 
                     data = read_device(client, slave_id, config, max_retries=3)
+
+                    # NOT: Bu 1<->2 takasi collector_async.py'de kaldirildi ama
+                    # burada duruyor. Cevap durumu logu olcumler tablosuyla
+                    # ayni ID uzerinden eslesmeli, o yuzden save_id kullaniyoruz.
+                    save_id = dev_id
+                    if fab_id == "uretim":
+                        if save_id == 1:
+                            save_id = 2
+                        elif save_id == 2:
+                            save_id = 1
+
+                    cevap_durumlari.append((fab_id, save_id, bool(data)))
                     if data:
-                        save_id = dev_id
-                        if fab_id == "uretim":
-                            if save_id == 1:
-                                save_id = 2
-                            elif save_id == 2:
-                                save_id = 1
+                        fab_sayaclari[fab_id]["okunan"] += 1
+                    else:
+                        fab_sayaclari[fab_id]["cevapsiz"] += 1
+
+                    if data:
                         veritabani.veri_ekle(save_id, data, fabrika_id=fab_id)
 
                         hata_kodlari = [data.get(f"hata_kodu_{r}", 0) for r in [107,109,111,112,114,115,116,117,118,119,120,121,122]]
@@ -315,6 +331,23 @@ def start_collector():
             for fab_id in FABRIKALAR:
                 otomatik_veri_temizle(fab_configs[fab_id])
             temizlik_sayaci = 0
+
+        # ── Kalp atisi ve cevap durumu kaydi ──
+        # Cihazlarin hicbiri cevap vermese bile yazilir; healthcheck "collector
+        # oldu" ile "cihaz cevap vermiyor" durumlarini bu sayede ayirt eder.
+        dongu_suresi = time.time() - baslangic
+        try:
+            veritabani.cihaz_cevap_durumlarini_guncelle(cevap_durumlari)
+            for fab_id, sayac in fab_sayaclari.items():
+                veritabani.heartbeat_yaz(
+                    fab_id,
+                    dongu_suresi_sn=dongu_suresi,
+                    okunan_cihaz=sayac["okunan"],
+                    cevapsiz_cihaz=sayac["cevapsiz"],
+                    beklenen_periyot_sn=fab_configs[fab_id]["refresh_rate"],
+                )
+        except Exception as e:
+            print(f"[WARN] Heartbeat/cevap durumu yazilamadi: {e}")
 
         _notify_websocket()
 

@@ -34,6 +34,10 @@ class PooledConnectionProxy:
     close()'u her zaman finally icinde cagirmalidir.
     """
 
+    # Proxy'nin kendi durumu; bunlarin disindaki her atama gercek baglantiya
+    # yonlendirilir.
+    _KENDI_ALANLARI = frozenset({"_pool", "_conn", "_returned"})
+
     def __init__(self, pool, conn):
         self._pool = pool
         self._conn = conn
@@ -41,6 +45,23 @@ class PooledConnectionProxy:
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
+
+    def __setattr__(self, name, value):
+        """Atamalari gercek baglantiya yonlendirir.
+
+        __setattr__ olmadigi surece `conn.autocommit = True` yalnizca proxy
+        nesnesinde bir alan olusturuyordu; gercek psycopg2 baglantisi
+        autocommit=False kaliyordu. Sonuc: autocommit gerektiren TimescaleDB
+        DDL'i (create_hypertable, continuous aggregate, add_retention_policy)
+        transaction icinde kosuyor, putconn sirasindaki rollback ile sessizce
+        geri aliniyordu — ustelik `conn.autocommit` okundugunda True gorundugu
+        icin hicbir hata da uretmiyordu. Temiz kurulumda hypertable hic
+        olusmuyor, retention senkronizasyonu hic uygulanmiyordu.
+        """
+        if name in PooledConnectionProxy._KENDI_ALANLARI:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._conn, name, value)
 
     def cursor(self, *args, **kwargs):
         if 'cursor_factory' not in kwargs:
@@ -269,6 +290,60 @@ def _init_db_semasi(conn):
             durum VARCHAR(20) DEFAULT 'AKTIF'
         )
     """)
+
+    # 7. Collector Heartbeat Tablosu
+    #
+    # Neden gerekli: healthcheck "son olcum ne kadar eski" diye bakiyordu, ama
+    # olcum akisi mesru sekilde kesintili — sahada okumalarin buyuk bolumu
+    # basarisiz oluyor (24 saatte 1611 [CEVAP YOK], cihaz basina 39 dakikaya
+    # varan bosluklar). Bu olcut "collector oldu" ile "cihaz cevap vermiyor"
+    # durumlarini ayirt edemiyor.
+    #
+    # Collector artik cihazlardan cevap alamasa bile her dongude buraya kalp
+    # atisi yaziyor; healthcheck canlilik icin bu tabloya, cihaz sessizligi
+    # icin cihaz_durum_log'a bakiyor.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS collector_heartbeat (
+            fabrika_id VARCHAR(50) PRIMARY KEY,
+            son_dongu TIMESTAMP,
+            dongu_suresi_sn DOUBLE PRECISION DEFAULT 0,
+            okunan_cihaz INTEGER DEFAULT 0,
+            cevapsiz_cihaz INTEGER DEFAULT 0,
+            beklenen_periyot_sn DOUBLE PRECISION DEFAULT 60
+        )
+    """)
+
+    # 8. Cihaz Cevap Durumu Log Tablosu (Stateful)
+    #
+    # Basarisiz okumalar bugune kadar yalnizca stdout'a "[CEVAP YOK]" olarak
+    # basiliyordu: veritabaninda iz yok, metrik yok, alarm yok. Sahada 3
+    # inverterin 2'si orneklerinin ~%75'ini kaybediyor (24 saatte 364/1440 ve
+    # 312/1440 satir) ve bu hicbir ekranda gorunmuyor.
+    #
+    # Cevapsizlik artik hata_log ile ayni stateful kalipla burada tutulur:
+    # cihaz sustugunda kayit acilir, tekrar cevap verdiginde kapanir. Boylece
+    # calisabilirlik (availability) olculebilir hale gelir.
+    # olcumler tablosuna kolon eklenmedi — mevcut rapor/ortalama sorgulari
+    # (AVG, COUNT) boylece hic etkilenmiyor.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cihaz_durum_log (
+            id SERIAL PRIMARY KEY,
+            fabrika_id VARCHAR(50),
+            slave_id INTEGER,
+            durum VARCHAR(20) DEFAULT 'CEVAP_YOK',
+            baslangic_zamani TIMESTAMP,
+            bitis_zamani TIMESTAMP
+        )
+    """)
+    try:
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cihaz_durum_aktif
+            ON cihaz_durum_log(fabrika_id, slave_id)
+            WHERE bitis_zamani IS NULL
+        """)
+    except Exception as e:
+        conn.rollback()
+        print(f"[WARN] cihaz_durum_log index hatasi: {e}")
 
     conn.commit()
 
@@ -993,6 +1068,195 @@ def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN
         return None
     finally:
         conn.close()
+
+# ─────────────────────────────────────────────
+# Collector Heartbeat ve Cihaz Cevap Durumu
+# ─────────────────────────────────────────────
+
+def heartbeat_yaz(fabrika_id, dongu_suresi_sn=0.0, okunan_cihaz=0,
+                  cevapsiz_cihaz=0, beklenen_periyot_sn=60.0, zaman=None):
+    """Collector'in bir döngüyü tamamladığını kaydeder.
+
+    Cihazlar cevap vermese bile çağrılır — healthcheck'in "collector yaşıyor mu"
+    sorusunu ölçüm tazeliğinden bağımsız yanıtlaması için tek kaynak budur.
+    """
+    simdi = zaman or datetime.now()
+    try:
+        with db_cursor(commit=True) as cursor:
+            cursor.execute("""
+                INSERT INTO collector_heartbeat
+                    (fabrika_id, son_dongu, dongu_suresi_sn, okunan_cihaz,
+                     cevapsiz_cihaz, beklenen_periyot_sn)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (fabrika_id) DO UPDATE SET
+                    son_dongu = EXCLUDED.son_dongu,
+                    dongu_suresi_sn = EXCLUDED.dongu_suresi_sn,
+                    okunan_cihaz = EXCLUDED.okunan_cihaz,
+                    cevapsiz_cihaz = EXCLUDED.cevapsiz_cihaz,
+                    beklenen_periyot_sn = EXCLUDED.beklenen_periyot_sn
+            """, (fabrika_id, simdi, float(dongu_suresi_sn), int(okunan_cihaz),
+                  int(cevapsiz_cihaz), float(beklenen_periyot_sn)))
+        return True
+    except Exception as e:
+        print(f"[WARN] Heartbeat yazma hatasi ({fabrika_id}): {e}")
+        return False
+
+
+def heartbeat_getir(fabrika_id=None):
+    """Kalp atışı kayıtlarını döndürür.
+
+    fabrika_id verilirse tek kayıt (dict) ya da None; verilmezse fabrika_id
+    anahtarlı dict döner.
+    """
+    try:
+        with db_cursor() as cursor:
+            if fabrika_id:
+                cursor.execute("""
+                    SELECT fabrika_id, son_dongu, dongu_suresi_sn, okunan_cihaz,
+                           cevapsiz_cihaz, beklenen_periyot_sn
+                    FROM collector_heartbeat WHERE fabrika_id = %s
+                """, (fabrika_id,))
+                row = cursor.fetchone()
+                return dict(row) if row else None
+
+            cursor.execute("""
+                SELECT fabrika_id, son_dongu, dongu_suresi_sn, okunan_cihaz,
+                       cevapsiz_cihaz, beklenen_periyot_sn
+                FROM collector_heartbeat
+            """)
+            return {row["fabrika_id"]: dict(row) for row in cursor.fetchall()}
+    except Exception as e:
+        print(f"[WARN] Heartbeat okuma hatasi: {e}")
+        return None if fabrika_id else {}
+
+
+def cihaz_cevap_durumu_guncelle(cursor, fabrika_id, slave_id, cevap_var, zaman):
+    """Cihazın cevap verme durumunu stateful olarak günceller.
+
+    `hata_durumu_guncelle` ile aynı kalıp: cihaz sustuğunda açık kayıt açılır,
+    tekrar cevap verdiğinde `bitis_zamani` yazılıp kapatılır. Açık kayıt zaten
+    varsa yenisi açılmaz, böylece uzun kesinti tek aralık olarak durur.
+
+    Çağıran taraf cursor'ı sağlar ki cihaz okuma sonucuyla aynı transaction'da
+    yazılabilsin.
+    """
+    cursor.execute("""
+        SELECT id FROM cihaz_durum_log
+        WHERE fabrika_id = %s AND slave_id = %s AND bitis_zamani IS NULL
+        ORDER BY baslangic_zamani DESC LIMIT 1
+    """, (fabrika_id, slave_id))
+    acik_kayit = cursor.fetchone()
+
+    if cevap_var:
+        if acik_kayit:
+            cursor.execute(
+                "UPDATE cihaz_durum_log SET bitis_zamani = %s WHERE id = %s",
+                (zaman, acik_kayit[0])
+            )
+    elif not acik_kayit:
+        cursor.execute("""
+            INSERT INTO cihaz_durum_log
+                (fabrika_id, slave_id, durum, baslangic_zamani)
+            VALUES (%s, %s, 'CEVAP_YOK', %s)
+        """, (fabrika_id, slave_id, zaman))
+
+
+def cihaz_cevap_durumlarini_guncelle(durumlar, zaman=None):
+    """Bir collector döngüsündeki tüm cihazların cevap durumunu tek işlemde yazar.
+
+    durumlar: [(fabrika_id, slave_id, cevap_var), ...]
+
+    Döngü başına tek bağlantı kullanılır; cihaz başına ayrı bağlantı açmak
+    havuzu gereksiz yorardı.
+    """
+    if not durumlar:
+        return True
+    simdi = zaman or datetime.now()
+    try:
+        with db_cursor(commit=True) as cursor:
+            for fabrika_id, slave_id, cevap_var in durumlar:
+                cihaz_cevap_durumu_guncelle(cursor, fabrika_id, slave_id, cevap_var, simdi)
+        return True
+    except Exception as e:
+        print(f"[WARN] Cihaz cevap durumu yazma hatasi: {e}")
+        return False
+
+
+def cihaz_cevap_durumu_kaydet(fabrika_id, slave_id, cevap_var, zaman=None):
+    """Tek cihaz için sarmalayıcı (toplu sürümü `cihaz_cevap_durumlarini_guncelle`)."""
+    return cihaz_cevap_durumlarini_guncelle([(fabrika_id, slave_id, cevap_var)], zaman)
+
+
+def cevapsiz_cihazlari_getir(fabrika_id=None):
+    """Şu anda cevap vermeyen cihazları (açık kayıtları) döndürür."""
+    try:
+        with db_cursor() as cursor:
+            if fabrika_id:
+                cursor.execute("""
+                    SELECT fabrika_id, slave_id, baslangic_zamani
+                    FROM cihaz_durum_log
+                    WHERE bitis_zamani IS NULL AND fabrika_id = %s
+                    ORDER BY slave_id
+                """, (fabrika_id,))
+            else:
+                cursor.execute("""
+                    SELECT fabrika_id, slave_id, baslangic_zamani
+                    FROM cihaz_durum_log
+                    WHERE bitis_zamani IS NULL
+                    ORDER BY fabrika_id, slave_id
+                """)
+            return [dict(row) for row in cursor.fetchall()]
+    except Exception as e:
+        print(f"[WARN] Cevapsiz cihaz listesi hatasi: {e}")
+        return []
+
+
+def cihaz_calisabilirligi(baslangic, bitis, fabrika_id=VARSAYILAN_FABRIKA):
+    """Cihaz başına çalışabilirlik (availability) yüzdesini hesaplar.
+
+    Verilen aralıkta cevapsız geçirilen süre toplanır ve aralığa oranlanır.
+    Aralığın dışına taşan kesintiler kırpılır; hâlâ açık olan kesinti için
+    bitiş olarak aralık sonu kabul edilir.
+    """
+    try:
+        with db_cursor() as cursor:
+            cursor.execute("""
+                SELECT slave_id,
+                       SUM(EXTRACT(EPOCH FROM (
+                           LEAST(COALESCE(bitis_zamani, %s::timestamp), %s::timestamp)
+                           - GREATEST(baslangic_zamani, %s::timestamp)
+                       ))) AS cevapsiz_sn
+                FROM cihaz_durum_log
+                WHERE fabrika_id = %s
+                  AND baslangic_zamani < %s::timestamp
+                  AND COALESCE(bitis_zamani, %s::timestamp) > %s::timestamp
+                GROUP BY slave_id
+                ORDER BY slave_id
+            """, (bitis, bitis, baslangic, fabrika_id, bitis, bitis, baslangic))
+            satirlar = cursor.fetchall()
+
+        with db_cursor() as cursor:
+            cursor.execute(
+                "SELECT EXTRACT(EPOCH FROM (%s::timestamp - %s::timestamp))",
+                (bitis, baslangic)
+            )
+            aralik_sn = float(cursor.fetchone()[0] or 0)
+
+        if aralik_sn <= 0:
+            return {}
+
+        sonuc = {}
+        for row in satirlar:
+            cevapsiz = max(0.0, float(row[1] or 0))
+            sonuc[row[0]] = {
+                "cevapsiz_sn": round(cevapsiz, 1),
+                "calisabilirlik_yuzde": round(max(0.0, 100.0 * (1 - cevapsiz / aralik_sn)), 2),
+            }
+        return sonuc
+    except Exception as e:
+        print(f"[WARN] Calisabilirlik hesaplama hatasi: {e}")
+        return {}
+
 
 def audit_log_kaydet(kullanici, islem, detay="", fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()

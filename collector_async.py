@@ -395,6 +395,12 @@ async def main_loop():
             client_to_close.close()
             logger.info("Baglanti kapatildi ve serbest birakildi: %s", key)
 
+        # Cihaz basina cevap durumu (heartbeat ve cevapsizlik logu icin).
+        # Cevap alinamayan cihaz da kaydedilir: "satir yok" durumu eskiden
+        # "cihaz kapali" ile "ag koptu"yu ayirt edemiyordu.
+        cevap_durumlari = []
+        fab_sayaclari = {fab_id: {"okunan": 0, "cevapsiz": 0} for fab_id in FABRIKALAR}
+
         for i, result in enumerate(results):
             info = task_info[i]
             fab_id = info["fab_id"]
@@ -406,14 +412,21 @@ async def main_loop():
                 err_msg = str(result)
                 if isinstance(result, asyncio.TimeoutError):
                     err_msg = "Task TimeoutError (90s)"
-                
+
+                cevap_durumlari.append((fab_id, slave_id, False))
+                fab_sayaclari[fab_id]["cevapsiz"] += 1
+
                 logger.error(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) - Gorev hatasi: {err_msg}")
                 print(f"[{fab_id.upper()}] IP {ip_address} ID {slave_id} (DevID: {dev_id}) | [HATA/ZAMAN ASIMI] - {err_msg}")
                 continue
 
             dev_id, ip_address, slave_id, data = result
-            
 
+            cevap_durumlari.append((fab_id, slave_id, bool(data)))
+            if data:
+                fab_sayaclari[fab_id]["okunan"] += 1
+            else:
+                fab_sayaclari[fab_id]["cevapsiz"] += 1
 
             if data:
                 veritabani.veri_ekle(dev_id, data, fabrika_id=fab_id)
@@ -437,6 +450,33 @@ async def main_loop():
             for fab_id in FABRIKALAR:
                 otomatik_veri_temizle(fab_configs[fab_id])
             temizlik_sayaci = 0
+
+        # ── Kalp atisi ve cevap durumu kaydi ──
+        # Cihazlarin hicbiri cevap vermese bile yazilir: healthcheck bu sayede
+        # "collector oldu" ile "cihaz cevap vermiyor" durumlarini ayirt eder.
+        # Basarisiz okumalar eskiden yalnizca stdout'a basiliyordu; artik
+        # cihaz_durum_log'a islenip calisabilirlik olarak raporlanabiliyor.
+        dongu_suresi = time.time() - dongu_baslangic
+        try:
+            veritabani.cihaz_cevap_durumlarini_guncelle(cevap_durumlari)
+            for fab_id, sayac in fab_sayaclari.items():
+                veritabani.heartbeat_yaz(
+                    fab_id,
+                    dongu_suresi_sn=dongu_suresi,
+                    okunan_cihaz=sayac["okunan"],
+                    cevapsiz_cihaz=sayac["cevapsiz"],
+                    beklenen_periyot_sn=fab_configs[fab_id]["refresh_rate"],
+                )
+        except Exception as e:
+            logger.error("Heartbeat/cevap durumu yazilamadi: %s", e)
+
+        # Dongu refresh_rate'i asiyorsa olcum araligi sessizce kayar; gorunur olsun.
+        if dongu_suresi > min_refresh:
+            logger.warning(
+                "Dongu %.1f sn surdu, refresh_rate %.0f sn — olcum araligi kaydi. "
+                "Cihaz sayisini, gateway bekleme surelerini veya refresh_rate'i gozden gecirin.",
+                dongu_suresi, min_refresh
+            )
 
         await _notify_websocket()
 

@@ -8,12 +8,61 @@ Temmuz raporundaki kritik maddelerin büyük bölümü gerçekten kapanmış. Bu
 
 ---
 
+## 🔴 EN KRİTİK BULGU (canlı sistemde doğrulandı)
+
+### `PooledConnectionProxy` atamaları yutuyor — TimescaleDB kurulumu sessizce geri alınıyor
+
+**Dosya:** `veritabani.py` — `PooledConnectionProxy`
+
+Sınıf `__getattr__` tanımlıyor ama **`__setattr__` tanımlamıyordu.** Dolayısıyla:
+
+```python
+conn.autocommit = True      # proxy nesnesinde alan olusturur
+conn.autocommit             # -> True  (proxy'nin kendi alani okunur)
+conn._conn.autocommit       # -> False (gercek psycopg2 baglantisi hic degismedi)
+```
+
+Canlı sistemde doğrulandı:
+
+```
+baslangic      proxy.autocommit = False | gercek baglanti.autocommit = False
+atamadan sonra proxy.autocommit = True  | gercek baglanti.autocommit = False
+```
+
+`_timescale_kurulumu()` tam olarak buna dayanıyor: continuous aggregate DDL'i transaction içinde çalışamadığı için `conn.autocommit = True` yapıyor. Atama gerçek bağlantıya geçmediği için **bütün TimescaleDB kurulumu bir transaction içinde koşuyor ve hiç commit edilmiyor** — `conn.close()` → `putconn()` → psycopg2 rollback. Üstelik `conn.autocommit` okunduğunda `True` göründüğü için hiçbir hata üretilmiyordu; hatta `retention_policy_senkronize` "365 gün olarak ayarlandı" mesajını basıp hiçbir şey yapmıyordu.
+
+**Kanıt — temiz veritabanında `init_db()` (düzeltme öncesi):**
+
+| Nesne | Beklenen | Gerçek |
+|---|---|---|
+| `olcumler` hypertable | var | **yok** |
+| `olcumler_saatlik` continuous aggregate | var | **yok** |
+| `policy_retention` job | 365 gün | **yok** |
+
+Düzeltmeden sonra aynı temiz kurulum üçünü de oluşturuyor.
+
+**Üretim neden etkilenmemiş:** `solar_db`'de hypertable, continuous aggregate ve 365 günlük retention policy **mevcut** — çünkü bunları `migrate_timescale.py` kurmuş, o da havuzu değil doğrudan `psycopg2.connect()` kullanıyor. Yani üretim şu an iyi durumda; kırık olan şey **her yeni kurulum** ve **çalışma anındaki retention senkronizasyonu**. Temmuz raporunun "kod her açılışta retention'ı ayarlardan senkronize ediyor" maddesi pratikte hiç çalışmıyordu.
+
+**Düzeltme:** Proxy'ye `__setattr__` eklendi; kendi alanları (`_pool`, `_conn`, `_returned`) dışındaki her atama gerçek bağlantıya yönlendiriliyor. Regresyon testi: `test_db_pool.py::test_atama_gercek_baglantiya_yonlendirilir`.
+
+> Yan not: `create_hypertable` çalıştığında TimescaleDB iki uyarı basıyor — `fabrika_id` için `TEXT`, `zaman` için `TIMESTAMPTZ` öneriyor. İkincisi 5. bölümdeki TIMESTAMPTZ maddesini destekliyor.
+
+---
+
 ## ✅ UYGULAMA DURUMU (2026-08-05, aynı gün)
 
-Yol haritasının 1. ve 5. maddeleri uygulandı:
+Yol haritasının 1., 2. ve 5. maddeleri uygulandı:
 
 - **1.1 Havuz sızıntısı — DÜZELTİLDİ.** 11 fonksiyonun tamamı `finally: conn.close()` kalıbına geçirildi. `init_db` şema kurulumu `_init_db_semasi(conn)` olarak ayrıldı ki DDL hatasında da bağlantı havuza dönsün. `PooledConnectionProxy` sertleştirildi: çift `close()` bağlantıyı havuza iki kez eklemiyor, geri vermeden önce `autocommit` normalize ediliyor. Yazma yollarına (`veri_ekle`, `veri_kaydet`, `ayar_yaz`, `audit_log_kaydet`) açık `rollback` eklendi. Tarama ile doğrulandı: `get_db_connection()` çağıran hiçbir fonksiyonda artık `finally` eksik değil.
-- **1.5 `autocommit` sızıntısı — DÜZELTİLDİ.** `retention_policy_senkronize` `finally` bloğunda `autocommit`'i `False`'a çekiyor; ayrıca proxy `close()` içinde ikinci bir savunma katmanı var.
+- **1.5 `autocommit` sızıntısı — DÜZELTİLDİ.** `retention_policy_senkronize` `finally` bloğunda `autocommit`'i `False`'a çekiyor; ayrıca proxy `close()` içinde ikinci bir savunma katmanı var. (Bu düzeltme ancak yukarıdaki `__setattr__` bulgusuyla birlikte gerçek bir etkiye sahip — öncesinde atamalar gerçek bağlantıya hiç ulaşmıyordu.)
+- **Proxy `__setattr__` — DÜZELTİLDİ.** Yukarıdaki "en kritik bulgu" bölümü. Temiz kurulumda hypertable / continuous aggregate / retention policy artık gerçekten oluşuyor; canlı PostgreSQL'e karşı doğrulandı.
+- **1.2 Sessiz örnek kaybı — ÖLÇÜLEBİLİR HALE GETİRİLDİ** (kök neden hâlâ açık):
+  - Yeni `collector_heartbeat` tablosu: collector cihazlardan cevap alamasa bile her döngüde döngü zamanı, süresi, okunan ve cevapsız cihaz sayısını yazıyor. Her iki collector (`collector_async.py` ve legacy `collector.py`) yazıyor.
+  - Yeni `cihaz_durum_log` tablosu: cevapsızlık `hata_log` ile aynı stateful kalıpla tutuluyor — cihaz sustuğunda kayıt açılır, cevap verince kapanır, süren kesinti tek aralık kalır. `olcumler`'e kolon **eklenmedi**, böylece mevcut `AVG`/`COUNT` tabanlı rapor sorguları hiç etkilenmiyor.
+  - `cihaz_calisabilirligi(baslangic, bitis, fabrika)`: cihaz başına çalışabilirlik yüzdesi. Canlı PostgreSQL'de doğrulandı (36 saatlik pencerede 11 saatlik kesinti → %69.44; 16 saatlik → %55.56; pencere dışı kesintiler ve ters aralık → boş sonuç).
+  - `healthcheck.py` yeniden yazıldı: canlılık ölçütü ölçüm tazeliği değil `collector_heartbeat`. Cihaz sessizliği artık `unhealthy` değil `degraded` (HTTP 200, gövdede `degraded: true`, log satırı `WARN`). Böylece meşru kesintiler yanlış alarm üretmiyor, gerçek arıza (DB erişilemez / collector döngü çevirmiyor) gürültüye karışmıyor. Devrede olmayan ikinci fabrika da kalıcı `unhealthy` üretmiyor.
+  - `collector_async.py` döngü süresi `refresh_rate`'i aştığında artık `logger.warning` basıyor — ölçüm aralığının sessizce kaymasını görünür kılar (3.1).
+  - Yeni testler: `test_healthcheck.py` (11 test — cihaz sessizliği, collector ölümü, tolerans sınırları, devrede olmayan fabrika) ve `test_collector_heartbeat.py` (14 test — stateful cevapsızlık, döngü sayaçları, döngü başına tek bağlantı).
 - **Yeni:** `db_cursor()` context manager eklendi (`veritabani.py`). Yeni veritabanı fonksiyonları bununla yazılmalı — bağlantıyı her koşulda havuza döndürür, hatada `rollback` yapar, bağlantı yoksa `DBBaglantiYok` yükseltir.
 - **4.2 CI kırmızı — DÜZELTİLDİ.** Tam CI komutu (`pytest test_*.py --cov=.`) artık **exit 0**: 32 geçti, 2 atlandı, 34 subtest geçti, %32 kapsama. Yapılanlar:
   - SQLite dönemine ait `test_veritabani_path.py` ve `test_veritabani_ek.py` modül seviyesinde `unittest.SkipTest` ile atlanıyor (neden ve yerine ne yazılması gerektiği dosya başında belgeli).
@@ -37,8 +86,8 @@ Kod üzerinde doğrulanarak kapandığı görülen maddeler:
 
 | Madde | Durum | Kanıt |
 |---|---|---|
-| 1.1 Retention çelişkisi | Kapandı | `veritabani.py:267` `retention_policy_senkronize()`, ayarlardan `make_interval(days => %s)` |
-| 1.2 Continuous aggregate | Kapandı | `veritabani.py:216` `_timescale_kurulumu()`, autocommit + `WITH NO DATA` |
+| 1.1 Retention çelişkisi | Kod doğru ama **çalışmıyordu** → şimdi kapandı | `retention_policy_senkronize()` doğru yazılmış, ama `autocommit` ataması gerçek bağlantıya geçmediği için her çağrı rollback ediliyordu (bkz. en kritik bulgu) |
+| 1.2 Continuous aggregate | Kod doğru ama **temiz kurulumda oluşmuyordu** → şimdi kapandı | `_timescale_kurulumu()` doğru; aynı `autocommit` bulgusu yüzünden DDL commit edilmiyordu. Üretimde nesne var çünkü `migrate_timescale.py` kurmuş |
 | 1.4–1.6 API eksikleri | Kapandı | `api.py`'de tüm endpointlerde `fabrika` parametresi mevcut |
 | 2.3 PG portu | Kapandı | `docker-compose.yml:42` `127.0.0.1:5432:5432` |
 | 2.4 `pgdata` mount'u | Kapandı | x-common'dan çıkarılmış, yalnız `solar-postgres`'te |
@@ -111,32 +160,43 @@ def db_cursor(commit=False):
 
 Geçiş sırasında hızlı bir doğrulama: yük altında `SELECT count(*) FROM pg_stat_activity WHERE datname='solar_db';` değerinin zamanla tırmanıp tırmanmadığına bakın.
 
-### 1.2 Gece / cevapsız cihaz veri boşluğu healthcheck'i restart döngüsüne sokuyor
+### 1.2 Sessiz örnek kaybı: 3 inverterin 2'si verisinin ~%75'ini kaybediyor
 
-**Dosyalar:** `collector_async.py:207`, `collector_async.py:413`, `healthcheck.py:85`, `docker-compose.yml:72-77`
+> ⚠️ **Bu maddenin ilk yazımı yanlıştı — düzeltildi.** İlk versiyonda "gece inverterler kapanınca hiç satır yazılmıyor, healthcheck unhealthy oluyor ve Docker collector'ı her gece sürekli yeniden başlatıyor" yazıyordu. Canlı sistemde ölçtüm, **öyle olmuyor**:
+>
+> - `docker inspect solar_collector` → `RestartCount=0`, `FailingStreak=0` (17 saat, tam bir gece dahil). Restart döngüsü hiç yaşanmamış.
+> - Gece verisi akıyor: 04 Ağu 20:00 – 05 Ağu 05:00 arasında her saat satır var. Güç `0.0` ama **sıcaklık ~40 °C** — inverter beslemede kaldığı için dört değerin hepsi asla sıfır olmuyor, dolayısıyla `all-zero → None` koşulu tetiklenmiyor.
+> - Ayrıca **`unhealthy` durumu tek başına konteyneri yeniden başlatmaz.** Docker'ın restart politikası konteynerin *çıkışına* tepki verir, sağlık durumuna değil; unhealthy'de restart Swarm/Kubernetes davranışıdır. Hem bu rapor hem Temmuz raporunun 5.2 maddesi hem de koddaki yorumlar bu varsayımı yanlış kurmuş.
+>
+> Aşağıdaki asıl bulgu ölçüme dayanıyor.
 
-Collector yalnızca veri varsa yazıyor:
+**Dosyalar:** `collector_async.py:207`, `collector_async.py:413`, `healthcheck.py`
+
+Okuma başarısız olduğunda hiçbir yere kayıt düşmüyor — yalnızca stdout'a basılıyor:
 
 ```python
-if val_volt == 0 and val_akim == 0 and val_guc == 0 and val_isi == 0:
-    return dev_id, ip_address, slave_id, None   # collector_async.py:207
-...
 if data:
     veritabani.veri_ekle(...)                    # collector_async.py:413
 else:
-    print(f"... | [CEVAP YOK]")                  # DB'ye hiçbir şey yazılmaz
+    print(f"... | [CEVAP YOK]")                  # DB'ye hiçbir sey yazilmaz
 ```
 
-İnverter gece kapandığında (ya da hat koptuğunda) hiç satır yazılmıyor. Healthcheck ise son ölçümün yaşına bakıyor ve tolerans `max(180, refresh_rate*3)` yani varsayılanda **180 saniye**. Compose'da collector'ın healthcheck'i bu betik ve `retries: 3` + `interval: 60s`.
+Canlı sistemde 24 saatlik ölçüm (`refresh_rate=60`, yani cihaz başına beklenen 1440 satır):
 
-**Sonuç:** Üretim durduktan ~5 dakika sonra collector `unhealthy` oluyor. `restart: unless-stopped` politikası devreye giriyor ve **her gece boyunca collector sürekli yeniden başlatılıyor.** Yeniden başlatmak inverterin kapalı olmasını çözmediği için döngü sabaha kadar sürüyor. Yan etkileri: log şişmesi, `init_db()`'nin her açılışta tekrar koşması, ve gerçek bir collector arızasının bu gürültünün içinde görünmez hale gelmesi.
+| Cihaz | Satır (24s) | Beklenenin oranı | Medyan aralık | Ortalama aralık | En uzun boşluk |
+|---|---|---|---|---|---|
+| `uretim/1` | 1437 | %100 | 60.0 sn | 60.1 sn | 130 sn |
+| `mekanik/1` | **364** | **%25** | 65.6 sn | 237.0 sn | **2341 sn (39 dk)** |
+| `uretim/2` | **312** | **%22** | 171.5 sn | 276.5 sn | **1672 sn (28 dk)** |
 
-Aynı kural ikinci fabrika için de geçerli: `FABRIKALAR` sözlüğündeki her fabrika kontrol ediliyor. "uretim" fabrikasında hiç cihaz devrede değilse `"uretim: hic veri yok"` kalıcı olarak `unhealthy` üretir.
+Collector logunda aynı 24 saatte **1611 `[CEVAP YOK]`** ve **3212 `veri okuma hatasi`** var (zaman aşımı 0 — yani bağlantı kurulup okuma reddediliyor).
 
-**Öneri (iki parça):**
+**Sonuç:** Üç inverterin ikisi verisinin dörtte üçünü kaybediyor ve **bu hiçbir ekranda görünmüyor.** Veritabanında iz yok, metrik yok, alarm yok; yalnızca `docker logs` içinde. Panel "son veri 14 sn önce" gösterdiği için sistem sağlıklı görünüyor. Bunun iki ölçülebilir zararı var:
 
-1. **Cevapsızlığı veri olarak kaydedin.** `olcumler`'e `durum` (`OK` / `CEVAP_YOK`) kolonu ya da ayrı bir `cihaz_durum_log` tablosu ekleyin ve okuma başarısız olduğunda da satır yazın. Bunun iki faydası daha var: (a) healthcheck'in tazelik ölçütü artık "collector çalışıyor mu" sorusunu doğru yanıtlar, (b) *availability* (çalışabilirlik) yüzdesi hesaplanabilir hale gelir — şu anda "satır yok" durumu "cihaz kapalı" ile "ağ koptu"yu ayırt edemiyor.
-2. **Healthcheck'i yalnızca collector'ın canlılığına bağlayın.** Cihaz kapalıyken bile collector her döngüde bir *heartbeat* yazsın (örn. `ayarlar` tablosunda `collector_last_loop`), tazelik kontrolü bu değere baksın. Cihaz sessizliği ise Docker restart'ı yerine alarm/bildirim konusu olsun.
+1. `gunluk_uretim_hesapla` çalışma süresini `olcum_sayisi * refresh_rate / 3600` ile tahmin ediyor (`veritabani.py`). `mekanik/1` için bu 24 saat yerine ~6 saat verir; `modbus_uretim` register'ı okunamadığı günlerde üretim hesabı doğrudan yanlış çıkar.
+2. Kayıp örnekler ortalamaları çarpıtır: 39 dakikalık boşluk içindeki gerçek güç eğrisi hiç kaydedilmiyor.
+
+**Öneri:** Aşağıdaki "Uygulama durumu" bölümünde yapıldı — cevapsızlık `cihaz_durum_log` tablosuna stateful olarak işleniyor, collector her döngüde `collector_heartbeat` yazıyor, healthcheck canlılığı ölçüm akışından ayırıyor. Böylece kayıp ölçülebilir hale geliyor. **Kaybın kök nedeni (gateway/inverter neden okumayı reddediyor) hâlâ açık** — bunun için 3.1'deki gateway bekleme süreleri ve blok okuma stratejisi incelenmeli.
 
 ### 1.3 Modbus kayma oto-düzeltmesi üretilmiş değeri gerçek ölçüm gibi kaydediyor
 
@@ -385,15 +445,15 @@ Proje yolu: `OneDrive - TESCOM .../Masaüstü/solar-monitor-master`. `data/auth.
 
 | Sıra | İş | Efor | Etki |
 |---|---|---|---|
-| 1 | Havuz sızıntısı — `db_cursor()` context manager'ına geçiş (1.1) + `autocommit` sızıntısı (1.5) | ~1 gün | Tüm sistemi durduran arızayı kapatır |
-| 2 | Gece veri boşluğu + healthcheck heartbeat (1.2) | ~1 gün | Gece restart döngüsünü bitirir, availability'nin de temeli |
+| ~~1~~ | ~~Havuz sızıntısı + `autocommit` sızıntısı + proxy `__setattr__`~~ | — | **Yapıldı** |
+| ~~2~~ | ~~Heartbeat + cevapsızlık logu + healthcheck ayrımı~~ | — | **Yapıldı** (kök neden 9. maddede) |
 | 3 | Alarm → Telegram bildirimi (1.4) | ~1 gün | En yüksek operasyonel değer; altyapı hazır |
 | 4 | Gömülü admin hash'i + `compare_digest` + oturum süresi (2.1, 2.2, 2.4) | ~yarım gün | Kimlik doğrulamayı gerçekten güvenli yapar |
 | 5 | CI'ı yeşile çekme + havuz regresyon testi (4.2) | ~yarım gün | 1. maddenin kalıcılığını garanti eder |
 | 6 | Register varsayılanlarını tek kaynağa toplama (4.1) + bildirilmemiş bağımlılıklar (4.3) | ~yarım gün | Kurulum güvenilirliği |
 | 7 | Log rotasyonu (4.5) + çift silme kaldırma (3.3) + `collector.py` temizliği (4.7) | ~2 saat | Disk ve DB yükü |
 | 8 | Rate-limit anahtarı + reverse proxy/TLS (2.3, 2.7) | ~1 gün | Ağ güvenliği; ikisi birlikte çözülür |
-| 9 | Collector zamanlama ölçümü + sabit beklemelerin ayara taşınması (3.1) | ~1 gün | Ölçüm sıklığı doğruluğu |
-| 10 | Availability/PR KPI'ı (5.1) + inverter anomali tespiti (5.2) | ~2-3 gün | Yeni izleme değeri |
+| 9 | **Örnek kaybının kök nedeni** — gateway bekleme süreleri, blok okuma stratejisi, döngü zamanlaması (3.1) | ~1-2 gün | 3 inverterin 2'sinde %75 veri kaybını giderir; artık ölçülebilir |
+| 10 | Availability/PR KPI'ı (5.1) + inverter anomali tespiti (5.2) | ~2-3 gün | `cihaz_durum_log` hazır, panel tarafı kaldı |
 
-İlk beş madde ~4 iş günü ve sistemin bugün taşıdığı iki sessiz arızayı (havuz tükenmesi, gece restart döngüsü) kapatıp alarmları operatöre ulaştırıyor. Sonrası kademeli iyileştirme.
+Kalan işlerde en yüksek değerli iki madde: **9** (gerçek veri kaybı — artık `cihaz_durum_log` ve heartbeat sayaçlarıyla ölçülebilir, "düzeldi mi" sorusu yanıtlanabilir) ve **3** (alarmların operatöre ulaşması).

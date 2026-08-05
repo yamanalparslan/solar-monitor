@@ -128,6 +128,34 @@ class TestPooledConnectionProxy(HavuzTestTemeli):
             "ayni proxy iki kez kapatilirsa baglanti havuza iki kez eklenmemeli"
         )
 
+    def test_atama_gercek_baglantiya_yonlendirilir(self):
+        """`conn.autocommit = True` proxy'de kalmamali, gercek baglantiya gecmeli.
+
+        __setattr__ olmadigi surece atama yalnizca proxy nesnesinde bir alan
+        olusturuyordu ve gercek baglanti autocommit=False kaliyordu. Sonuc:
+        autocommit gerektiren TimescaleDB DDL'i (create_hypertable, continuous
+        aggregate, add_retention_policy) transaction icinde kosup putconn'daki
+        rollback ile sessizce geri aliniyordu. Temiz kurulumda hypertable hic
+        olusmuyordu; `conn.autocommit` True gorundugu icin hata da yoktu.
+        """
+        pool = self.havuz_kur()
+        conn = veritabani.get_db_connection()
+
+        conn.autocommit = True
+
+        self.assertTrue(
+            pool.son_conn.autocommit,
+            "atama gercek psycopg2 baglantisina gecmeli — aksi halde DDL rollback olur"
+        )
+
+    def test_proxy_kendi_alanlari_baglantiya_yazilmaz(self):
+        pool = self.havuz_kur()
+        conn = veritabani.get_db_connection()
+
+        self.assertFalse(hasattr(pool.son_conn, "_pool"))
+        self.assertFalse(hasattr(pool.son_conn, "_returned"))
+        self.assertIs(conn._conn, pool.son_conn)
+
     def test_autocommit_geri_vermeden_once_normalize_edilir(self):
         # DDL bloklari (TimescaleDB kurulumu, retention policy) autocommit'i
         # True'ya cekiyor; bu durum havuzdaki baglantiya sizmamali.
@@ -198,6 +226,14 @@ SORGU_FONKSIYONLARI = [
     ("haftalik_uretim_ozeti", lambda: veritabani.haftalik_uretim_ozeti("mekanik", 7)),
     ("veritabani_istatistikleri", lambda: veritabani.veritabani_istatistikleri("mekanik")),
     ("gecmis_alarmlari_getir", lambda: veritabani.gecmis_alarmlari_getir("mekanik", 10)),
+    ("heartbeat_yaz", lambda: veritabani.heartbeat_yaz("mekanik", 12.5, 3, 0, 60.0)),
+    ("heartbeat_getir", lambda: veritabani.heartbeat_getir()),
+    ("heartbeat_getir(fabrika)", lambda: veritabani.heartbeat_getir("mekanik")),
+    ("cihaz_cevap_durumlarini_guncelle", lambda: veritabani.cihaz_cevap_durumlarini_guncelle(
+        [("mekanik", 1, True), ("mekanik", 2, False)])),
+    ("cevapsiz_cihazlari_getir", lambda: veritabani.cevapsiz_cihazlari_getir()),
+    ("cihaz_calisabilirligi", lambda: veritabani.cihaz_calisabilirligi(
+        "2026-08-04 00:00:00", "2026-08-05 00:00:00", "mekanik")),
 ]
 
 
