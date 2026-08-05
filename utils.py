@@ -116,10 +116,13 @@ def decode_temperature_register(raw_value, configured_scale, min_c=-40.0, max_c=
     signed_raw = to_signed16(raw_value)
     
     # 1. Oncelikli aday: Veritabanindaki configured_scale
-    # Cihaz asiri isinmis (ornegin 154C) olabilir. Bu yuzden sadece cok absurt
-    # durumlarda (ornegin > 300C) fallback mekanizmasina gec.
+    # Cihaz asiri isinmis (ornegin 154C) olabilir. Bu yuzden ust sinirda cok
+    # absurt durumlarda (> 300C) fallback mekanizmasina gec.
+    # Alt sinir min_c: -100C gibi fiziksel olarak imkansiz bir sonuc kayitli
+    # carpanin hatali oldugunu gosterir; bu durumda da fallback denenmeli
+    # (ornegin 0xFF9C ham degeri 0.1 carpaniyla -10C'dir).
     primary_candidate = signed_raw * float(configured_scale)
-    if -100.0 <= primary_candidate <= 300.0:
+    if min_c <= primary_candidate <= 300.0:
         return primary_candidate
 
     # 2. Eger yapilandirilmis carpan tamamen hatali bir deger veriyorsa,
@@ -134,10 +137,19 @@ def decode_temperature_register(raw_value, configured_scale, min_c=-40.0, max_c=
     return primary_candidate
 
 
-def normalize_temperature_value(value, min_c=-40.0, max_c=300.0):
+def normalize_temperature_value(value, min_c=-40.0, max_c=300.0, olcek_max_c=120.0):
     """
     Veritabanina yanlis olcekle yazilmis sicakliklari gosterim icin normalize eder.
-    Gercekci isinmalari maskelememek icin max_c varsayilan olarak 300 dereceye cikarilmistir.
+
+    Iki ayri bant kullanilir:
+      * max_c (300C): "dokunma" bandi. Gercekci asiri isinmalari maskelememek
+        icin genis tutulur — kayitli 154.58 degeri bolunmeden aynen doner.
+      * olcek_max_c (120C): olcek duzeltmesi yapilirken kullanilan normal
+        calisma bandi. 15458 icin hem 154.58 hem 15.458 matematiksel olarak
+        mumkundur; inverter calisma araligi 15.458'i isaret eder.
+        decode_temperature_register fallback'i de ayni bandi kullanir, ikisi
+        tutarli olmalidir (aksi halde ayni ham deger collector'da 15.458,
+        panelde 154.58 gorunur).
     """
     if value is None:
         return 0.0
@@ -146,14 +158,14 @@ def normalize_temperature_value(value, min_c=-40.0, max_c=300.0):
         numeric_value = float(value)
     except (TypeError, ValueError):
         return 0.0
-        
+
     # Eger deger halihazirda mantikli araliktaysa hic dokunma.
     if min_c <= numeric_value <= max_c:
         return numeric_value
 
     for divisor in (10, 100, 1000):
         candidate = numeric_value / divisor
-        if min_c <= candidate <= max_c:
+        if min_c <= candidate <= olcek_max_c:
             return candidate
 
     return numeric_value

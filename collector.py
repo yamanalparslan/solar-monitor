@@ -23,10 +23,15 @@ import utils
 import veritabani
 
 # UTF-8 stdout (Windows uyumlulugu)
-if hasattr(sys.stdout, "buffer"):
-    sys.stdout = io.TextIOWrapper(
-        sys.stdout.buffer, encoding="utf-8", errors="replace", line_buffering=True
-    )
+# reconfigure kullaniliyor: sys.stdout'u yeni bir TextIOWrapper ile degistirmek
+# pytest'in cikti yakalamasini bozuyordu. Wrapper cop toplandiginda altindaki
+# buffer'i da kapatiyor, pytest de kosu sonunda
+# "ValueError: I/O operation on closed file" ile cokuyordu (CI kirmizi).
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+    except Exception:
+        pass
 
 WS_NOTIFY_URL = os.getenv("WS_NOTIFY_URL", "http://solar_api:8503/ws/notify")
 

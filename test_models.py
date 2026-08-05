@@ -75,15 +75,17 @@ def test_cihaz_durumu_properties():
     assert cihaz_normal.has_error is False
     assert cihaz_normal.durum_text == "AKTİF"
 
-    # Beklemede (guc 0)
-    cihaz_beklemede = CihazDurumu(
+    # Uyku modu (guc 0, voltaj 0) — durum sozlugu "BEKLEMEDE" degil "UYKU":
+    # models.durum_sistematik, durum_renk ve 2_ALARMLAR sayfasi ("Sistem Uykuda")
+    # hepsi UYKU kullaniyor.
+    cihaz_uyku = CihazDurumu(
         slave_id=2,
         guc=0.0,
         hata_kodu=0,
         hata_kodu_111=0
     )
-    assert cihaz_beklemede.has_error is False
-    assert cihaz_beklemede.durum_text == "BEKLEMEDE"
+    assert cihaz_uyku.has_error is False
+    assert cihaz_uyku.durum_text == "UYKU"
 
     # Arizali
     cihaz_arizali = CihazDurumu(
@@ -94,7 +96,7 @@ def test_cihaz_durumu_properties():
         hata_kodu_111=0
     )
     assert cihaz_arizali.has_error is True
-    assert cihaz_arizali.durum_text == "ARIZA"
+    assert cihaz_arizali.durum_text == "ARIZALI"
     
     cihaz_arizali_109 = CihazDurumu(
         slave_id=4,
@@ -103,8 +105,13 @@ def test_cihaz_durumu_properties():
         hata_kodu_109=2,
         hata_kodu_111=0
     )
+    # 109 register'inin 1. biti "Abnormal String Power [1-2]" — string seviyesi
+    # uyari, inverteri durduran bir ariza degil. Severity derecelendirmesi
+    # geldiginden beri cihaz uretime devam ederken ARIZALI degil "uyari sayili
+    # AKTIF" gorunuyor: has_error True ama has_critical_or_major_error False.
     assert cihaz_arizali_109.has_error is True
-    assert cihaz_arizali_109.durum_text == "ARIZA"
+    assert cihaz_arizali_109.has_critical_or_major_error is False
+    assert cihaz_arizali_109.durum_text == "AKTİF (1 UYARI)"
     
     cihaz_arizali_111 = CihazDurumu(
         slave_id=5,
@@ -115,7 +122,7 @@ def test_cihaz_durumu_properties():
         hata_kodu_112=0
     )
     assert cihaz_arizali_111.has_error is True
-    assert cihaz_arizali_111.durum_text == "ARIZA"
+    assert cihaz_arizali_111.durum_text == "ARIZALI"
     
     cihaz_arizali_112 = CihazDurumu(
         slave_id=6,
@@ -127,7 +134,7 @@ def test_cihaz_durumu_properties():
         hata_kodu_114=0
     )
     assert cihaz_arizali_112.has_error is True
-    assert cihaz_arizali_112.durum_text == "ARIZA"
+    assert cihaz_arizali_112.durum_text == "ARIZALI"
     
     cihaz_arizali_114 = CihazDurumu(
         slave_id=7,
@@ -140,7 +147,7 @@ def test_cihaz_durumu_properties():
         hata_kodu_115=0
     )
     assert cihaz_arizali_114.has_error is True
-    assert cihaz_arizali_114.durum_text == "ARIZA"
+    assert cihaz_arizali_114.durum_text == "ARIZALI"
     
     cihaz_arizali_115 = CihazDurumu(
         slave_id=8,
@@ -154,7 +161,7 @@ def test_cihaz_durumu_properties():
         hata_kodu_116=0
     )
     assert cihaz_arizali_115.has_error is True
-    assert cihaz_arizali_115.durum_text == "ARIZA"
+    assert cihaz_arizali_115.durum_text == "ARIZALI"
     
     cihaz_arizali_116 = CihazDurumu(
         slave_id=8,
@@ -174,5 +181,5 @@ def test_cihaz_durumu_properties():
         hata_kodu_122=0
     )
     assert cihaz_arizali_116.has_error is True
-    assert cihaz_arizali_116.durum_text == "ARIZA"
+    assert cihaz_arizali_116.durum_text == "ARIZALI"
 

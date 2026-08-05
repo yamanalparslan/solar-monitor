@@ -13,10 +13,12 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up Python 3.10
+    # Dockerfile python:3.11-slim kullaniyor; CI ayni surumde kossun ki
+    # testlerin gectigi ortam uretimle ayni olsun.
+    - name: Set up Python 3.11
       uses: actions/setup-python@v4
       with:
-        python-version: "3.10"
+        python-version: "3.11"
         
     - name: Install Dependencies
       run: |

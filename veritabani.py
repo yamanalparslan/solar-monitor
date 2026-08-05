@@ -2,6 +2,7 @@ import psycopg2
 from psycopg2.pool import ThreadedConnectionPool
 from psycopg2.extras import DictCursor
 import os
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 _pool = None
@@ -25,9 +26,18 @@ def get_pool():
     return _pool
 
 class PooledConnectionProxy:
+    """Havuzdan alinan baglantiyi sarar.
+
+    close() baglantiyi gercekten kapatmaz, havuza geri verir. Bu yuzden
+    close() cagrilmadan cikilan her kod yolu havuzdan kalici olarak bir slot
+    eksiltir (maxconn dolunca tum uygulama DB'siz kalir) — cagiran taraf
+    close()'u her zaman finally icinde cagirmalidir.
+    """
+
     def __init__(self, pool, conn):
         self._pool = pool
         self._conn = conn
+        self._returned = False
 
     def __getattr__(self, name):
         return getattr(self._conn, name)
@@ -38,6 +48,17 @@ class PooledConnectionProxy:
         return self._conn.cursor(*args, **kwargs)
 
     def close(self):
+        # Ayni proxy iki kez kapatilirsa baglanti havuza iki kez eklenmesin.
+        if self._returned:
+            return
+        self._returned = True
+        try:
+            # DDL bloklari autocommit'i True'ya cekiyor; bu durum havuzdaki
+            # baglantiya sizmasin diye geri vermeden once normalize ediyoruz.
+            if not self._conn.closed and self._conn.autocommit:
+                self._conn.autocommit = False
+        except Exception:
+            pass
         self._pool.putconn(self._conn)
 
 def get_db_connection():
@@ -50,6 +71,41 @@ def get_db_connection():
         except Exception as e:
             print(f"[DB_HATA] Havuzdan bağlantı alınamadı: {e}")
     return None
+
+
+class DBBaglantiYok(RuntimeError):
+    """Havuzdan bağlantı alınamadığında yükseltilir."""
+
+
+@contextmanager
+def db_cursor(commit=False, cursor_factory=None):
+    """Havuz güvenli cursor: bağlantı her koşulda havuza geri verilir.
+
+    Yeni veritabanı fonksiyonları bu context manager ile yazılmalıdır:
+
+        with db_cursor(commit=True) as cur:
+            cur.execute(...)
+
+    Bağlantı kurulamazsa DBBaglantiYok yükseltir; hata durumunda rollback
+    yapıp bağlantıyı temiz halde havuza döndürür.
+    """
+    conn = get_db_connection()
+    if conn is None:
+        raise DBBaglantiYok("PostgreSQL havuzundan baglanti alinamadi")
+    try:
+        cursor = conn.cursor(cursor_factory=cursor_factory) if cursor_factory else conn.cursor()
+        yield cursor
+        if commit:
+            conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
 
 # ── Fabrika Tanımları ──
 FABRIKALAR = {
@@ -64,8 +120,18 @@ def init_db():
     if not conn:
         print("[DB_HATA] init_db: baglanti kurulamadi, kurulum atlandi.")
         return
+    # Sema kurulumu ayri fonksiyonda tutuluyor ki DDL hatasinda da baglanti
+    # havuza geri donsun (aksi halde her basarisiz init havuzdan slot yer).
+    try:
+        _init_db_semasi(conn)
+    finally:
+        conn.close()
+
+
+def _init_db_semasi(conn):
+    """Tablolari, indeksleri, varsayilan ayarlari ve TimescaleDB kurulumunu yapar."""
     cursor = conn.cursor()
-    
+
     # 1. Ölçümler Tablosu
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS osos_verileri (
@@ -210,8 +276,6 @@ def init_db():
     # calisamadigi icin tablolar commit edildikten sonra autocommit ile yapilir.
     _timescale_kurulumu(conn)
 
-    conn.close()
-
 
 def _timescale_kurulumu(conn):
     """Hypertable, saatlik continuous aggregate ve retention policy kurulumu.
@@ -304,60 +368,84 @@ def retention_policy_senkronize(conn=None):
     except Exception as e:
         print(f"[DB] Retention policy senkronizasyon hatasi: {e}")
     finally:
+        # DDL icin acilan autocommit modu havuzdaki baglantiya sizmasin; aksi
+        # halde bu baglantiyi sonra kullanan fonksiyon farkinda olmadan
+        # autocommit modunda calisir ve rollback'i etkisiz kalir.
+        try:
+            conn.autocommit = False
+        except Exception:
+            pass
         if kendi_baglantisi:
             conn.close()
 
 
 def ayar_oku(anahtar, varsayilan=None, fabrika_id=VARSAYILAN_FABRIKA):
+    conn = get_db_connection()
+    if not conn:
+        return varsayilan
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT deger FROM ayarlar WHERE fabrika_id = %s AND anahtar = %s', (fabrika_id, anahtar))
         sonuc = cursor.fetchone()
-        conn.close()
         if sonuc:
             return sonuc[0]
         return varsayilan
     except Exception as e:
         print(f"[WARN] Ayar okuma hatası ({anahtar}): {e}")
         return varsayilan
+    finally:
+        conn.close()
 
 def ayar_yaz(anahtar, deger, fabrika_id=VARSAYILAN_FABRIKA):
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO ayarlar (fabrika_id, anahtar, deger, guncelleme_zamani)
             VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (fabrika_id, anahtar) 
+            ON CONFLICT (fabrika_id, anahtar)
             DO UPDATE SET deger = EXCLUDED.deger, guncelleme_zamani = EXCLUDED.guncelleme_zamani
         """, (fabrika_id, anahtar, str(deger)))
         conn.commit()
-        conn.close()
         return True
     except Exception as e:
         print(f"[WARN] Ayar yazma hatası ({anahtar}): {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return False
+    finally:
+        conn.close()
+
+def _varsayilan_ayarlar(fabrika_id: str) -> dict:
+    """DB okunamadiginda kullanilan varsayilan ayar seti."""
+    fab_ip = FABRIKALAR.get(fabrika_id, {}).get('varsayilan_ip', '10.35.14.10')
+    return {
+        'refresh_rate': '60', 'guc_scale': '1.0', 'volt_scale': '1.0',
+        'akim_scale': '0.1', 'isi_scale': '1.0', 'guc_addr': '70',
+        'volt_addr': '71', 'akim_addr': '72', 'isi_addr': '73',
+        'uretim_addr': '36', 'uretim_scale': '1.0',
+        'target_ip': fab_ip, 'target_port': '502', 'slave_ids': '1,2,3',
+        'veri_saklama_gun': '365', 'lat': '38.4237', 'lon': '27.1428'
+    }
 
 def tum_ayarlari_oku(fabrika_id: str):
+    conn = get_db_connection()
+    if not conn:
+        return _varsayilan_ayarlar(fabrika_id)
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT anahtar, deger FROM ayarlar WHERE fabrika_id = %s', (fabrika_id,))
         ayarlar = {row[0]: row[1] for row in cursor.fetchall()}
-        conn.close()
         return ayarlar
     except Exception as e:
         print(f"[WARN] tum_ayarlari_oku hatasi: {e}")
-        fab_ip = FABRIKALAR.get(fabrika_id, {}).get('varsayilan_ip', '10.35.14.10')
-        return {
-            'refresh_rate': '60', 'guc_scale': '1.0', 'volt_scale': '1.0',
-            'akim_scale': '0.1', 'isi_scale': '1.0', 'guc_addr': '70',
-            'volt_addr': '71', 'akim_addr': '72', 'isi_addr': '73',
-            'uretim_addr': '36', 'uretim_scale': '1.0',
-            'target_ip': fab_ip, 'target_port': '502', 'slave_ids': '1,2,3',
-            'veri_saklama_gun': '365', 'lat': '38.4237', 'lon': '27.1428'
-        }
+        return _varsayilan_ayarlar(fabrika_id)
+    finally:
+        conn.close()
 
 def hata_durumu_guncelle(cursor, fabrika_id, slave_id, register_no, hata_kodu, zaman):
     cursor.execute("""
@@ -460,6 +548,11 @@ def veri_ekle(slave_id, data, fabrika_id=VARSAYILAN_FABRIKA):
         conn.commit()
     except Exception as e:
         print(f"[ERROR] veri_ekle hatasi: {e}")
+        # Yarim kalan islemi geri al: baglanti havuza temiz halde donsun.
+        try:
+            conn.rollback()
+        except Exception:
+            pass
     finally:
         conn.close()
 
@@ -495,9 +588,14 @@ def veri_kaydet(fabrika_id, slave_id, guc, voltaj, akim, sicaklik, modbus_uretim
         )
         cursor.execute(query, vals)
         conn.commit()
-        conn.close()
     except Exception as e:
         print(f"[ERROR] veri_kaydet hatasi: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        conn.close()
 
 def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     try:
@@ -508,16 +606,20 @@ def son_verileri_getir(slave_id, limit=100, fabrika_id=VARSAYILAN_FABRIKA):
 
     conn = get_db_connection()
     if not conn: return []
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122, voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
-        FROM olcumler WHERE fabrika_id = %s AND slave_id = %s
-        ORDER BY zaman DESC LIMIT %s
-    """, (fabrika_id, slave_id, limit))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    return rows[::-1]
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT zaman, guc, voltaj, akim, sicaklik, hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112, hata_kodu_114, hata_kodu_115, hata_kodu_116, hata_kodu_117, hata_kodu_118, hata_kodu_119, hata_kodu_120, hata_kodu_121, hata_kodu_122, voltaj_ab, voltaj_bc, voltaj_ca, akim_a, akim_b, akim_c
+            FROM olcumler WHERE fabrika_id = %s AND slave_id = %s
+            ORDER BY zaman DESC LIMIT %s
+        """, (fabrika_id, slave_id, limit))
+        rows = cursor.fetchall()
+        return rows[::-1]
+    except Exception as e:
+        print(f"[WARN] son_verileri_getir hatasi (slave {slave_id}): {e}")
+        return []
+    finally:
+        conn.close()
 
 def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRIKA):
     try:
@@ -528,48 +630,55 @@ def karsilastirma_verisi_getir(slave_id, limit=2880, fabrika_id=VARSAYILAN_FABRI
 
     conn = get_db_connection()
     if not conn: return []
-    cursor = conn.cursor()
-    # dakikalık bazda gruplama yap (PostgreSQL date_trunc)
-    cursor.execute("""
-        SELECT 
-            date_trunc('minute', zaman) as zaman_dk, 
-            AVG(guc) as guc, 
-            AVG(voltaj) as voltaj, 
-            AVG(akim) as akim, 
-            AVG(sicaklik) as sicaklik
-        FROM olcumler 
-        WHERE fabrika_id = %s AND slave_id = %s
-          AND zaman >= NOW() - %s * INTERVAL '1 minute'
-        GROUP BY zaman_dk
-        ORDER BY zaman_dk DESC 
-        LIMIT %s
-    """, (fabrika_id, slave_id, limit, limit))
-    rows = cursor.fetchall()
-    conn.close()
-    
-    return rows[::-1]
+    try:
+        cursor = conn.cursor()
+        # dakikalık bazda gruplama yap (PostgreSQL date_trunc)
+        cursor.execute("""
+            SELECT
+                date_trunc('minute', zaman) as zaman_dk,
+                AVG(guc) as guc,
+                AVG(voltaj) as voltaj,
+                AVG(akim) as akim,
+                AVG(sicaklik) as sicaklik
+            FROM olcumler
+            WHERE fabrika_id = %s AND slave_id = %s
+              AND zaman >= NOW() - %s * INTERVAL '1 minute'
+            GROUP BY zaman_dk
+            ORDER BY zaman_dk DESC
+            LIMIT %s
+        """, (fabrika_id, slave_id, limit, limit))
+        rows = cursor.fetchall()
+        return rows[::-1]
+    except Exception as e:
+        print(f"[WARN] karsilastirma_verisi_getir hatasi (slave {slave_id}): {e}")
+        return []
+    finally:
+        conn.close()
 
 
 def tum_cihazlarin_son_durumu(fabrika_id=VARSAYILAN_FABRIKA):
     conn = get_db_connection()
     if not conn: return []
-    from psycopg2.extras import DictCursor
-    cursor = conn.cursor(cursor_factory=DictCursor)
-    cursor.execute("""
-        SELECT DISTINCT ON (slave_id) 
-               slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik,
-               hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112,
-               hata_kodu_114, hata_kodu_115, hata_kodu_116,
-               hata_kodu_117, hata_kodu_118, hata_kodu_119,
-               hata_kodu_120, hata_kodu_121, hata_kodu_122,
-               modbus_uretim
-        FROM olcumler
-        WHERE fabrika_id = %s
-        ORDER BY slave_id ASC, zaman DESC
-    """, (fabrika_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return rows
+    try:
+        cursor = conn.cursor(cursor_factory=DictCursor)
+        cursor.execute("""
+            SELECT DISTINCT ON (slave_id)
+                   slave_id, zaman as son_zaman, guc, voltaj, akim, sicaklik,
+                   hata_kodu, hata_kodu_109, hata_kodu_111, hata_kodu_112,
+                   hata_kodu_114, hata_kodu_115, hata_kodu_116,
+                   hata_kodu_117, hata_kodu_118, hata_kodu_119,
+                   hata_kodu_120, hata_kodu_121, hata_kodu_122,
+                   modbus_uretim
+            FROM olcumler
+            WHERE fabrika_id = %s
+            ORDER BY slave_id ASC, zaman DESC
+        """, (fabrika_id,))
+        return cursor.fetchall()
+    except Exception as e:
+        print(f"[WARN] tum_cihazlarin_son_durumu hatasi ({fabrika_id}): {e}")
+        return []
+    finally:
+        conn.close()
 
 def db_temizle(fabrika_id=None):
     conn = get_db_connection()
@@ -670,28 +779,29 @@ def saatlik_ozet_getir(slave_id, baslangic_tarihi, bitis_tarihi, fabrika_id=VARS
     TimescaleDB continuous aggregate tablosundan saatlik bazda sıkıştırılmış verileri getirir.
     Eski tarihli uzun raporlar için çok hızlıdır.
     """
+    conn = get_db_connection()
+    if not conn:
+        return []
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
-        
+
         query = '''
-            SELECT 
-                zaman_saati as ts, 
+            SELECT
+                zaman_saati as ts,
                 guc, voltaj, akim, sicaklik, max_uretim as modbus_uretim
             FROM olcumler_saatlik
             WHERE slave_id = %s AND fabrika_id = %s
             AND zaman_saati >= %s AND zaman_saati <= %s
             ORDER BY zaman_saati ASC
         '''
-        
+
         cursor.execute(query, (slave_id, fabrika_id, baslangic_tarihi, bitis_tarihi))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        return rows
+        return cursor.fetchall()
     except Exception as e:
         print(f"[WARN] Saatlik ozet verisi cekme hatasi: {e}")
         return []
+    finally:
+        conn.close()
 
 def tarih_araliginda_ortalamalar(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN_FABRIKA):
     from datetime import datetime
@@ -885,23 +995,32 @@ def hata_sayilarini_getir(baslangic, bitis, slave_id=None, fabrika_id=VARSAYILAN
         conn.close()
 
 def audit_log_kaydet(kullanici, islem, detay="", fabrika_id=VARSAYILAN_FABRIKA):
+    conn = get_db_connection()
+    if not conn:
+        return False
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO audit_log (kullanici, islem, detay, fabrika_id, zaman)
             VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
         """, (kullanici, islem, detay, fabrika_id))
         conn.commit()
-        conn.close()
         return True
     except Exception as e:
         print(f"[WARN] Audit log hatası: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return False
+    finally:
+        conn.close()
 
 def audit_log_getir(limit=100, fabrika_id=VARSAYILAN_FABRIKA):
+    conn = get_db_connection()
+    if not conn:
+        return []
     try:
-        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, kullanici, islem, detay, zaman, fabrika_id
@@ -910,8 +1029,7 @@ def audit_log_getir(limit=100, fabrika_id=VARSAYILAN_FABRIKA):
             ORDER BY zaman DESC LIMIT %s
         """, (fabrika_id, limit))
         rows = cursor.fetchall()
-        conn.close()
-        
+
         formatted_rows = []
         for r in rows:
             formatted_rows.append((r[0], r[1], r[2], r[3], str(r[4]), r[5]))
@@ -919,6 +1037,8 @@ def audit_log_getir(limit=100, fabrika_id=VARSAYILAN_FABRIKA):
     except Exception as e:
         print(f"[WARN] Audit log getirme hatası: {e}")
         return []
+    finally:
+        conn.close()
 
 def gecmis_alarmlari_getir(fabrika_id, limit=100):
     try:
