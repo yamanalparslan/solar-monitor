@@ -90,8 +90,6 @@ def _is_auth_enabled() -> bool:
     return os.getenv("AUTH_ENABLED", "true").lower() in ("true", "1", "yes")
 
 
-_DEFAULT_ADMIN_HASH = "0139dcacdd93868fd19a701191131882297aab91532bfb7b825b886f19ae7a53"
-
 def _get_credentials() -> tuple[str, str]:
     pass # Deprecated
 
@@ -106,10 +104,11 @@ def load_users() -> dict:
         try:
             with open(_USERS_JSON_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
             pass
-    # Fallback: return default admin user
-    return {"admin": {"hash": _DEFAULT_ADMIN_HASH, "role": "admin"}}
+    # Kullanıcı veritabanı yoksa veya okunamadıysa boş döneriz,
+    # check_auth() ilk kurulum uyarısı verecek.
+    return {}
 
 def save_users(users: dict):
     os.makedirs(os.path.dirname(_USERS_JSON_PATH), exist_ok=True)
@@ -426,6 +425,12 @@ def check_auth() -> bool:
         return True
     if st.session_state.get("authenticated"):
         return True
+        
+    if not os.path.exists(_USERS_JSON_PATH):
+        st.error("⚠️ Sistemde tanımlı hiçbir kullanıcı bulunamadı (`users.json` eksik).")
+        st.info("Lütfen sunucu üzerinden `python kurulum_yap.py` komutunu çalıştırarak ilk kurulumu tamamlayın.")
+        st.stop()
+        
     _show_login_form()
     return False
 
